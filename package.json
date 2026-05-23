@@ -1,0 +1,17 @@
+{
+  "name": "fictia",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "rs": "node restart.mjs",
+    "dev": "concurrently \"pnpm --filter @fictia/server dev\" \"pnpm --filter @fictia/web dev\"",
+    "dev:web": "pnpm --filter @fictia/web dev",
+    "dev:server": "pnpm --filter @fictia/server dev",
+    "build": "pnpm --filter @fictia/shared build && pnpm --filter @fictia/server build && pnpm --filter @fictia/web build",
+    "check": "pnpm --filter @fictia/shared check && pnpm --filter @fictia/server check && pnpm --filter @fictia/web check"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.0"
+  }
+}

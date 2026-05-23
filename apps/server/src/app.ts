@@ -1,0 +1,29 @@
+import express from "express";
+import cors from "cors";
+import { novelRoutes } from "./routes/novels.js";
+import { chapterRoutes } from "./routes/chapters.js";
+import { agentRoutes } from "./routes/agents.js";
+import { pipelineRoutes } from "./routes/pipelines.js";
+import { settingsRoutes } from "./routes/settings.js";
+import { feedbackRoutes } from "./routes/feedback.js";
+import { chatRoutes } from "./routes/chat.js";
+import { errorHandler } from "./middleware/error-handler.js";
+
+export function createApp() {
+  const app = express();
+
+  app.use(cors());
+  app.use(express.json({ limit: "10mb" }));
+
+  app.use("/api/novels", novelRoutes);
+  app.use("/api", chapterRoutes);
+  app.use("/api", agentRoutes);
+  app.use("/api", pipelineRoutes);
+  app.use("/api/settings", settingsRoutes);
+  app.use("/api/feedback", feedbackRoutes);
+  app.use("/api/chat", chatRoutes);
+
+  app.use(errorHandler);
+
+  return app;
+}
