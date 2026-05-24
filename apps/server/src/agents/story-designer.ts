@@ -11,6 +11,7 @@ export class StoryDesignerAgent extends BaseAgent {
   protected stageName: StageName = "story";
   protected agentType: AgentType = "story-designer";
   protected agentName = "story-designer";
+  protected maxToolIterations = 0; // 不限制，支持长篇小说 150+ 章节
 
   protected getToolTier(): "standard" | "full" {
     return "full";

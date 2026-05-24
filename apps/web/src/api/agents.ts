@@ -16,4 +16,10 @@ export const agentsApi = {
       `/chapters/${chapterId}/rewrite`,
       params,
     ),
+
+  fileRewrite: (novelId: string, params: { filePath: string; selectedText?: string; instruction: string }) =>
+    api.post<{ updatedContent: string }>(
+      `/novels/${novelId}/file-rewrite`,
+      params,
+    ),
 };

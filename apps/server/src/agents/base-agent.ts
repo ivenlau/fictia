@@ -20,8 +20,6 @@ export interface AgentRunOptions {
   incrementalTarget?: string;
 }
 
-const MAX_TOOL_ITERATIONS = 20;
-
 export abstract class BaseAgent {
   protected abstract stageName: StageName;
   protected abstract agentType: AgentType;
@@ -29,6 +27,8 @@ export abstract class BaseAgent {
   protected novelDir: string;
   protected model: Model<"openai-completions">;
   protected apiKey: string;
+  /** 最大工具迭代次数，0 表示不限制 */
+  protected maxToolIterations = 20;
 
   constructor(
     novelDir: string,
@@ -451,7 +451,7 @@ export abstract class BaseAgent {
 
     let finalText = "";
 
-    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    for (let iteration = 0; this.maxToolIterations === 0 || iteration < this.maxToolIterations; iteration++) {
       const ctx: Context = {
         systemPrompt: resolvedSystemPrompt,
         messages,

@@ -25,17 +25,48 @@ import {
 import { useNovelStore } from "@/stores/novelStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAgentStore } from "@/stores/agentStore";
-import { useNovel, useChapters, useDeleteNovel, useResetNovel } from "@/hooks/useNovel";
-import { useAgentOutputs } from "@/hooks/useAgent";
+import { useNovel, useDeleteNovel, useResetNovel } from "@/hooks/useNovel";
 import { useEditorStore } from "@/stores/editorStore";
+import { novelsApi } from "@/api/novels";
 import { pipelinesApi } from "@/api/pipelines";
 import { EditNovelModal } from "@/features/novel/EditNovelModal";
 import { exportMarkdown, exportEpub, exportTxt } from "@/utils/export";
-import { chaptersApi } from "@/api/chapters";
 import { WorkspaceTasks } from "./WorkspaceTasks";
+import { countWords } from "@/lib/markdown";
+import type { WorkspaceFile } from "@fictia/shared";
 
 interface WorkspaceRootViewProps {
   novelId?: string;
+}
+
+interface ChapterFileInfo {
+  path: string;
+  number: number;
+  title: string;
+  wordCount: number;
+  hasContent: boolean;
+  content: string;
+}
+
+function parseChapterFiles(files: WorkspaceFile[]): ChapterFileInfo[] {
+  return files
+    .filter((f) => /^chapters\/act-\d+\/ch\d+\.md$/.test(f.path))
+    .map((f) => {
+      const numMatch = f.path.match(/ch(\d+)\.md/);
+      const number = numMatch ? parseInt(numMatch[1]) : 0;
+      const titleMatch = (f.content ?? "").match(/^#\s+(.+)$/m);
+      const title = titleMatch ? titleMatch[1].trim() : "";
+      const wordCount = countWords(f.content ?? "");
+      return {
+        path: f.path,
+        number,
+        title,
+        wordCount,
+        hasContent: !!(f.content && f.content.trim().length > 0),
+        content: f.content ?? "",
+      };
+    })
+    .sort((a, b) => a.number - b.number);
 }
 
 export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewProps = {}) {
@@ -46,8 +77,6 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
 
   const queryClient = useQueryClient();
   const { data: novel, isLoading } = useNovel(novelId);
-  const { data: chapters } = useChapters(novelId);
-  const { data: agentOutputs } = useAgentOutputs(novelId);
   const deleteNovel = useDeleteNovel();
   const resetNovel = useResetNovel();
   const closeFile = useEditorStore((s) => s.closeFile);
@@ -61,20 +90,24 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   const setAutoGeneratePaused = useAgentStore((s) => s.setAutoGeneratePaused);
   const pausedRef = useRef(false);
 
+  // Load workspace files for chapter listing
+  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
+  const refreshFiles = useCallback(() => {
+    if (!novelId) return;
+    novelsApi.getFiles(novelId).then(setWorkspaceFiles).catch(() => {});
+  }, [novelId]);
+
+  useEffect(() => {
+    refreshFiles();
+  }, [refreshFiles]);
+
+  const chapterFiles = parseChapterFiles(workspaceFiles);
+
   useEffect(() => {
     if (novel) setCurrentNovel(novel);
   }, [novel, setCurrentNovel]);
 
-  // Sync writing state from backend: find running/pending chapter_writer agent
-  useEffect(() => {
-    if (!agentOutputs) return;
-    const writingOutput = agentOutputs.find(
-      (o: any) => o.agentType === "chapter-writer" && (o.status === "running" || o.status === "pending") && o.chapterId,
-    );
-    setWritingChapter(writingOutput?.chapterId ?? null);
-  }, [agentOutputs, setWritingChapter]);
-
-  const allChaptersWritten = chapters && chapters.length > 0 && chapters.every((ch: any) => ch.wordCount > 0 && ch.content);
+  const allChaptersWritten = chapterFiles.length > 0 && chapterFiles.every((ch) => ch.hasContent);
 
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -91,12 +124,11 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   }, [showExportMenu]);
 
   const handleExport = useCallback(async (format: "md" | "epub" | "txt") => {
-    if (!chapters || !novel) return;
-    const sorted = [...chapters].sort((a: any, b: any) => a.number - b.number);
-    const chapterData = sorted.map((ch: any) => ({
+    if (!chapterFiles || !novel) return;
+    const chapterData = chapterFiles.map((ch) => ({
       number: ch.number,
-      title: ch.title ?? `第${ch.number}章`,
-      content: ch.content ?? "",
+      title: ch.title || `第${ch.number}章`,
+      content: ch.content,
     }));
     const meta = { title: novel.title, description: novel.description, genre: novel.genre };
     if (format === "epub") {
@@ -107,47 +139,45 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
       exportMarkdown(meta, chapterData);
     }
     setShowExportMenu(false);
-  }, [chapters, novel]);
+  }, [chapterFiles, novel]);
 
-  const waitForChapterDone = useCallback((chapterId: string, outputId: string): Promise<void> => {
+  const waitForStageDone = useCallback((targetNovelId: string): Promise<void> => {
     return new Promise((resolve) => {
       const poll = setInterval(async () => {
         try {
-          const res = await fetch(`/api/novels/${novelId}/agent-outputs`);
-          const outputs = await res.json();
-          const writer = outputs.find((o: any) => o.id === outputId);
-          if (writer && writer.status !== "running" && writer.status !== "pending") {
+          const status = await pipelinesApi.getStatus(targetNovelId);
+          const stage = status.stages.find((s) => s.name === "chapters");
+          if (stage && stage.status !== "in_progress") {
             clearInterval(poll);
-            queryClient.invalidateQueries({ queryKey: ["chapters", novelId] });
-            queryClient.invalidateQueries({ queryKey: ["chapter", chapterId] });
-            queryClient.invalidateQueries({ queryKey: ["agent-outputs", novelId] });
+            refreshFiles();
             resolve();
           }
         } catch {}
       }, 3000);
     });
-  }, [novelId, queryClient]);
+  }, [refreshFiles]);
 
   const handleAutoGenerate = useCallback(async () => {
-    if (!chapters || !novelId) return;
-    const pending = chapters.filter((ch: any) => !ch.wordCount || !ch.content);
+    if (!novelId) return;
+    const pending = chapterFiles.filter((ch) => !ch.hasContent);
     if (pending.length === 0) return;
 
     setAutoGenerateActive(true);
     setAutoGeneratePaused(false);
     pausedRef.current = false;
 
+    // Use pipeline runStage for each pending chapter
     for (const ch of pending) {
       while (pausedRef.current) {
         await new Promise((r) => setTimeout(r, 500));
       }
 
-      setWritingChapter(ch.id);
+      setWritingChapter(ch.path);
       try {
-        const result = await pipelinesApi.runStage(novelId!, "chapters", {
-          incrementalTarget: ch.id,
+        await pipelinesApi.runStage(novelId, "chapters", {
+          incrementalTarget: ch.path,
         });
-        await waitForChapterDone(ch.id, ch.id);
+        await waitForStageDone(novelId);
       } catch (err) {
         console.error("Auto-generate failed for chapter", ch.number, err);
       }
@@ -156,7 +186,8 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
     setWritingChapter(null);
     setAutoGenerateActive(false);
     setAutoGeneratePaused(false);
-  }, [chapters, novelId, setWritingChapter, setAutoGenerateActive, setAutoGeneratePaused, waitForChapterDone]);
+    refreshFiles();
+  }, [novelId, chapterFiles, setWritingChapter, setAutoGenerateActive, setAutoGeneratePaused, waitForStageDone, refreshFiles]);
 
   const handlePauseResume = useCallback(() => {
     if (autoGeneratePaused) {
@@ -184,10 +215,11 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
     try {
       await resetNovel.mutateAsync(novelId);
       setShowResetConfirm(false);
+      refreshFiles();
     } catch {
       // error handled silently
     }
-  }, [novelId, resetNovel]);
+  }, [novelId, resetNovel, refreshFiles]);
 
   if (!novelId) {
     return <WelcomeState onCreateNovel={() => setShowNewNovel(true)} />;
@@ -249,7 +281,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
               </h1>
               <p className="font-caption text-xs text-fg-muted">
                 {novel.genre}
-                {chapters ? ` · ${chapters.length} 章` : ""}
+                {chapterFiles.length > 0 ? ` · ${chapterFiles.length} 章` : ""}
               </p>
             </div>
           </div>
@@ -381,7 +413,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
         <div className="flex items-center justify-between rounded-lg bg-surface-muted px-4 py-3">
           <div className="flex items-center gap-3 text-fg-muted">
             <span className="font-caption text-xs">
-              {chapters?.length ?? 0} 章节
+              {chapterFiles.length} 章节
             </span>
             <span className="text-fg-muted/30">|</span>
             <span className="font-caption text-xs">{tags.length} 标签</span>
@@ -407,7 +439,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
           <div className="flex items-center gap-3 mb-3">
             <button
               onClick={handleAutoGenerate}
-              disabled={autoGenerateActive || !chapters || chapters.length === 0 || allChaptersWritten || autoGeneratePaused}
+              disabled={autoGenerateActive || chapterFiles.length === 0 || allChaptersWritten || autoGeneratePaused}
               className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {autoGenerateActive && !autoGeneratePaused ? (
@@ -444,23 +476,15 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
           </div>
 
           {/* Chapter List */}
-          {chapters && chapters.length > 0 ? (
+          {chapterFiles.length > 0 ? (
             <div className="space-y-2">
-              {chapters.map((ch) => (
-                <ChapterCard
-                  key={ch.id}
+              {chapterFiles.map((ch) => (
+                <FileChapterCard
+                  key={ch.path}
                   chapter={ch}
                   novelId={novelId}
                   novelTitle={novel.title}
-                  onOpen={() => {
-                    const openFile = useEditorStore.getState().openFile;
-                    openFile({
-                      id: ch.id,
-                      path: `${novel.title}/章节/${ch.title ?? `第${ch.number}章`}.md`,
-                      type: "chapter",
-                      label: ch.title ?? `第${ch.number}章`,
-                    });
-                  }}
+                  onRefresh={refreshFiles}
                 />
               ))}
             </div>
@@ -468,7 +492,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
             <div className="rounded-lg border border-dashed border-subtle p-6 text-center">
               <BookOpen size={20} className="mx-auto text-fg-muted mb-2" />
               <p className="font-caption text-xs text-fg-muted">
-                完成"一键准备"后，章节将自动创建
+                完成 Pipeline 的"故事设计"阶段后，章节大纲将自动生成
               </p>
             </div>
           )}
@@ -563,42 +587,40 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   );
 }
 
-function ChapterCard({
+function FileChapterCard({
   chapter,
   novelId,
   novelTitle,
-  onOpen,
+  onRefresh,
 }: {
-  chapter: { id: string; number: number; title: string; summary: string; content?: string; status: string; wordCount: number; version: number; goal: string };
+  chapter: ChapterFileInfo;
   novelId: string;
   novelTitle: string;
-  onOpen: () => void;
+  onRefresh: () => void;
 }) {
-  const queryClient = useQueryClient();
   const writingChapterId = useAgentStore((s) => s.writingChapterId);
   const setWritingChapter = useAgentStore((s) => s.setWritingChapter);
-  const hasContent = chapter.wordCount > 0 && chapter.content;
-  const isThisWriting = writingChapterId === chapter.id;
+  const openFile = useEditorStore((s) => s.openFile);
+  const [showRerunModal, setShowRerunModal] = useState(false);
+  const isThisWriting = writingChapterId === chapter.path;
   const isAnyWriting = writingChapterId !== null;
 
-  const handleGenerate = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setWritingChapter(chapter.id);
+  const handleGenerate = useCallback(async (directive?: string) => {
+    setWritingChapter(chapter.path);
     try {
-      const result = await pipelinesApi.runStage(novelId!, "chapters", {
-        incrementalTarget: chapter.id,
+      await pipelinesApi.runStage(novelId, "chapters", {
+        incrementalTarget: chapter.path,
+        userDirective: directive || undefined,
       });
+      // Poll until done
       const poll = setInterval(async () => {
         try {
-          const res = await fetch(`/api/novels/${novelId}/agent-outputs`);
-          const outputs = await res.json();
-          const writer = outputs.find((o: any) => o.chapterId === chapter.id && o.agentType === "chapter-writer");
-          if (writer && writer.status !== "running" && writer.status !== "pending") {
+          const status = await pipelinesApi.getStatus(novelId);
+          const stage = status.stages.find((s) => s.name === "chapters");
+          if (stage && stage.status !== "in_progress") {
             clearInterval(poll);
             setWritingChapter(null);
-            queryClient.invalidateQueries({ queryKey: ["chapters", novelId] });
-            queryClient.invalidateQueries({ queryKey: ["chapter", chapter.id] });
-            queryClient.invalidateQueries({ queryKey: ["agent-outputs", novelId] });
+            onRefresh();
           }
         } catch {}
       }, 3000);
@@ -606,69 +628,147 @@ function ChapterCard({
       console.error("Write pipeline failed:", err);
       setWritingChapter(null);
     }
-  }, [chapter.id, novelId, setWritingChapter, queryClient]);
+  }, [chapter.path, novelId, setWritingChapter, onRefresh]);
+
+  const handleOpen = useCallback(() => {
+    openFile({
+      id: `${novelId}:${chapter.path}`,
+      path: chapter.path,
+      type: "workspace",
+      label: `第${chapter.number}章${chapter.title ? ` ${chapter.title}` : ""}`,
+      novelId,
+    });
+  }, [openFile, novelId, chapter]);
+
+  return (
+    <>
+      <div
+        onClick={handleOpen}
+        className="group rounded-lg border border-subtle bg-surface-card p-3.5 text-left transition-colors hover:border-accent/40 cursor-pointer"
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent mt-0.5">
+            <BookOpen size={15} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-body text-sm font-medium text-fg-primary">
+              第{chapter.number}章 {chapter.title}
+            </p>
+            <div className="flex items-center gap-3 mt-2">
+              {chapter.hasContent ? (
+                <>
+                  <span className="font-caption text-[11px] text-fg-muted">
+                    {chapter.wordCount} 字
+                  </span>
+                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-caption bg-success/15 text-success">
+                    已完成
+                  </span>
+                </>
+              ) : (
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-caption bg-warning/15 text-warning">
+                  待生成
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {chapter.hasContent && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleOpen(); }}
+                disabled={isAnyWriting}
+                className="flex items-center gap-1 rounded-md border border-subtle px-2.5 py-1.5 font-body text-[11px] text-fg-secondary transition-colors hover:bg-surface-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                title="查看章节"
+              >
+                <Eye size={12} />
+                查看
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (chapter.hasContent) {
+                  setShowRerunModal(true);
+                } else {
+                  handleGenerate();
+                }
+              }}
+              disabled={isAnyWriting}
+              className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
+              title={chapter.hasContent ? "重新生成章节" : "生成章节内容"}
+            >
+              {isThisWriting ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : chapter.hasContent ? (
+                <RefreshCw size={12} />
+              ) : (
+                <PenLine size={12} />
+              )}
+              {isThisWriting ? "生成中..." : chapter.hasContent ? "重新生成" : "生成章节"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {showRerunModal && (
+        <ChapterRerunModal
+          chapterLabel={`第${chapter.number}章 ${chapter.title}`}
+          onConfirm={(directive) => {
+            setShowRerunModal(false);
+            handleGenerate(directive);
+          }}
+          onCancel={() => setShowRerunModal(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function ChapterRerunModal({
+  chapterLabel,
+  onConfirm,
+  onCancel,
+}: {
+  chapterLabel: string;
+  onConfirm: (directive: string) => void;
+  onCancel: () => void;
+}) {
+  const [directive, setDirective] = useState("");
 
   return (
     <div
-      onClick={onOpen}
-      className="group rounded-lg border border-subtle bg-surface-card p-3.5 text-left transition-colors hover:border-accent/40 cursor-pointer"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onCancel}
     >
-      <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent mt-0.5">
-          <BookOpen size={15} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-body text-sm font-medium text-fg-primary">
-            第{chapter.number}章 {chapter.title}
-          </p>
-          {chapter.summary && (
-            <p className="font-caption text-[11px] text-fg-muted mt-1 leading-relaxed line-clamp-2">
-              {chapter.summary}
-            </p>
-          )}
-          <div className="flex items-center gap-3 mt-2">
-            {hasContent ? (
-              <>
-                <span className="font-caption text-[11px] text-fg-muted">
-                  {chapter.wordCount} 字 · v{chapter.version}
-                </span>
-                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-caption bg-success/15 text-success">
-                  已完成
-                </span>
-              </>
-            ) : (
-              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-caption bg-warning/15 text-warning">
-                草稿
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {hasContent && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpen(); }}
-              disabled={isAnyWriting}
-              className="flex items-center gap-1 rounded-md border border-subtle px-2.5 py-1.5 font-body text-[11px] text-fg-secondary transition-colors hover:bg-surface-muted disabled:opacity-50 disabled:cursor-not-allowed"
-              title="查看章节"
-            >
-              <Eye size={12} />
-              查看
-            </button>
-          )}
+      <div
+        className="w-[440px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-heading text-base font-bold text-fg-primary mb-1">
+          重新生成「{chapterLabel}」
+        </h3>
+        <p className="font-body text-sm text-fg-secondary mb-4">
+          输入自定义指令可以引导 agent 按照你的要求重新生成。留空则直接重新生成。
+        </p>
+        <textarea
+          value={directive}
+          onChange={(e) => setDirective(e.target.value)}
+          placeholder="例如：请增加更多的环境描写和心理活动..."
+          rows={3}
+          className="w-full rounded-lg border border-subtle bg-surface-primary px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted/50 focus:border-accent focus:outline-none resize-none"
+        />
+        <div className="flex justify-end gap-2 mt-4">
           <button
-            onClick={handleGenerate}
-            disabled={isAnyWriting}
-            className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
-            title={hasContent ? "重新生成章节" : "生成章节内容"}
+            onClick={onCancel}
+            className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
           >
-            {isThisWriting ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : hasContent ? (
-              <RefreshCw size={12} />
-            ) : (
-              <PenLine size={12} />
-            )}
-            {isThisWriting ? "生成中..." : hasContent ? "重新生成" : "生成章节"}
+            取消
+          </button>
+          <button
+            onClick={() => onConfirm(directive)}
+            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-accent-deep"
+          >
+            <RefreshCw size={14} />
+            重新生成
           </button>
         </div>
       </div>

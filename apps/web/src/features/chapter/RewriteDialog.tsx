@@ -3,16 +3,20 @@ import { Loader2, Wand2, X } from "lucide-react";
 import { agentsApi } from "@/api/agents";
 
 interface RewriteDialogProps {
-  chapterId: string;
+  chapterId?: string;
+  filePath?: string;
+  novelId?: string;
   selectedText?: string;
   onClose: () => void;
   onRewritten: (updatedContent: string) => void;
 }
 
-export function RewriteDialog({ chapterId, selectedText, onClose, onRewritten }: RewriteDialogProps) {
+export function RewriteDialog({ chapterId, filePath, novelId, selectedText, onClose, onRewritten }: RewriteDialogProps) {
   const [instruction, setInstruction] = useState("");
   const [isRewriting, setIsRewriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isFileMode = !!filePath && !!novelId;
 
   const handleRewrite = useCallback(async () => {
     if (!instruction.trim()) return;
@@ -20,18 +24,33 @@ export function RewriteDialog({ chapterId, selectedText, onClose, onRewritten }:
     setError(null);
 
     try {
-      const result = await agentsApi.rewrite(chapterId, {
-        selectedText: selectedText || undefined,
-        instruction: instruction.trim(),
-      });
-      onRewritten(result.updatedContent);
+      let updatedContent: string;
+
+      if (isFileMode) {
+        const result = await agentsApi.fileRewrite(novelId!, {
+          filePath: filePath!,
+          selectedText: selectedText || undefined,
+          instruction: instruction.trim(),
+        });
+        updatedContent = result.updatedContent;
+      } else if (chapterId) {
+        const result = await agentsApi.rewrite(chapterId, {
+          selectedText: selectedText || undefined,
+          instruction: instruction.trim(),
+        });
+        updatedContent = result.updatedContent;
+      } else {
+        return;
+      }
+
+      onRewritten(updatedContent);
       onClose();
     } catch (err: any) {
       setError(err?.message ?? "改写失败，请重试");
     } finally {
       setIsRewriting(false);
     }
-  }, [chapterId, selectedText, instruction, onRewritten, onClose]);
+  }, [isFileMode, novelId, filePath, chapterId, selectedText, instruction, onRewritten, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>

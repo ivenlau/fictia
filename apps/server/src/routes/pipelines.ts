@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
+import { v4 as uuid } from "uuid";
 import type { StageName, AgentType } from "@fictia/shared";
 import { STAGE_LABELS, AGENT_FILE_MAP } from "@fictia/shared";
 import { db, schema } from "../db/index.js";
@@ -7,11 +8,15 @@ import { novelService } from "../services/novel.service.js";
 import { settingsService } from "../services/settings.service.js";
 import {
   getOrCreateOrchestrator,
+  getOrCreateRunner,
+  getRunnerState,
   writeAgentOutput,
 } from "../services/pipeline.service.js";
 import { getStageDefinition } from "../core/pipeline.js";
 import { StateTracker } from "../core/state-tracker.js";
 import { fileService } from "../services/file.service.js";
+
+const now = () => new Date().toISOString();
 
 const router = Router();
 const VALID_STAGES = Object.keys(STAGE_LABELS) as StageName[];
@@ -52,6 +57,7 @@ router.get("/novels/:novelId/pipeline/status", async (req, res) => {
 
   const tracker = orch.getStateTracker();
   const progress = tracker.getProgress();
+  const runnerState = getRunnerState(novelId);
 
   const stages = VALID_STAGES.map((stageName) => {
     const def = getStageDefinition(stageName)!;
@@ -72,15 +78,23 @@ router.get("/novels/:novelId/pipeline/status", async (req, res) => {
     novelId,
     progress,
     stages,
+    isRunning: runnerState.isRunning,
+    isPaused: runnerState.isPaused,
   });
 });
 
-// POST /novels/:novelId/pipeline/start - start pipeline from first pending stage
+// POST /novels/:novelId/pipeline/start - start pipeline async
 router.post("/novels/:novelId/pipeline/start", async (req, res) => {
   const { novelId } = req.params;
   const novel = novelService.getById(novelId);
   if (!novel) {
     res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+
+  const runnerState = getRunnerState(novelId);
+  if (runnerState.isRunning) {
+    res.status(409).json({ error: "Pipeline is already running" });
     return;
   }
 
@@ -90,30 +104,42 @@ router.post("/novels/:novelId/pipeline/start", async (req, res) => {
   const orch = getOrCreateOrchestrator(novelId, novelDir, keys, agentModels as any);
   await orch.init();
 
-  try {
-    const result = await orch.start();
-    if (!result) {
-      res.json({ status: "complete", message: "所有阶段已完成" });
-      return;
-    }
+  const runner = getOrCreateRunner(novelId, orch, novelDir);
 
-    const nextStage = new StateTracker(novelId);
-    await nextStage.load();
-    const inProgress = nextStage.getInProgressStage();
+  // Start in background — do NOT await
+  runner.start().catch((err) => {
+    console.error(`[Pipeline] Runner failed for ${novelId}:`, err);
+  });
 
-    // Write agent output to filesystem
-    if (result.success) {
-      await writeAgentOutput(novelDir, result);
-    }
+  res.json({ status: "started", novelId, message: "Pipeline started" });
+});
 
-    res.json({
-      status: result.success ? "completed" : "failed",
-      stage: inProgress,
-      result,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Pipeline start failed" });
+// POST /novels/:novelId/pipeline/pause
+router.post("/novels/:novelId/pipeline/pause", async (req, res) => {
+  const { novelId } = req.params;
+  const runnerState = getRunnerState(novelId);
+  if (!runnerState.isRunning) {
+    res.status(400).json({ error: "Pipeline is not running" });
+    return;
   }
+  const { getRunner } = await import("../services/pipeline.service.js");
+  const runner = getRunner(novelId);
+  runner?.pause();
+  res.json({ status: "paused", novelId });
+});
+
+// POST /novels/:novelId/pipeline/resume
+router.post("/novels/:novelId/pipeline/resume", async (req, res) => {
+  const { novelId } = req.params;
+  const runnerState = getRunnerState(novelId);
+  if (!runnerState.isRunning) {
+    res.status(400).json({ error: "Pipeline is not running" });
+    return;
+  }
+  const { getRunner } = await import("../services/pipeline.service.js");
+  const runner = getRunner(novelId);
+  runner?.resume();
+  res.json({ status: "resumed", novelId });
 });
 
 // POST /novels/:novelId/pipeline/stages/:stage - run a specific stage
@@ -126,6 +152,13 @@ router.post("/novels/:novelId/pipeline/stages/:stage", async (req, res) => {
     return;
   }
 
+  // Block if auto-pipeline is running
+  const runnerState = getRunnerState(novelId);
+  if (runnerState.isRunning) {
+    res.status(409).json({ error: "Pipeline is running automatically. Pause it first." });
+    return;
+  }
+
   const novel = novelService.getById(novelId);
   if (!novel) {
     res.status(404).json({ error: "Novel not found" });
@@ -138,6 +171,31 @@ router.post("/novels/:novelId/pipeline/stages/:stage", async (req, res) => {
   const orch = getOrCreateOrchestrator(novelId, novelDir, keys, agentModels as any);
   await orch.init();
 
+  // Create agent_outputs record before execution
+  const def = getStageDefinition(stage as StageName);
+  const outputId = uuid();
+  if (def) {
+    db.insert(schema.agentOutputs)
+      .values({
+        id: outputId,
+        novelId,
+        chapterId: null,
+        agentType: def.agentType,
+        stageName: stage,
+        persona: userDirective ?? null,
+        filename: "",
+        modelUsed: "",
+        providerUsed: "",
+        status: "running",
+        tokensInput: 0,
+        tokensOutput: 0,
+        cost: 0,
+        createdAt: now(),
+        completedAt: null,
+      })
+      .run();
+  }
+
   try {
     const result = await orch.runStage(stage as StageName, {
       userDirective,
@@ -147,6 +205,22 @@ router.post("/novels/:novelId/pipeline/stages/:stage", async (req, res) => {
 
     if (result.success) {
       await writeAgentOutput(novelDir, result);
+      // Propagate downstream when re-running
+      if (isRedo) {
+        await orch.onStageModified(stage as StageName);
+      }
+    }
+
+    // Update agent_outputs record
+    if (def) {
+      db.update(schema.agentOutputs)
+        .set({
+          status: result.success ? "completed" : "failed",
+          tokensOutput: result.output?.length ?? 0,
+          completedAt: now(),
+        })
+        .where(eq(schema.agentOutputs.id, outputId))
+        .run();
     }
 
     res.json({
@@ -155,11 +229,18 @@ router.post("/novels/:novelId/pipeline/stages/:stage", async (req, res) => {
       result,
     });
   } catch (err: any) {
+    // Mark output as failed
+    if (def) {
+      db.update(schema.agentOutputs)
+        .set({ status: "failed", completedAt: now() })
+        .where(eq(schema.agentOutputs.id, outputId))
+        .run();
+    }
     res.status(500).json({ error: err?.message ?? `阶段 "${STAGE_LABELS[stage as StageName]}" 执行失败` });
   }
 });
 
-// POST /novels/:novelId/pipeline/stages/:stage/confirm - confirm a stage's output
+// POST /novels/:novelId/pipeline/stages/:stage/confirm - kept for compatibility
 router.post("/novels/:novelId/pipeline/stages/:stage/confirm", async (req, res) => {
   const { novelId, stage } = req.params;
 

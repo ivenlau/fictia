@@ -85,15 +85,17 @@ export class Orchestrator extends EventEmitter {
       throw new Error(`未知阶段: ${stageName}`);
     }
 
-    // Check dependencies
-    const unmetDeps = stage.dependsOn.filter(dep => {
-      const state = this.stateTracker.getState(dep);
-      return state.status !== "confirmed";
-    });
-    if (unmetDeps.length > 0) {
-      throw new Error(
-        `阶段 "${STAGE_LABELS[stageName]}" 的前置依赖未满足: ${unmetDeps.map(d => STAGE_LABELS[d]).join(", ")}`
-      );
+    // Check dependencies (skip when targeting a specific file — user-initiated)
+    if (!options?.incrementalTarget) {
+      const unmetDeps = stage.dependsOn.filter(dep => {
+        const state = this.stateTracker.getState(dep);
+        return state.status !== "confirmed";
+      });
+      if (unmetDeps.length > 0) {
+        throw new Error(
+          `阶段 "${STAGE_LABELS[stageName]}" 的前置依赖未满足: ${unmetDeps.map(d => STAGE_LABELS[d]).join(", ")}`
+        );
+      }
     }
 
     this.emit("stage:start", stageName);
@@ -111,7 +113,25 @@ export class Orchestrator extends EventEmitter {
       const result = await agent.run(options);
 
       this.emit("stage:output", stageName, result);
-      this.emit("stage:confirm-needed", stageName, result);
+
+      if (result.success) {
+        // Auto-confirm on success
+        const hasMore = await this.confirmStage(stageName);
+        if (hasMore) {
+          await this.stateTracker.updateState(stageName, {
+            status: "needs_update",
+            reason: "增量阶段还有更多工作",
+          });
+        }
+      } else {
+        // Agent returned but indicated failure
+        await this.stateTracker.updateState(stageName, {
+          status: "failed",
+          reason: result.error ?? "Agent returned unsuccessful result",
+        });
+        this.emit("stage:failed", stageName, result.error ?? "Agent returned unsuccessful result");
+      }
+
       return result;
     } catch (error) {
       const errorMsg = String(error);

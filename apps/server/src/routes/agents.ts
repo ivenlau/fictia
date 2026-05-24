@@ -424,4 +424,69 @@ router.post("/chapters/:chapterId/rewrite", async (req, res) => {
   }
 });
 
+// POST /novels/:novelId/file-rewrite - file-based rewrite (no DB chapter required)
+router.post("/novels/:novelId/file-rewrite", async (req, res) => {
+  const { novelId } = req.params;
+  const { filePath, selectedText, instruction } = req.body as {
+    filePath?: string;
+    selectedText?: string;
+    instruction: string;
+  };
+
+  if (!instruction) {
+    res.status(400).json({ error: "instruction is required" });
+    return;
+  }
+
+  if (!filePath) {
+    res.status(400).json({ error: "filePath is required" });
+    return;
+  }
+
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+
+  try {
+    const keys = settingsService.getApiKeys();
+    const agentModelsRaw = (() => {
+      const row = db.select().from(schema.settings).where(eq(schema.settings.key, "agentModels")).get();
+      if (row?.value) { try { return JSON.parse(row.value); } catch { return null; } }
+      return null;
+    })();
+
+    const novelContext = buildNovelContext(novel);
+    const novelDir = fileService.getNovelDir(novelId);
+
+    const promptSections = [
+      `## 小说背景\n${novelContext}`,
+      `## 改写任务`,
+      `文件路径: ${filePath}`,
+    ];
+
+    if (selectedText) {
+      promptSections.push(`## 用户选中的文本\n"${selectedText}"`);
+    }
+
+    promptSections.push(`## 用户指令\n${instruction}`);
+
+    await runAgent(
+      "chapter-writer" as AgentType,
+      novelDir,
+      keys,
+      { userDirective: promptSections.join("\n\n"), incrementalTarget: filePath },
+      agentModelsRaw,
+    );
+
+    const updatedContent = await fileService.readWorkspaceFile(novelId, filePath);
+
+    res.json({ updatedContent });
+  } catch (err: any) {
+    console.error("[FileRewrite] Failed:", err);
+    res.status(500).json({ error: err?.message ?? "Rewrite failed" });
+  }
+});
+
 export const agentRoutes = router;

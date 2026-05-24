@@ -155,6 +155,16 @@ export function FileViewer({ fileId }: FileViewerProps) {
     return <ChapterEditor chapterId={activeFile.id} />;
   }
 
+  // Workspace files under chapters/ also use ChapterEditor (file-based mode)
+  if (activeFile.type === "workspace" && activeFile.path.startsWith("chapters/") && activeFile.novelId) {
+    return (
+      <ChapterEditor
+        filePath={activeFile.path}
+        novelId={activeFile.novelId}
+      />
+    );
+  }
+
   const Icon = activeFile.type === "workspace" ? Folder : FileText;
   const fileType = activeFile.type === "workspace" ? getFileType(activeFile.path) : "markdown";
 

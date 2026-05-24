@@ -20,6 +20,8 @@ export interface PipelineStatus {
     percentage: number;
   };
   stages: PipelineStageInfo[];
+  isRunning: boolean;
+  isPaused: boolean;
 }
 
 export interface StageRunResult {
@@ -41,11 +43,27 @@ export const pipelinesApi = {
     api.get<PipelineStatus>(`/novels/${novelId}/pipeline/status`),
 
   /**
-   * Start pipeline from first pending stage
+   * Start pipeline async — returns immediately
    */
   start: (novelId: string) =>
-    api.post<StageRunResult | { status: "complete"; message: string }>(
+    api.post<{ status: "started"; novelId: string; message: string }>(
       `/novels/${novelId}/pipeline/start`,
+    ),
+
+  /**
+   * Pause the auto-pipeline (current stage continues to completion)
+   */
+  pause: (novelId: string) =>
+    api.post<{ status: "paused"; novelId: string }>(
+      `/novels/${novelId}/pipeline/pause`,
+    ),
+
+  /**
+   * Resume the auto-pipeline
+   */
+  resume: (novelId: string) =>
+    api.post<{ status: "resumed"; novelId: string }>(
+      `/novels/${novelId}/pipeline/resume`,
     ),
 
   /**
@@ -66,7 +84,7 @@ export const pipelinesApi = {
     ),
 
   /**
-   * Confirm a stage's output
+   * Confirm a stage's output (kept for compatibility)
    */
   confirmStage: (novelId: string, stage: StageName) =>
     api.post<{

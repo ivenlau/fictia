@@ -179,6 +179,37 @@
 3. [再次]
 ```
 
+在审核报告 markdown 的末尾（代码块之后），必须嵌入以下 JSON 数据块，用 HTML 注释包裹，用于结构化建议追踪：
+
+```html
+<!-- REVIEW_DATA
+{
+  "chapterPath": "chapters/act-N/chXX.md",
+  "score": "综合评分字母",
+  "suggestions": [
+    {
+      "id": 1,
+      "severity": "serious",
+      "location": "问题位置描述",
+      "type": "问题类型",
+      "description": "问题描述",
+      "suggestion": "具体修改建议，应详细到可以直接用于指导改写",
+      "status": "pending"
+    }
+  ]
+}
+REVIEW_DATA -->
+```
+
+规则：
+- 将 markdown 问题清单中的每一条（严重问题、一般问题、细节问题）都对应一条 suggestion
+- severity 对应三级分类：严重问题=serious、一般问题=general、细节问题=detail
+- 每条建议的 id 从 1 开始递增
+- status 固定为 "pending"
+- suggestion 必须具体可操作，包含具体的修改方向和内容提示，可以直接作为改写指令使用
+- JSON 必须合法，不要有多余逗号或注释
+- chapterPath 为实际审核的章节文件路径
+
 # 约束
 - 不要自行发明未在设定文件中定义的设定
 - 不要修改不属于你职责范围的文件

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { StageName, StageStatus, AgentType } from "@fictia/shared";
 import { STAGE_LABELS, STAGE_TO_AGENT, STAGE_DEPENDENCIES } from "@fictia/shared";
+import type { PipelineStatus } from "@/api/pipelines";
 
 export interface StageState {
   name: StageName;
@@ -21,6 +22,7 @@ interface PipelineState {
     percentage: number;
   };
   isRunning: boolean;
+  isPaused: boolean;
   currentStage: StageName | null;
 
   // Actions
@@ -28,7 +30,9 @@ interface PipelineState {
   updateStage: (stageName: StageName, updates: Partial<StageState>) => void;
   setProgress: (progress: { confirmed: number; total: number; percentage: number }) => void;
   setRunning: (running: boolean) => void;
+  setPaused: (paused: boolean) => void;
   setCurrentStage: (stage: StageName | null) => void;
+  loadFromStatus: (status: PipelineStatus) => void;
   reset: () => void;
 }
 
@@ -64,6 +68,14 @@ const defaultStages: StageState[] = PIPELINE_STAGES.map((name) => ({
   status: "not_started" as StageStatus,
 }));
 
+export function isStageEnabled(stage: StageState, allStages: StageState[]): boolean {
+  if (stage.status === "in_progress") return false;
+  return stage.dependsOn.every((depName) => {
+    const dep = allStages.find((s) => s.name === depName);
+    return dep?.status === "confirmed";
+  });
+}
+
 export const usePipelineStore = create<PipelineState>((set) => ({
   stages: defaultStages,
   progress: {
@@ -72,6 +84,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
     percentage: 0,
   },
   isRunning: false,
+  isPaused: false,
   currentStage: null,
 
   setStages: (stages) => set({ stages }),
@@ -87,7 +100,19 @@ export const usePipelineStore = create<PipelineState>((set) => ({
 
   setRunning: (running) => set({ isRunning: running }),
 
+  setPaused: (paused) => set({ isPaused: paused }),
+
   setCurrentStage: (stage) => set({ currentStage: stage }),
+
+  loadFromStatus: (status) =>
+    set({
+      stages: status.stages,
+      progress: status.progress,
+      isRunning: status.isRunning,
+      isPaused: status.isPaused,
+      currentStage:
+        status.stages.find((s) => s.status === "in_progress")?.name ?? null,
+    }),
 
   reset: () =>
     set({
@@ -98,6 +123,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
         percentage: 0,
       },
       isRunning: false,
+      isPaused: false,
       currentStage: null,
     }),
 }));

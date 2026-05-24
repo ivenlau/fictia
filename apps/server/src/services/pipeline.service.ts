@@ -1,9 +1,16 @@
+import { v4 as uuid } from "uuid";
+import { eq } from "drizzle-orm";
 import { Orchestrator } from "../core/orchestrator.js";
 import type { StageName, AgentType } from "@fictia/shared";
+import { STAGE_LABELS } from "@fictia/shared";
 import type { AgentRunResult } from "../agents/index.js";
 import { readFileSafe } from "../utils/file.js";
+import { db, schema } from "../db/index.js";
+import { getStageDefinition } from "../core/pipeline.js";
 import * as path from "path";
 import * as fs from "fs/promises";
+
+const now = () => new Date().toISOString();
 
 // In-memory orchestrator instances per novel
 const orchestrators = new Map<string, Orchestrator>();
@@ -35,25 +42,31 @@ export async function writeAgentOutput(
   novelDir: string,
   result: AgentRunResult,
 ): Promise<void> {
+  // Agents that use write_project_file tool have already written correct content.
+  // Skip writing if any output files already exist on disk (written by tool calls).
   for (const filePath of result.filesWritten) {
+    if (filePath.includes("*")) continue; // Skip glob patterns
     const fullPath = path.join(novelDir, filePath);
-
-    // If the agent output contains file separators, split and write each file
-    if (result.output.includes("===FILE:")) {
-      const fileBlocks = result.output.split(/===FILE:\s*(.+?)\s*===/);
-      // fileBlocks: [preamble, filename1, content1, filename2, content2, ...]
-      for (let i = 1; i < fileBlocks.length; i += 2) {
-        const fileName = fileBlocks[i].trim();
-        const content = fileBlocks[i + 1]?.trim() ?? "";
-        const targetPath = path.join(novelDir, fileName);
-        await fs.mkdir(path.dirname(targetPath), { recursive: true });
-        await fs.writeFile(targetPath, content, "utf-8");
-      }
+    const existing = await readFileSafe(fullPath);
+    if (existing) {
       return;
     }
   }
 
-  // Single file output
+  // No files written by tools — write from result.output
+
+  if (result.output.includes("===FILE:")) {
+    const fileBlocks = result.output.split(/===FILE:\s*(.+?)\s*===/);
+    for (let i = 1; i < fileBlocks.length; i += 2) {
+      const fileName = fileBlocks[i].trim();
+      const content = fileBlocks[i + 1]?.trim() ?? "";
+      const targetPath = path.join(novelDir, fileName);
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.writeFile(targetPath, content, "utf-8");
+    }
+    return;
+  }
+
   if (result.filesWritten.length === 1) {
     const fullPath = path.join(novelDir, result.filesWritten[0]);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
@@ -76,4 +89,159 @@ export async function getStageOutput(
     }
   }
   return parts.length > 0 ? parts.join("\n\n---\n\n") : null;
+}
+
+// ===== Pipeline Runner — async execution with pause/resume =====
+
+export class PipelineRunner {
+  private orch: Orchestrator;
+  private novelId: string;
+  private novelDir: string;
+  private _running = false;
+  private _paused = false;
+
+  constructor(orch: Orchestrator, novelId: string, novelDir: string) {
+    this.orch = orch;
+    this.novelId = novelId;
+    this.novelDir = novelDir;
+  }
+
+  get running() { return this._running; }
+  get paused() { return this._paused; }
+
+  async start(): Promise<void> {
+    if (this._running) throw new Error("Pipeline already running");
+    this._running = true;
+    this._paused = false;
+
+    try {
+      while (this._running) {
+        // Wait while paused
+        if (this._paused) {
+          await this.waitUntilResumed();
+          if (!this._running) break;
+        }
+
+        await this.orch.init();
+        const nextStageName = this.orch.getStateTracker().getNextPendingStage();
+        if (!nextStageName) {
+          this.orch.emit("pipeline:complete");
+          break;
+        }
+
+        const def = getStageDefinition(nextStageName as StageName);
+        if (!def) break;
+
+        // Create agent_outputs record
+        const outputId = uuid();
+        db.insert(schema.agentOutputs)
+          .values({
+            id: outputId,
+            novelId: this.novelId,
+            chapterId: null,
+            agentType: def.agentType,
+            stageName: nextStageName,
+            persona: null,
+            filename: "",
+            modelUsed: "",
+            providerUsed: "",
+            status: "running",
+            tokensInput: 0,
+            tokensOutput: 0,
+            cost: 0,
+            createdAt: now(),
+            completedAt: null,
+          })
+          .run();
+
+        try {
+          const result = await this.orch.runStage(nextStageName as StageName);
+
+          if (result.success) {
+            await writeAgentOutput(this.novelDir, result);
+          }
+
+          // Update agent_outputs record
+          db.update(schema.agentOutputs)
+            .set({
+              status: result.success ? "completed" : "failed",
+              tokensOutput: result.output?.length ?? 0,
+              completedAt: now(),
+            })
+            .where(eq(schema.agentOutputs.id, outputId))
+            .run();
+
+          if (!result.success) {
+            console.log(`[Pipeline] Stage "${nextStageName}" failed, stopping pipeline`);
+            break;
+          }
+        } catch (stageErr: any) {
+          // Mark output as failed
+          db.update(schema.agentOutputs)
+            .set({ status: "failed", completedAt: now() })
+            .where(eq(schema.agentOutputs.id, outputId))
+            .run();
+
+          console.error(`[Pipeline] Stage "${nextStageName}" error:`, stageErr?.message);
+          break;
+        }
+      }
+    } finally {
+      this._running = false;
+      this._paused = false;
+      runners.delete(this.novelId);
+    }
+  }
+
+  pause(): void {
+    if (!this._running) return;
+    this._paused = true;
+  }
+
+  resume(): void {
+    this._paused = false;
+  }
+
+  stop(): void {
+    this._running = false;
+    this._paused = false;
+  }
+
+  private waitUntilResumed(): Promise<void> {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (!this._paused || !this._running) {
+          resolve();
+        } else {
+          setTimeout(check, 500);
+        }
+      };
+      check();
+    });
+  }
+}
+
+// In-memory runners per novel
+const runners = new Map<string, PipelineRunner>();
+
+export function getOrCreateRunner(
+  novelId: string,
+  orch: Orchestrator,
+  novelDir: string,
+): PipelineRunner {
+  let runner = runners.get(novelId);
+  if (!runner) {
+    runner = new PipelineRunner(orch, novelId, novelDir);
+    runners.set(novelId, runner);
+  }
+  return runner;
+}
+
+export function getRunner(novelId: string): PipelineRunner | undefined {
+  return runners.get(novelId);
+}
+
+export function getRunnerState(novelId: string): { isRunning: boolean; isPaused: boolean } {
+  const runner = runners.get(novelId);
+  return { isRunning: runner?.running ?? false, isPaused: runner?.paused ?? false };
 }
