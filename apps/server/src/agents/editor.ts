@@ -35,11 +35,21 @@ export class EditorAgent extends BaseAgent {
     return ["reviews/ch*-review.md"];
   }
 
+  async hasMoreWork(): Promise<boolean> {
+    return (await this.findNextUnreviewedChapter()) !== null;
+  }
+
+  async getNextWorkItem(): Promise<string | null> {
+    const p = await this.findNextUnreviewedChapter();
+    if (!p) return null;
+    return p.split("/").pop()?.replace(".md", "") ?? null;
+  }
+
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
-    const chapterToReview = options?.incrementalTarget ?? (await this.findLatestChapter());
+    const chapterToReview = options?.incrementalTarget ?? (await this.findNextUnreviewedChapter());
     if (!chapterToReview) {
       return {
-        output: "没有找到需要审核的章节",
+        output: "所有章节已审核",
         filesWritten: [],
         success: true,
       };
@@ -123,14 +133,35 @@ ${context}
     };
   }
 
-  private async findLatestChapter(): Promise<string | null> {
+  private async findNextUnreviewedChapter(): Promise<string | null> {
     const chapterFiles = await listFiles(
       path.join(this.novelDir, "chapters"),
       { recursive: true, extensions: [".md"] }
     );
     if (chapterFiles.length === 0) return null;
-    const sorted = chapterFiles.sort();
-    const latest = sorted[sorted.length - 1];
-    return path.relative(this.novelDir, latest).replace(/\\/g, "/");
+
+    const reviewFiles = await listFiles(
+      path.join(this.novelDir, "reviews"),
+      { extensions: [".md"] }
+    );
+
+    const getNum = (f: string) => {
+      const m = path.basename(f).match(/ch(\d+)/i);
+      return m ? parseInt(m[1]) : null;
+    };
+
+    const reviewedNums = new Set<number>();
+    for (const f of reviewFiles) {
+      const n = getNum(f);
+      if (n !== null) reviewedNums.add(n);
+    }
+
+    const unreviewed = chapterFiles
+      .map(f => ({ absPath: f, num: getNum(f) }))
+      .filter((x): x is { absPath: string; num: number } => x.num !== null && !reviewedNums.has(x.num))
+      .sort((a, b) => a.num - b.num);
+
+    if (unreviewed.length === 0) return null;
+    return path.relative(this.novelDir, unreviewed[0].absPath).replace(/\\/g, "/");
   }
 }
