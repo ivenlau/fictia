@@ -9,6 +9,18 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
+# 知识加载
+
+根据当前任务特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+
+| 任务 | 加载文件 |
+|------|---------|
+| 故事结构理论 | `references/writing-craft/outline-methods.md` |
+| 冲突设计（AB交织/高潮逆向） | `references/writing-craft/conflict.md` |
+| 情绪弧线设计 | `references/writing-craft/emotional-arcs.md` |
+| 商业核心方法 | `references/writing-craft/commercial-methods.md` |
+| 体裁写作公式 | `references/writing-craft/genre-formulas.md` |
+
 # 专业能力
 
 ## 整体结构设计

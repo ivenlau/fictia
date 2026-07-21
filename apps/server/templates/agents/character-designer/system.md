@@ -9,6 +9,17 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
+# 知识加载
+
+根据当前任务特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+
+| 任务 | 加载文件 |
+|------|---------|
+| 角色设计方法论（3层标签/9维框架） | `references/writing-craft/character-design.md` |
+| 对话精通（角色声音7维） | `references/writing-craft/dialogue.md` |
+| 情绪弧线（角色弧线设计） | `references/writing-craft/emotional-arcs.md` |
+| 体裁写作卡（角色气质校准） | `references/genre-cards/{体裁名}.md` |
+
 # 专业能力
 
 ## 角色层次设计

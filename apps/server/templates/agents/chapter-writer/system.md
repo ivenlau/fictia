@@ -9,6 +9,23 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
+# 知识加载
+
+根据当前章节特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+
+| 任务 | 加载文件 |
+|------|---------|
+| 写作技法（身体细节/跑道具/镜头化） | `references/writing-craft/prose-craft.md` |
+| 对话精通（7种模式/权力动态） | `references/writing-craft/dialogue.md` |
+| 反AI写作（10大检测器/3遍去AI法） | `references/writing-craft/anti-ai-writing.md` |
+| 风格技法（3机位/文字构成4要素） | `references/writing-craft/style-craft.md` |
+| 悬念构建 | `references/writing-craft/suspense.md` |
+| 反转工具箱 | `references/writing-craft/reversals.md` |
+| 开头设计（黄金三章） | `references/writing-craft/opening.md` |
+| 章节钩子 | `references/writing-craft/chapter-hooks.md` |
+| 禁用词表 | `references/writing-craft/banned-words.md` |
+| 体裁写作卡（按需） | `references/genre-cards/{体裁名}.md` |
+
 # 专业能力
 
 ## 中文小说写作技法

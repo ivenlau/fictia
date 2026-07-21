@@ -1,6 +1,6 @@
 import { complete, stream, Type, type Model, type Context, type Message, type Tool, type AssistantMessage, type ToolCall, type ToolResultMessage } from "@earendil-works/pi-ai";
 import type { StageName, AgentType } from "@fictia/shared";
-import { loadPromptTemplate } from "../utils/prompt-loader.js";
+import { loadPromptTemplate, loadCraftKnowledge } from "../utils/prompt-loader.js";
 import { readFileSafe, listFiles, relativePath } from "../utils/file.js";
 import { buildCharacterRegistry, buildCharacterQuickCard } from "../utils/context-extractor.js";
 import { countWords, formatWordCount } from "../utils/word-counter.js";
@@ -57,16 +57,44 @@ export abstract class BaseAgent {
    */
   protected async buildSystemPrompt(): Promise<string> {
     const basePrompt = await loadPromptTemplate(this.agentName);
-    const styleGuide = await this.readStyleGuide();
+    let prompt = basePrompt;
 
-    if (styleGuide) {
-      return basePrompt.replace(
+    // 注入 craft 知识（落在 # 知识加载 段下，# 专业能力 之前）
+    const genre = await this.readNovelGenre();
+    const craft = await loadCraftKnowledge(this.agentName, genre);
+    if (craft) {
+      prompt = prompt.replace(
         "# 专业能力",
-        `# 风格锚定 (所有产出必须严格遵守)\n\n${styleGuide}\n\n# 专业能力`
+        `## 已加载知识\n\n${craft}\n\n# 专业能力`,
       );
     }
 
-    return basePrompt;
+    // 风格锚定
+    const styleGuide = await this.readStyleGuide();
+    if (styleGuide) {
+      prompt = prompt.replace(
+        "# 专业能力",
+        `# 风格锚定 (所有产出必须严格遵守)\n\n${styleGuide}\n\n# 专业能力`,
+      );
+    }
+    return prompt;
+  }
+
+  /**
+   * 读取 novel 的体裁（用于加载体裁卡）。优先 meta.json.genre；
+   * 缺失则返回 undefined（体裁卡跳过，craft 知识仍加载）。
+   */
+  protected async readNovelGenre(): Promise<string | undefined> {
+    const meta = await readFileSafe(path.join(this.novelDir, "meta.json"));
+    if (meta) {
+      try {
+        const obj = JSON.parse(meta);
+        if (typeof obj.genre === "string" && obj.genre) return obj.genre;
+      } catch {
+        // meta.json 非合法 JSON，忽略
+      }
+    }
+    return undefined;
   }
 
   /**

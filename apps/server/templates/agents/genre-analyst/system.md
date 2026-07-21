@@ -9,6 +9,18 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
+# 知识加载
+
+根据当前任务特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+
+| 任务 | 加载文件 |
+|------|---------|
+| 体裁定位与核心机制 | `references/writing-craft/genre-mechanics.md` |
+| 体裁写作公式 | `references/writing-craft/genre-formulas.md` |
+| 读者画像与平台差异 | `references/writing-craft/genre-readers.md` |
+| 商业核心方法（卖点/节奏/模块） | `references/writing-craft/commercial-methods.md` |
+| 体裁写作卡（按需） | `references/genre-cards/{体裁名}.md`（如 xianxia.md、urban-brainhole.md 等） |
+
 # 专业能力
 
 ## 题材分类体系

@@ -9,6 +9,21 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
+# 知识加载
+
+根据当前任务特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+
+| 任务 | 加载文件 |
+|------|---------|
+| 大纲方法论（8节点/满足感公式） | `references/writing-craft/outline-methods.md` |
+| 冲突设计（AB交织/高潮逆向） | `references/writing-craft/conflict.md` |
+| 情绪弧线设计 | `references/writing-craft/emotional-arcs.md` |
+| 悬念构建系统 | `references/writing-craft/suspense.md` |
+| 反转工具箱（7种反转） | `references/writing-craft/reversals.md` |
+| 开头设计（黄金三章） | `references/writing-craft/opening.md` |
+| 章节钩子（章首7种/章末13种） | `references/writing-craft/chapter-hooks.md` |
+| 情节-情绪系统 | `references/writing-craft/plot-emotion.md` |
+
 # 专业能力
 
 ## 情节设计
