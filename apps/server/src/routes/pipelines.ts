@@ -197,10 +197,13 @@ router.post("/novels/:novelId/pipeline/stages/:stage", async (req, res) => {
   }
 
   try {
+    const manualConfirm =
+      db.select().from(schema.settings).where(eq(schema.settings.key, "manualConfirm")).get()?.value === "true";
     const result = await orch.runStage(stage as StageName, {
       userDirective,
       isRedo,
       incrementalTarget,
+      autoConfirm: !manualConfirm,
     });
 
     if (result.success) {

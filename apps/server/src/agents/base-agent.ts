@@ -18,6 +18,11 @@ export interface AgentRunOptions {
   userDirective?: string;
   isRedo?: boolean;
   incrementalTarget?: string;
+  /**
+   * 成功后是否自动确认阶段。默认 true（auto-runner 行为）。
+   * 设 false 时置 pending_confirm，等用户显式 /confirm（对齐 skill 人工确认纪律）。
+   */
+  autoConfirm?: boolean;
 }
 
 export abstract class BaseAgent {
@@ -95,6 +100,33 @@ export abstract class BaseAgent {
       }
     }
     return undefined;
+  }
+
+  /**
+   * 头脑风暴探索模式（设计阶段 1-8）：产出 3-5 个创意方向，不写最终文件。
+   * 对齐 skill 的 brainstorm 三段式之「探索」段。无工具调用，纯文本产出。
+   */
+  async runExplore(directive?: string): Promise<string> {
+    const input = [
+      "# 头脑风暴 · 探索阶段",
+      "",
+      "在产出正式内容前，先探索 3-5 个创意方向。每个方向必须包含：",
+      "- **方向名称**：一句话概括",
+      "- **具体示例**：给出具体的设定/情节/风格示例（不能只说方向）",
+      "- **叙事价值**：选择这个方向，故事会获得什么",
+      "- **风险与代价**：可能失去什么或面临什么挑战",
+      "- **参照作品**（如有）：同类成功案例",
+      "",
+      "**发散约束**（必须满足）：",
+      "- 至少一个反直觉选项（违反该题材常见套路）",
+      "- 至少一个极端选项（与推荐方案形成鲜明对比）",
+      "- 给出明确推荐：说「我推荐方向 X，因为...」",
+      "",
+      directive ? `用户补充要求：${directive}` : "",
+      "",
+      "只输出方向分析，不要产出最终的设定文件。",
+    ].join("\n");
+    return this.streamLLM(input, () => {});
   }
 
   /**

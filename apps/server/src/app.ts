@@ -5,6 +5,7 @@ import { chapterRoutes } from "./routes/chapters.js";
 import { agentRoutes } from "./routes/agents.js";
 import { pipelineRoutes } from "./routes/pipelines.js";
 import { writingLoopRoutes } from "./routes/writing-loop.js";
+import { brainstormRoutes } from "./routes/brainstorm.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { chatRoutes } from "./routes/chat.js";
@@ -21,6 +22,7 @@ export function createApp() {
   app.use("/api", agentRoutes);
   app.use("/api", pipelineRoutes);
   app.use("/api", writingLoopRoutes);
+  app.use("/api", brainstormRoutes);
   app.use("/api/settings", settingsRoutes);
   app.use("/api/feedback", feedbackRoutes);
   app.use("/api/chat", chatRoutes);

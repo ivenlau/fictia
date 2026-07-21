@@ -115,13 +115,18 @@ export class Orchestrator extends EventEmitter {
       this.emit("stage:output", stageName, result);
 
       if (result.success) {
-        // Auto-confirm on success
-        const hasMore = await this.confirmStage(stageName);
-        if (hasMore) {
-          await this.stateTracker.updateState(stageName, {
-            status: "needs_update",
-            reason: "增量阶段还有更多工作",
-          });
+        if (options?.autoConfirm === false) {
+          // 手动确认纪律（对齐 skill）：成功后置 pending_confirm，等用户显式 /confirm
+          await this.stateTracker.updateState(stageName, { status: "pending_confirm" });
+        } else {
+          // Auto-confirm on success（auto-runner 默认）
+          const hasMore = await this.confirmStage(stageName);
+          if (hasMore) {
+            await this.stateTracker.updateState(stageName, {
+              status: "needs_update",
+              reason: "增量阶段还有更多工作",
+            });
+          }
         }
       } else {
         // Agent returned but indicated failure

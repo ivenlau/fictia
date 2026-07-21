@@ -54,6 +54,7 @@ export const settingsService = {
     }
 
     const chatPersona = getSettingValue("chatPersona") ?? "";
+    const manualConfirm = getSettingValue("manualConfirm") === "true";
 
     return {
       apiKeyGlm: maskKey(apiKeyGlm),
@@ -61,6 +62,7 @@ export const settingsService = {
       apiKeyDoubao: maskKey(apiKeyDoubao),
       agentModels,
       chatPersona,
+      manualConfirm,
     };
   },
 
@@ -70,13 +72,15 @@ export const settingsService = {
     apiKeyDoubao: string;
     agentModels: Record<string, { provider: string; model: string }>;
     chatPersona: string;
+    manualConfirm: boolean;
   }>) {
-    // Skip masked keys (****xxxx) — only save real keys
+    // Skip masked keys (****xxxx) - only save real keys
     if (data.apiKeyGlm !== undefined && !data.apiKeyGlm.startsWith("****")) setSettingValue("apiKeyGlm", data.apiKeyGlm);
     if (data.apiKeyMinimax !== undefined && !data.apiKeyMinimax.startsWith("****")) setSettingValue("apiKeyMinimax", data.apiKeyMinimax);
     if (data.apiKeyDoubao !== undefined && !data.apiKeyDoubao.startsWith("****")) setSettingValue("apiKeyDoubao", data.apiKeyDoubao);
     if (data.agentModels !== undefined) setSettingValue("agentModels", JSON.stringify(data.agentModels));
     if (data.chatPersona !== undefined) setSettingValue("chatPersona", data.chatPersona);
+    if (data.manualConfirm !== undefined) setSettingValue("manualConfirm", data.manualConfirm ? "true" : "false");
 
     return this.get();
   },
