@@ -29,6 +29,7 @@ import {
   upsertRelations,
   type Entity,
   type Relation,
+  entityStats,
 } from "./entity-store.js";
 
 // ---------- 表解析 ----------
@@ -360,6 +361,138 @@ export async function assembleWritingSpace(
   );
 
   return parts.join("\n\n---\n\n");
+}
+
+// ---------- 动态状态更新（从章节写作备注） ----------
+
+async function resolveChapterFile(
+  novelDir: string,
+  chapterNumber: number,
+): Promise<string | null> {
+  const num = String(chapterNumber).padStart(2, "0");
+  try {
+    const files = await listFiles(path.join(novelDir, "chapters"), {
+      recursive: true,
+      extensions: [".md"],
+    });
+    return files.find((f) => path.basename(f) === `ch${num}.md`) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function extractWritingNotes(content: string): string | null {
+  const m = content.match(/### 写作备注\s*\n([\s\S]*?)$/);
+  return m ? m[1] : null;
+}
+
+function getNoteValue(notes: string, key: string): string | null {
+  const re = new RegExp(`- \\*\\*${key}\\*\\*[：:]\\s*([^\\n]+)`);
+  const m = notes.match(re);
+  return m ? m[1].trim() : null;
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * 从章节写作备注解析状态变更，更新 characters/foreshadowing 的 state。
+ *   - 角色状态更新/人物状态更新：按已知角色名前缀匹配，state = 去名去括号后的文本
+ *   - 伏笔操作：埋设->planted / 推进|强化->strengthened / 回收->resolved
+ */
+export async function updateEntitiesFromChapterNotes(
+  novelId: string,
+  chapterNumber: number,
+): Promise<{ updated: number }> {
+  const novelDir = fileService.getNovelDir(novelId);
+  const chapterPath = await resolveChapterFile(novelDir, chapterNumber);
+  if (!chapterPath) return { updated: 0 };
+  const content = await readFileSafe(chapterPath);
+  if (!content) return { updated: 0 };
+  const notes = extractWritingNotes(content);
+  if (!notes) return { updated: 0 };
+
+  const characters = listEntities(novelId, "characters");
+  const foreshadows = listEntities(novelId, "foreshadowing");
+  const updated: Entity[] = [];
+
+  const stateValue =
+    getNoteValue(notes, "角色状态更新") ?? getNoteValue(notes, "人物状态更新");
+  if (stateValue) {
+    const segments = stateValue
+      .split(/[；;，,]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const seg of segments) {
+      const clean = seg.replace(/\s*[（(][^)）]*[)）]\s*/g, "").trim();
+      for (const c of characters) {
+        if (c.name && clean.startsWith(c.name)) {
+          const stateText = clean.slice(c.name.length).trim() || c.name;
+          updated.push({ ...c, state: stateText });
+          break;
+        }
+      }
+    }
+  }
+
+  const foreshadowValue = getNoteValue(notes, "伏笔操作");
+  if (foreshadowValue) {
+    for (const f of foreshadows) {
+      const reOp = new RegExp(`(埋设|推进|强化|回收)[^F]*${escapeRe(f.id)}`);
+      const m = foreshadowValue.match(reOp);
+      if (m) {
+        const op = m[1];
+        const state = op === "回收" ? "resolved" : op === "埋设" ? "planted" : "strengthened";
+        updated.push({ ...f, state });
+      }
+    }
+  }
+
+  if (updated.length > 0) upsertEntities(novelId, updated);
+  return { updated: updated.length };
+}
+
+/**
+ * 组装动态上下文（角色当前状态 + 本章伏笔指令），注入 chapter-writer。
+ */
+export function assembleDynamicContext(
+  novelId: string,
+  chapterNumber: number,
+): string {
+  const num = String(chapterNumber).padStart(2, "0");
+  const chTag = `ch${num}`;
+  const parts: string[] = [];
+
+  const charEntities = listEntities(novelId, "characters");
+  const withState = charEntities.filter((e) => e.state && e.state !== "active");
+  if (withState.length) {
+    parts.push(
+      `## 角色当前状态（动态，随章节更新）\n${withState
+        .map((e) => `- **${e.name}**：${e.state}`)
+        .join("\n")}`,
+    );
+  }
+
+  const foreshadows = listEntities(novelId, "foreshadowing");
+  const relevant = foreshadows.filter((e) => {
+    const f = e.fields;
+    return [f.plant, f.strengthen, f.resolve].some(
+      (v) => typeof v === "string" && v.includes(chTag),
+    );
+  });
+  if (relevant.length) {
+    parts.push(
+      `## 本章伏笔指令\n${relevant
+        .map(
+          (e) =>
+            `- **${e.id} ${e.name}**（${e.fields.type ?? ""}，state=${e.state}）：${e.fields.desc ?? ""}`,
+        )
+        .join("\n")}`,
+    );
+  }
+
+  return parts.join("\n\n");
 }
 
 export { extractCharacters, extractForeshadowing, extractStorylines, extractTimeline };

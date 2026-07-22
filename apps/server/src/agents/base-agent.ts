@@ -23,6 +23,10 @@ export interface AgentRunOptions {
    * 设 false 时置 pending_confirm，等用户显式 /confirm（对齐 skill 人工确认纪律）。
    */
   autoConfirm?: boolean;
+  /**
+   * 额外上下文块（如动态写作空间的实体状态），拼到 agent 输入前。
+   */
+  extraContext?: string;
 }
 
 export abstract class BaseAgent {

@@ -52,7 +52,7 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
   const novelDir = fileService.getNovelDir(novelId);
   const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
-  const svc = new WritingLoopService(novelDir, keys, agentModels);
+  const svc = new WritingLoopService(novelId, novelDir, keys, agentModels);
 
   // SSE
   res.setHeader("Content-Type", "text/event-stream");

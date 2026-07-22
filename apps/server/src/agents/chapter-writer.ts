@@ -128,7 +128,7 @@ ${options.userDirective}
         }
       }
 
-      input = `## 写作第 ${chapterNumber} 章
+      input = `${options?.extraContext ? options.extraContext + "\n\n---\n\n" : ""}## 写作第 ${chapterNumber} 章
 
 ### 章节大纲
 ${outline}

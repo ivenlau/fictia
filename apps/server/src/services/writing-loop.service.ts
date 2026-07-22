@@ -1,13 +1,12 @@
 /**
- * 章节写作循环服务（review-fix 循环门）。
+ * 章节写作循环服务（review-fix 循环门 + 动态写作空间注入）。
  *
- * 忠实复刻 skill 的「章节写作流程」：
- *   写作 -> 确定性 prose 检查（blocking 必须先修）-> 编辑审核 -> verdict 判定
- *   -> 未过则定向修复 -> 重新审核 -> 最多 maxRounds 轮 -> 通过则确认 / 否则中止。
+ * 流程（对齐 skill 章节写作流程）：
+ *   确保实体索引 -> 组装动态上下文(角色状态+本章伏笔)注入 chapter-writer
+ *   -> 写作 -> 确定性 prose 检查（blocking 先修）-> 编辑审核 -> verdict
+ *   -> 未过则定向修复 -> 重新审核 -> 最多 maxRounds 轮 -> 通过则确认 + 更新实体状态
  *
  * 通过条件（与 skill 一致）：grade === "A" && severe === 0 && normal === 0。
- * 仅操作文件模型（chapters/act-N/chNN.md + reviews/chNN-review.md），不碰 DB 章节表
- * （与现有 chapter-writer 流程一致，非破坏）。
  */
 
 import { createAgent } from "../agents/index.js";
@@ -18,6 +17,12 @@ import { parseReviewVerdict, type Verdict } from "../utils/verdict.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
 import type { AgentType } from "@fictia/shared";
 import * as path from "path";
+import { entityStats } from "./entity-store.js";
+import {
+  indexAllEntities,
+  assembleDynamicContext,
+  updateEntitiesFromChapterNotes,
+} from "./entity.service.js";
 
 export type LoopPhase =
   | "writing"
@@ -45,12 +50,14 @@ export interface LoopResult {
   finalVerdict: Verdict | null;
   proseBlockingRemaining: number;
   proseAdvisory: number;
+  entitiesUpdated: number;
 }
 
 export type ProgressCb = (p: LoopProgress) => void;
 
 export class WritingLoopService {
   constructor(
+    private readonly novelId: string,
     private readonly novelDir: string,
     private readonly apiKeys: Record<string, string>,
     private readonly agentModels?: Record<AgentType, { provider: string; model: string }>,
@@ -100,9 +107,20 @@ export class WritingLoopService {
     const reviewPath = `reviews/ch${String(chapterNumber).padStart(2, "0")}-review.md`;
     const emit = (p: LoopProgress) => onProgress?.(p);
 
+    // 确保实体已索引（首次），组装动态上下文注入 chapter-writer
+    const stats = entityStats(this.novelId);
+    if (stats.characters === 0) {
+      try {
+        await indexAllEntities(this.novelId);
+      } catch {
+        // 索引失败不阻塞写作
+      }
+    }
+    const dynamicContext = assembleDynamicContext(this.novelId, chapterNumber);
+
     // 第 0 轮：写作
     emit({ phase: "writing", round: 0, message: `写作第 ${chapterNumber} 章` });
-    await writer.writeChapter(chapterNumber);
+    await writer.writeChapter(chapterNumber, { extraContext: dynamicContext });
 
     // 阶段 1a：确定性 prose 检查（blocking 必须先修，不消耗审核轮次，最多 3 次内部修复）
     let proseBlockingRemaining = 0;
@@ -144,7 +162,15 @@ export class WritingLoopService {
       });
 
       if (verdict.passed) {
-        emit({ phase: "done", round, message: `第 ${chapterNumber} 章通过（${round} 轮）` });
+        // 通过：更新实体状态（从本章写作备注），供下一章动态上下文使用
+        let entitiesUpdated = 0;
+        try {
+          const r = await updateEntitiesFromChapterNotes(this.novelId, chapterNumber);
+          entitiesUpdated = r.updated;
+        } catch {
+          // 状态更新失败不阻塞
+        }
+        emit({ phase: "done", round, message: `第 ${chapterNumber} 章通过（${round} 轮），实体状态更新 ${entitiesUpdated} 条` });
         return {
           chapterNumber,
           chapterPath,
@@ -154,6 +180,7 @@ export class WritingLoopService {
           finalVerdict: verdict,
           proseBlockingRemaining,
           proseAdvisory,
+          entitiesUpdated,
         };
       }
 
@@ -178,6 +205,7 @@ export class WritingLoopService {
       finalVerdict: verdict,
       proseBlockingRemaining,
       proseAdvisory,
+      entitiesUpdated: 0,
     };
   }
 
