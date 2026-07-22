@@ -1,13 +1,14 @@
 /**
- * 实体提取 + 动态写作空间组装（scoped P2-2）。
+ * 实体提取 + 动态写作空间组装 + 知识图谱构建（scoped P2-2 / P2-3）。
  *
  * 提取 4 类实体：
- *   characters    <- characters/*.md 的 YAML front-matter
+ *   characters    <- characters/*.md 的 YAML front-matter（含 relationships）
  *   foreshadowing <- narrative-weave.md 的伏笔表
  *   storylines    <- narrative-weave.md 的支线表
  *   timeline      <- world/timeline.md 的时间线表
  *
- * 表 schema 对齐 skill project-structure.md。动态状态更新（从章节写作备注）为后续。
+ * 知识图谱：从 characters.relationships + storylines.characters 抽三元组。
+ * 表 schema 对齐 skill project-structure.md。动态状态更新（从章节备注）为后续。
  */
 
 import * as yaml from "js-yaml";
@@ -24,7 +25,10 @@ import {
   upsertEntities,
   clearEntities,
   listEntities,
+  clearRelations,
+  upsertRelations,
   type Entity,
+  type Relation,
 } from "./entity-store.js";
 
 // ---------- 表解析 ----------
@@ -89,6 +93,7 @@ async function extractCharacters(novelDir: string): Promise<Entity[]> {
         age: fm.age ?? "",
         traits: fm.traits ?? [],
         language_style: fm.language_style ?? "",
+        relationships: fm.relationships ?? [],
         file: path.relative(novelDir, f).replace(/\\/g, "/"),
       },
     });
@@ -99,7 +104,7 @@ async function extractCharacters(novelDir: string): Promise<Entity[]> {
 async function extractForeshadowing(novelDir: string): Promise<Entity[]> {
   const nw = await readFileSafe(path.join(novelDir, "narrative-weave.md"));
   if (!nw) return [];
-  const rows = parseTableRows(nw, /编号.*名称.*类型/);
+  const rows = parseTableRows(nw, /编号.*名称.*类型.*埋设章节/);
   return rows
     .filter((r) => r.length >= 4 && r[0])
     .map((r) => {
@@ -178,6 +183,91 @@ export async function indexAllEntities(
   };
 }
 
+// ---------- 知识图谱 ----------
+
+/** 从关系描述文本归类关系类型。 */
+function classifyRel(text: string): string {
+  if (/师|徒|mentor/.test(text)) return "mentor";
+  if (/友|friend/.test(text)) return "friend";
+  if (/敌|enemy|rival|对手/.test(text)) return "enemy";
+  if (/恋|爱|lover|青梅/.test(text)) return "lover";
+  if (/家|族|family|父|母|兄|弟|姐|妹|亲/.test(text)) return "family";
+  if (/盟|ally/.test(text)) return "ally";
+  return "related_to";
+}
+
+/** 容忍两种 relationships 格式：字符串「与X：Y」/「X：Y」或对象 {name, relation}。 */
+function parseRelationship(
+  r: unknown,
+): { target: string; relType: string; text: string } | null {
+  if (typeof r === "string") {
+    const m = r.match(/^与?\s*([^:：]+)[:：]\s*(.+)$/);
+    if (m) {
+      const text = m[2].trim();
+      return { target: m[1].trim(), relType: classifyRel(text), text };
+    }
+    return null;
+  }
+  if (r && typeof r === "object") {
+    const obj = r as Record<string, unknown>;
+    const name = obj.name ?? obj.target ?? "";
+    const rel = obj.relation ?? obj.rel_type ?? "related";
+    if (name) {
+      const text = String(rel);
+      return { target: String(name), relType: classifyRel(text), text };
+    }
+  }
+  return null;
+}
+
+/**
+ * 从已有实体构建知识图谱三元组：
+ *   - characters.relationships -> (char, relType, target)
+ *   - storylines.characters    -> (char, participates, storyline)
+ */
+export async function buildGraph(
+  novelId: string,
+): Promise<{ relations_added: number }> {
+  const characters = listEntities(novelId, "characters");
+  const storylines = listEntities(novelId, "storylines");
+  const rels: Relation[] = [];
+
+  for (const c of characters) {
+    const rships = c.fields.relationships;
+    if (Array.isArray(rships)) {
+      for (const r of rships) {
+        const parsed = parseRelationship(r);
+        if (parsed) {
+          rels.push({
+            source_id: c.id,
+            rel_type: parsed.relType,
+            target_id: parsed.target,
+            text: parsed.text,
+          });
+        }
+      }
+    }
+  }
+
+  for (const s of storylines) {
+    const chars = s.fields.characters;
+    if (typeof chars === "string" && chars.trim()) {
+      for (const name of chars.split(/[,，、]/).map((x) => x.trim()).filter(Boolean)) {
+        rels.push({
+          source_id: name,
+          rel_type: "participates",
+          target_id: s.id,
+          text: `参与支线 ${s.name}`,
+        });
+      }
+    }
+  }
+
+  clearRelations(novelId);
+  upsertRelations(novelId, rels);
+  return { relations_added: rels.length };
+}
+
 // ---------- 写作空间组装 ----------
 
 async function collectCharacterFiles(
@@ -202,7 +292,6 @@ async function collectCharacterFiles(
 
 /**
  * 为指定章节组装动态写作空间（静态设计 + 必读动态实体 + 按需检索提示）。
- * 对齐 skill writing_space.py 的三层结构（简化版）。
  */
 export async function assembleWritingSpace(
   novelId: string,
@@ -213,13 +302,11 @@ export async function assembleWritingSpace(
   const chTag = `ch${num}`;
   const parts: string[] = [];
 
-  // 1. 章节大纲
   const outline = await readFileSafe(
     path.join(novelDir, "outline", "chapters", `ch${num}.md`),
   );
   if (outline) parts.push(`## 章节大纲（ch${num}）\n\n${outline}`);
 
-  // 2. 风格要点
   const styleGuide = await readFileSafe(path.join(novelDir, "style-guide.md"));
   if (styleGuide) {
     const act = chapterToAct(chapterNumber);
@@ -227,7 +314,6 @@ export async function assembleWritingSpace(
     if (notes) parts.push(`## 风格要点（act ${act}）\n\n${notes}`);
   }
 
-  // 3. 世界观速查
   const worldSetting = await readFileSafe(path.join(novelDir, "world", "setting.md"));
   const worldRules = await readFileSafe(path.join(novelDir, "world", "rules.md"));
   if (worldSetting || worldRules) {
@@ -235,14 +321,12 @@ export async function assembleWritingSpace(
     if (ref) parts.push(`## 世界观速查\n\n${ref}`);
   }
 
-  // 4. 角色总览
   const charFiles = await collectCharacterFiles(novelDir);
   if (charFiles.length) {
     const registry = buildCharacterRegistry(charFiles);
     if (registry) parts.push(`## 角色总览\n\n${registry}`);
   }
 
-  // 5. 角色当前状态（非默认 active 的）
   const charEntities = listEntities(novelId, "characters");
   const withState = charEntities.filter((e) => e.state && e.state !== "active");
   if (withState.length) {
@@ -253,7 +337,6 @@ export async function assembleWritingSpace(
     );
   }
 
-  // 6. 本章相关伏笔（埋设/强化/回收章节命中本章）
   const foreshadows = listEntities(novelId, "foreshadowing");
   const relevant = foreshadows.filter((e) => {
     const f = e.fields;
@@ -272,7 +355,6 @@ export async function assembleWritingSpace(
     );
   }
 
-  // 7. 按需检索提示
   parts.push(
     `## 按需检索\n如需更多实体（其他章节伏笔/支线/时间线），使用 GET /novels/:id/entity/search?q=...`,
   );

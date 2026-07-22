@@ -8,6 +8,7 @@ import { writingLoopRoutes } from "./routes/writing-loop.js";
 import { brainstormRoutes } from "./routes/brainstorm.js";
 import { vectorRoutes } from "./routes/vector.js";
 import { entityRoutes } from "./routes/entity.js";
+import { graphRoutes } from "./routes/graph.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { chatRoutes } from "./routes/chat.js";
@@ -27,6 +28,7 @@ export function createApp() {
   app.use("/api", brainstormRoutes);
   app.use("/api", vectorRoutes);
   app.use("/api", entityRoutes);
+  app.use("/api", graphRoutes);
   app.use("/api/settings", settingsRoutes);
   app.use("/api/feedback", feedbackRoutes);
   app.use("/api/chat", chatRoutes);

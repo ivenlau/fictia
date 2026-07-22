@@ -1,7 +1,6 @@
 /**
- * 实体存储：每 novel 独立 entities.db，通用实体表（collection/id/name/state/fields）。
- * 8 类 collection（characters/foreshadowing/storylines/timeline/locations/items/events/easter_eggs）。
- * scoped P2-2：仅提取前 4 类；store 通用，后续可扩展。
+ * 实体存储 + 关系（知识图谱）存储：每 novel 独立 entities.db。
+ * entities 表（collection/id/name/state/fields）+ relations 表（source_id/rel_type/target_id/text/chapter）。
  */
 
 import Database from "better-sqlite3";
@@ -39,6 +38,18 @@ function getDb(novelId: string): Database.Database {
       PRIMARY KEY (collection, id)
     )`,
   );
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS relations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_id TEXT NOT NULL,
+      rel_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      text TEXT,
+      chapter INTEGER
+    )`,
+  );
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target_id)`);
   dbCache.set(novelId, db);
   return db;
 }
@@ -51,7 +62,21 @@ export interface Entity {
   fields: Record<string, unknown>;
 }
 
-function rowToEntity(row: { collection: string; id: string; name: string | null; state: string | null; fields: string | null }): Entity {
+export interface Relation {
+  source_id: string;
+  rel_type: string;
+  target_id: string;
+  text: string;
+  chapter?: number | null;
+}
+
+function rowToEntity(row: {
+  collection: string;
+  id: string;
+  name: string | null;
+  state: string | null;
+  fields: string | null;
+}): Entity {
   let fields: Record<string, unknown> = {};
   try {
     fields = row.fields ? JSON.parse(row.fields) : {};
@@ -66,6 +91,8 @@ function rowToEntity(row: { collection: string; id: string; name: string | null;
     fields,
   };
 }
+
+// ---------- entities ----------
 
 export function upsertEntities(novelId: string, entities: Entity[]): void {
   const db = getDb(novelId);
@@ -132,4 +159,105 @@ export function entityStats(novelId: string): Record<string, number> {
     stats[c] = row.n;
   }
   return stats;
+}
+
+// ---------- relations (knowledge graph) ----------
+
+export function upsertRelations(novelId: string, rels: Relation[]): void {
+  const db = getDb(novelId);
+  const stmt = db.prepare(
+    `INSERT INTO relations(source_id, rel_type, target_id, text, chapter) VALUES (?, ?, ?, ?, ?)`,
+  );
+  const tx = db.transaction((rs: Relation[]) => {
+    for (const r of rs) {
+      stmt.run(r.source_id, r.rel_type, r.target_id, r.text, r.chapter ?? null);
+    }
+  });
+  tx(rels);
+}
+
+export function clearRelations(novelId: string): void {
+  const db = getDb(novelId);
+  db.exec(`DELETE FROM relations`);
+}
+
+export function listRelations(
+  novelId: string,
+  entityId?: string,
+  relType?: string,
+): (Relation & { id: number })[] {
+  const db = getDb(novelId);
+  let sql = `SELECT * FROM relations WHERE 1=1`;
+  const params: any[] = [];
+  if (entityId) {
+    sql += ` AND (source_id = ? OR target_id = ?)`;
+    params.push(entityId, entityId);
+  }
+  if (relType) {
+    sql += ` AND rel_type = ?`;
+    params.push(relType);
+  }
+  sql += ` ORDER BY id`;
+  return (db.prepare(sql).all(...params) as any[]).map((r) => ({
+    id: r.id,
+    source_id: r.source_id,
+    rel_type: r.rel_type,
+    target_id: r.target_id,
+    text: r.text ?? "",
+    chapter: r.chapter,
+  }));
+}
+
+export interface Neighbor {
+  relation_id: number;
+  entity_id: string;
+  rel_type: string;
+  direction: "out" | "in";
+  text: string;
+  chapter?: number | null;
+}
+
+export function getNeighbors(
+  novelId: string,
+  entityId: string,
+  relType?: string,
+): Neighbor[] {
+  const rels = listRelations(novelId, entityId, relType);
+  const out: Neighbor[] = [];
+  for (const r of rels) {
+    if (r.source_id === entityId) {
+      out.push({
+        relation_id: r.id,
+        entity_id: r.target_id,
+        rel_type: r.rel_type,
+        direction: "out",
+        text: r.text,
+        chapter: r.chapter,
+      });
+    }
+    if (r.target_id === entityId) {
+      out.push({
+        relation_id: r.id,
+        entity_id: r.source_id,
+        rel_type: r.rel_type,
+        direction: "in",
+        text: r.text,
+        chapter: r.chapter,
+      });
+    }
+  }
+  return out;
+}
+
+export function relationStats(
+  novelId: string,
+): { relations: number; types: Record<string, number> } {
+  const db = getDb(novelId);
+  const total = (db.prepare(`SELECT COUNT(*) as n FROM relations`).get() as { n: number }).n;
+  const typeRows = db
+    .prepare(`SELECT rel_type, COUNT(*) as n FROM relations GROUP BY rel_type`)
+    .all() as { rel_type: string; n: number }[];
+  const types: Record<string, number> = {};
+  for (const r of typeRows) types[r.rel_type] = r.n;
+  return { relations: total, types };
 }
