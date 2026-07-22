@@ -46,6 +46,8 @@ function getDb(novelId: string): Database.Database {
     );
   }
 
+  db.exec(`CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT)`);
+
   dbCache.set(novelId, db);
   return db;
 }
@@ -138,4 +140,21 @@ export function collectionStats(novelId: string): Record<string, number> {
     stats[c] = row.n;
   }
   return stats;
+}
+
+/** 记录当前向量库是用哪个 embedding provider 索引的（查询时校验一致性）。 */
+export function setIndexProvider(novelId: string, provider: string): void {
+  const db = getDb(novelId);
+  db.prepare(`INSERT OR REPLACE INTO kv(key, value) VALUES (?, ?)`).run(
+    "index_provider",
+    provider,
+  );
+}
+
+export function getIndexProvider(novelId: string): string | null {
+  const db = getDb(novelId);
+  const row = db
+    .prepare(`SELECT value FROM kv WHERE key = ?`)
+    .get("index_provider") as { value: string | null } | undefined;
+  return row?.value ?? null;
 }

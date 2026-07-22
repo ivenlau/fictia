@@ -4,11 +4,12 @@ import {
   Search,
   GitBranch,
   Bot,
+  Library,
   Settings,
 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 
-type Panel = "explorer" | "search" | "graph" | "agent";
+type Panel = "explorer" | "search" | "graph" | "agent" | "knowledge";
 
 interface ActivityItem {
   icon: React.ElementType;
@@ -21,6 +22,7 @@ const items: ActivityItem[] = [
   { icon: Search, panel: "search", label: "Search" },
   { icon: GitBranch, panel: "graph", label: "Graph" },
   { icon: Bot, panel: "agent", label: "Agent" },
+  { icon: Library, panel: "knowledge", label: "知识库" },
 ];
 
 export function ActivityBar() {

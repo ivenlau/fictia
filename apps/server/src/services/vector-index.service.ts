@@ -6,10 +6,11 @@
  * notes / sources 暂不索引（无 notes 子系统；source 工作流在 P3）。
  */
 
-import { embed } from "../utils/embedding.js";
+import { embed, type EmbeddingProvider } from "../utils/embedding.js";
 import {
   upsertVectors,
   clearCollection,
+  setIndexProvider,
   type VectorItem,
   type VectorCollection,
 } from "./vector-store.js";
@@ -49,12 +50,14 @@ async function indexChunks(
   novelId: string,
   collection: VectorCollection,
   chunks: FileChunk[],
+  provider: EmbeddingProvider,
   apiKey: string,
 ): Promise<number> {
   if (chunks.length === 0) return 0;
   clearCollection(novelId, collection);
   const vectors = await embed(
     chunks.map((c) => c.text.slice(0, 8000)),
+    provider,
     apiKey,
   );
   const items: VectorItem[] = chunks.map((c, i) => ({
@@ -69,17 +72,23 @@ async function indexChunks(
 
 export async function indexAll(
   novelId: string,
+  provider: EmbeddingProvider,
   apiKey: string,
   onProgress?: (msg: string) => void,
 ): Promise<{ indexed: Record<string, number> }> {
   const novelDir = fileService.getNovelDir(novelId);
   const indexed: Record<string, number> = {};
 
+  if (provider === "bge-m3") {
+    onProgress?.("加载本地 bge-m3 模型（首次需下载约 2.2GB，请耐心等待）");
+  }
+
   onProgress?.("索引 chapters");
   indexed.chapters = await indexChunks(
     novelId,
     "chapters",
     await collectFiles(novelDir, path.join(novelDir, "chapters"), /^ch\d+\.md$/),
+    provider,
     apiKey,
   );
 
@@ -98,13 +107,14 @@ export async function indexAll(
   designChunks.push(
     ...(await collectFiles(novelDir, path.join(novelDir, "characters"), /\.md$/)),
   );
-  indexed.design = await indexChunks(novelId, "design", designChunks, apiKey);
+  indexed.design = await indexChunks(novelId, "design", designChunks, provider, apiKey);
 
   onProgress?.("索引 world");
   indexed.world = await indexChunks(
     novelId,
     "world",
     await collectFiles(novelDir, path.join(novelDir, "world"), /\.md$/),
+    provider,
     apiKey,
   );
 
@@ -113,8 +123,10 @@ export async function indexAll(
     novelId,
     "outlines",
     await collectFiles(novelDir, path.join(novelDir, "outline"), /\.md$/),
+    provider,
     apiKey,
   );
 
+  setIndexProvider(novelId, provider);
   return { indexed };
 }

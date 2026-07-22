@@ -10,7 +10,7 @@ export interface WritingLoopEvent {
   [key: string]: unknown;
 }
 
-async function consumeSse(
+export async function consumeSse(
   res: Response,
   onEvent: (e: WritingLoopEvent) => void,
 ): Promise<void> {

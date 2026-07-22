@@ -6,6 +6,7 @@ import {
   collectionStats,
   queryVectors,
   isCollection,
+  getIndexProvider,
 } from "../services/vector-store.js";
 import { indexAll } from "../services/vector-index.service.js";
 import { embedOne } from "../utils/embedding.js";
@@ -36,9 +37,16 @@ router.get("/novels/:novelId/search", async (req, res) => {
     return;
   }
 
+  const provider = settingsService.getEmbeddingProvider();
+  const indexedProvider = getIndexProvider(novelId);
+  if (indexedProvider && indexedProvider !== provider) {
+    res.status(400).json({ error: `索引(provider=${indexedProvider})与当前 embedding(${provider})不一致，请重新索引` });
+    return;
+  }
+
   const keys = settingsService.getApiKeys();
   try {
-    const queryVec = await embedOne(q, keys.glm);
+    const queryVec = await embedOne(q, provider, keys.glm);
     const hits = queryVectors(novelId, collection, queryVec, topK);
     res.json({ query: q, collection, hits });
   } catch (err: any) {
@@ -66,10 +74,11 @@ router.post("/novels/:novelId/vector/index", async (req, res) => {
   const send = (obj: Record<string, unknown>) =>
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
+  const provider = settingsService.getEmbeddingProvider();
   const keys = settingsService.getApiKeys();
   try {
     send({ type: "start" });
-    const result = await indexAll(novelId, keys.glm, (msg) =>
+    const result = await indexAll(novelId, provider, keys.glm, (msg) =>
       send({ type: "progress", message: msg }),
     );
     send({ type: "result", result });
@@ -95,7 +104,7 @@ router.get("/novels/:novelId/vector/status", async (req, res) => {
   void fileService.getNovelDir(novelId);
   try {
     const stats = collectionStats(novelId);
-    res.json({ novelId, collections: stats });
+    res.json({ novelId, collections: stats, indexProvider: getIndexProvider(novelId) });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "状态查询失败" });
   }

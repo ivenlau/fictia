@@ -16,6 +16,7 @@
     "@earendil-works/pi-ai": "^0.74.0",
     "@earendil-works/pi-coding-agent": "^0.74.0",
     "@fictia/shared": "workspace:*",
+    "@huggingface/transformers": "^4.2.0",
     "@sinclair/typebox": "^0.34.49",
     "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",

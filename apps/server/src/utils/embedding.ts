@@ -1,30 +1,39 @@
 /**
- * Embedding：智谱 embedding-2 API（1024 维）+ stub（测试用，无 API key）。
- * 对齐 skill 的 ZhipuApiEmbedding（同端点、同模型、同维度）。
+ * Embedding：按 provider 分流。
+ *   glm     -> 智谱 embedding-2 API（1024 维），需 API key。
+ *   bge-m3  -> 本地 transformers.js（1024 维），无需 key。
+ *
+ * 两种 provider 都是 1024 维（EMBED_DIM 不变），但向量空间不同，
+ * 切换 provider 后旧索引不可复用（由向量库的 index_provider 记录并校验）。
+ *
+ * stub（测试用，无 key/provider 时的确定性 hash embedding）。
  */
 
 import { createHash } from "crypto";
+import type { EmbeddingProvider } from "../../../../packages/shared/src/types.js";
+import { localEmbed } from "./local-embedder.js";
 
 export const EMBED_DIM = 1024;
-const API_URL = "https://open.bigmodel.cn/api/paas/v4/embeddings";
-const MODEL = "embedding-2";
+export type { EmbeddingProvider };
+/** 别名，便于后端按习惯引用。 */
+export type EmbedProvider = EmbeddingProvider;
+
+const GLM_API_URL = "https://open.bigmodel.cn/api/paas/v4/embeddings";
+const GLM_MODEL = "embedding-2";
 
 export class EmbeddingError extends Error {}
 
-/**
- * 调用智谱 embedding-2 批量嵌入。apiKey 为智谱/GLM API key。
- */
-export async function embed(texts: string[], apiKey: string): Promise<number[][]> {
+/** 智谱 embedding-2 批量嵌入。 */
+async function embedGlm(texts: string[], apiKey: string): Promise<number[][]> {
   if (!apiKey) throw new EmbeddingError("未配置 GLM/智谱 API key（settings.apiKeyGlm）");
-  if (texts.length === 0) return [];
 
-  const resp = await fetch(API_URL, {
+  const resp = await fetch(GLM_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: MODEL, input: texts }),
+    body: JSON.stringify({ model: GLM_MODEL, input: texts }),
   });
 
   if (!resp.ok) {
@@ -36,13 +45,29 @@ export async function embed(texts: string[], apiKey: string): Promise<number[][]
   return data.data.map((item) => item.embedding);
 }
 
-export async function embedOne(text: string, apiKey: string): Promise<number[]> {
-  const vecs = await embed([text], apiKey);
+/**
+ * 批量嵌入：glm 走智谱 API，bge-m3 走本地 transformers.js。
+ */
+export async function embed(
+  texts: string[],
+  provider: EmbeddingProvider,
+  glmKey: string,
+): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  return provider === "bge-m3" ? localEmbed(texts) : embedGlm(texts, glmKey);
+}
+
+export async function embedOne(
+  text: string,
+  provider: EmbeddingProvider,
+  glmKey: string,
+): Promise<number[]> {
+  const vecs = await embed([text], provider, glmKey);
   return vecs[0];
 }
 
 /**
- * Stub：确定性 hash-based embedding（无 API key，仅用于测试向量库机制）。
+ * Stub：确定性 hash-based embedding（无 API key/provider，仅用于测试向量库机制）。
  * 移植自 skill embeddings.py::StubEmbedding._hash_to_vector。
  */
 export function stubEmbed(text: string, dim: number = EMBED_DIM): number[] {

@@ -113,12 +113,15 @@ export interface WorkspaceFile {
   updatedAt: string;
 }
 
+export type EmbeddingProvider = "glm" | "bge-m3";
+
 export interface Settings {
   apiKeyGlm: string;
   apiKeyMinimax: string;
   apiKeyDoubao: string;
   agentModels: Record<AgentType, { provider: string; model: string }>;
   chatPersona: string;
+  embeddingProvider: EmbeddingProvider;
 }
 
 export interface ChatMessage {
