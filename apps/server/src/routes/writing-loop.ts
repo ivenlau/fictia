@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import type { AgentType } from "@fictia/shared";
+import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 import { db, schema } from "../db/index.js";
 import { novelService } from "../services/novel.service.js";
-import { settingsService } from "../services/settings.service.js";
 import { fileService } from "../services/file.service.js";
 import { WritingLoopService } from "../services/writing-loop.service.js";
 import {
@@ -15,7 +14,7 @@ import {
 const router = Router();
 
 /** 读取 per-agent 模型配置（与 pipelines.ts 同逻辑）。 */
-function getAgentModels(): Record<AgentType, { provider: string; model: string }> | undefined {
+function getAgentModels(): Partial<Record<AgentType, AgentModelAssignment>> | undefined {
   const row = db
     .select()
     .from(schema.settings)
@@ -50,9 +49,8 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
-  const svc = new WritingLoopService(novelId, novelDir, keys, agentModels);
+  const svc = new WritingLoopService(novelId, novelDir, agentModels);
 
   // SSE
   res.setHeader("Content-Type", "text/event-stream");
@@ -123,7 +121,6 @@ router.post("/novels/:novelId/consistency-check", async (req, res) => {
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -136,7 +133,7 @@ router.post("/novels/:novelId/consistency-check", async (req, res) => {
 
   try {
     send({ type: "start" });
-    const result = await runConsistencyCheck(novelDir, keys, agentModels, (p) =>
+    const result = await runConsistencyCheck(novelDir, agentModels, (p) =>
       send({ type: "progress", ...p }),
     );
     send({ type: "result", result });

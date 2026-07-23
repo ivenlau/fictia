@@ -15,7 +15,7 @@ import { EditorAgent } from "../agents/editor.js";
 import { checkProse, type ProseReport } from "../utils/prose-check.js";
 import { parseReviewVerdict, type Verdict } from "../utils/verdict.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
-import type { AgentType } from "@fictia/shared";
+import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 import * as path from "path";
 import { entityStats } from "./entity-store.js";
 import {
@@ -59,8 +59,7 @@ export class WritingLoopService {
   constructor(
     private readonly novelId: string,
     private readonly novelDir: string,
-    private readonly apiKeys: Record<string, string>,
-    private readonly agentModels?: Record<AgentType, { provider: string; model: string }>,
+    private readonly agentModels?: Partial<Record<AgentType, AgentModelAssignment>>,
   ) {}
 
   /**
@@ -100,8 +99,8 @@ export class WritingLoopService {
     maxRounds = 3,
     onProgress?: ProgressCb,
   ): Promise<LoopResult> {
-    const writer = createAgent("chapter-writer", this.novelDir, this.apiKeys, this.agentModels) as ChapterWriterAgent;
-    const editor = createAgent("editor", this.novelDir, this.apiKeys, this.agentModels) as EditorAgent;
+    const writer = createAgent("chapter-writer", this.novelDir, this.agentModels) as ChapterWriterAgent;
+    const editor = createAgent("editor", this.novelDir, this.agentModels) as EditorAgent;
 
     const chapterPath = await this.resolveChapterPath(chapterNumber);
     const reviewPath = `reviews/ch${String(chapterNumber).padStart(2, "0")}-review.md`;

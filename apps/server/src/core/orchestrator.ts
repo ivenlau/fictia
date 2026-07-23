@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import type { StageName, AgentType } from "@fictia/shared";
+import type { StageName, AgentType, AgentModelAssignment } from "@fictia/shared";
 import { STAGE_LABELS } from "@fictia/shared";
 import { StateTracker } from "./state-tracker.js";
 import { UpdatePropagator } from "./update-propagator.js";
@@ -22,19 +22,16 @@ export class Orchestrator extends EventEmitter {
   private updatePropagator: UpdatePropagator;
   private novelDir: string;
   private novelId: string;
-  private apiKeys: Record<string, string>;
-  private agentModels?: Record<AgentType, { provider: string; model: string }>;
+  private agentModels?: Partial<Record<AgentType, AgentModelAssignment>>;
 
   constructor(
     novelId: string,
     novelDir: string,
-    apiKeys: Record<string, string>,
-    agentModels?: Record<AgentType, { provider: string; model: string }>,
+    agentModels?: Partial<Record<AgentType, AgentModelAssignment>>,
   ) {
     super();
     this.novelId = novelId;
     this.novelDir = novelDir;
-    this.apiKeys = apiKeys;
     this.agentModels = agentModels;
     this.stateTracker = new StateTracker(novelId);
     this.updatePropagator = new UpdatePropagator(this.stateTracker);
@@ -45,11 +42,7 @@ export class Orchestrator extends EventEmitter {
     await this.stateTracker.load();
   }
 
-  updateConfig(
-    apiKeys: Record<string, string>,
-    agentModels?: Record<AgentType, { provider: string; model: string }>,
-  ) {
-    this.apiKeys = apiKeys;
+  updateConfig(agentModels?: Partial<Record<AgentType, AgentModelAssignment>>) {
     this.agentModels = agentModels;
   }
 
@@ -106,7 +99,6 @@ export class Orchestrator extends EventEmitter {
       const agent = createAgentFromStage(
         stageName,
         this.novelDir,
-        this.apiKeys,
         this.agentModels,
       );
 
@@ -161,7 +153,6 @@ export class Orchestrator extends EventEmitter {
       const agent = createAgentFromStage(
         stageName,
         this.novelDir,
-        this.apiKeys,
         this.agentModels,
       );
       const moreWork = await agent.hasMoreWork();

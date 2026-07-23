@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { ChatMessage } from "@fictia/shared";
-import { CHAT_MODELS } from "@fictia/shared";
 
 interface ToolCallEntry {
   tool: string;
@@ -11,10 +10,10 @@ interface ToolCallEntry {
 interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
-  selectedProvider: string;
-  selectedModel: string;
+  selectedProviderId: string;
+  selectedModelId: string;
   toolCalls: ToolCallEntry[];
-  setModel: (provider: string, model: string) => void;
+  setModel: (providerId: string, modelId: string) => void;
   addMessage: (msg: ChatMessage) => void;
   appendToLast: (delta: string) => void;
   addToolCall: (tc: ToolCallEntry) => void;
@@ -23,16 +22,15 @@ interface ChatState {
   clearMessages: () => void;
 }
 
-const defaultModel = CHAT_MODELS[0];
-
-export const useChatStore = create<ChatState>((set, get) => ({
+export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   isStreaming: false,
-  selectedProvider: defaultModel.provider,
-  selectedModel: defaultModel.model,
+  selectedProviderId: "",
+  selectedModelId: "",
   toolCalls: [],
 
-  setModel: (provider, model) => set({ selectedProvider: provider, selectedModel: model }),
+  setModel: (providerId, modelId) =>
+    set({ selectedProviderId: providerId, selectedModelId: modelId }),
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
 

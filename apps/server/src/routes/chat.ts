@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { v4 as uuid } from "uuid";
 import { db, schema } from "../db/index.js";
-import { settingsService } from "../services/settings.service.js";
-import { createModel } from "../llm/providers.js";
+import { providerService } from "../services/provider.service.js";
+import { buildModel } from "../llm/providers.js";
 import { runChatAgent } from "../agents/chat.agent.js";
 import type { ChatRequest } from "@fictia/shared";
 import { DEFAULT_CHAT_PERSONA } from "@fictia/shared";
@@ -39,24 +39,22 @@ router.delete("/history", (req, res) => {
 
 // POST / — SSE streaming chat
 router.post("/", async (req, res) => {
-  const { message, novelId, provider, model, history } = req.body as ChatRequest;
+  const { message, novelId, providerId, modelId, history } = req.body as ChatRequest;
 
   if (!message?.trim()) {
     res.status(400).json({ error: "message is required" });
     return;
   }
 
-  // Get API keys and persona
-  const keys = settingsService.getApiKeys();
-  const apiKeyMap: Record<string, string> = {
-    glm: keys.glm,
-    minimax: keys.minimax,
-    doubao: keys.doubao,
-  };
-
-  const apiKey = apiKeyMap[provider];
+  // Resolve provider + model from DB
+  const resolved = providerService.resolveModel(providerId, modelId);
+  if (!resolved) {
+    res.status(400).json({ error: `Provider/model 未配置: ${providerId}/${modelId}` });
+    return;
+  }
+  const apiKey = resolved.provider.apiKey ?? "";
   if (!apiKey) {
-    res.status(400).json({ error: `API key not configured for provider: ${provider}` });
+    res.status(400).json({ error: `未配置 API Key：${resolved.provider.name}` });
     return;
   }
 
@@ -69,7 +67,7 @@ router.post("/", async (req, res) => {
   const persona = personaRow?.value || DEFAULT_CHAT_PERSONA;
 
   // Create model
-  const llmModel = createModel(provider, model);
+  const llmModel = buildModel(resolved.provider, resolved.model);
 
   // Save user message to DB
   const userMsgId = uuid();
@@ -119,8 +117,8 @@ router.post("/", async (req, res) => {
         novelId: novelId ?? null,
         role: "assistant",
         content: fullResponse,
-        modelUsed: model,
-        providerUsed: provider,
+        modelUsed: modelId,
+        providerUsed: providerId,
         createdAt: now(),
       })
       .run();

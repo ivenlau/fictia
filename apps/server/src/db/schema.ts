@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
 
 export const novels = sqliteTable("novels", {
   id: text("id").primaryKey(),
@@ -87,3 +87,35 @@ export const pipelineState = sqliteTable("pipeline_state", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const providers = sqliteTable("providers", {
+  id: text("id").primaryKey(), // preset slug or UUID
+  type: text("type").notNull(), // "preset" | "custom"
+  presetKey: text("preset_key"),
+  name: text("name").notNull(),
+  baseUrl: text("base_url").notNull(),
+  apiFormat: text("api_format").notNull().default("openai"),
+  apiKey: text("api_key").default(""),
+  enabled: integer("enabled").notNull().default(1),
+  sort: integer("sort").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const models = sqliteTable(
+  "models",
+  {
+    id: text("id").notNull(),
+    providerId: text("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // "preset" | "custom"
+    name: text("name").notNull(),
+    contextWindow: integer("context_window").default(128000),
+    maxTokens: integer("max_tokens").default(8192),
+    reasoning: integer("reasoning").default(0),
+    enabled: integer("enabled").notNull().default(1),
+    sort: integer("sort").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.providerId, t.id] })],
+);

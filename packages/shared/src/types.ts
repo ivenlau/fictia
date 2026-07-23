@@ -115,11 +115,42 @@ export interface WorkspaceFile {
 
 export type EmbeddingProvider = "glm" | "bge-m3";
 
+// ===== Provider / Model Management =====
+export type ProviderType = "preset" | "custom";
+export type ApiFormat = "openai";
+
+export interface ModelInfo {
+  id: string;
+  providerId: string;
+  type: ProviderType;
+  name: string;
+  contextWindow: number;
+  maxTokens: number;
+  reasoning: boolean;
+  enabled: boolean;
+  sort: number;
+}
+
+export interface ProviderInfo {
+  id: string;
+  type: ProviderType;
+  presetKey: string | null;
+  name: string;
+  baseUrl: string;
+  apiFormat: ApiFormat;
+  apiKey: string; // masked (****xxxx) when sent to client
+  enabled: boolean;
+  sort: number;
+  models: ModelInfo[];
+}
+
+export interface AgentModelAssignment {
+  providerId: string;
+  modelId: string;
+}
+
 export interface Settings {
-  apiKeyGlm: string;
-  apiKeyMinimax: string;
-  apiKeyDoubao: string;
-  agentModels: Record<AgentType, { provider: string; model: string }>;
+  agentModels: Record<AgentType, AgentModelAssignment>;
   chatPersona: string;
   embeddingProvider: EmbeddingProvider;
 }
@@ -138,8 +169,8 @@ export interface ChatMessage {
 export interface ChatRequest {
   message: string;
   novelId?: string;
-  provider: string;
-  model: string;
+  providerId: string;
+  modelId: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
 }
 

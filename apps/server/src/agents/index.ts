@@ -1,4 +1,4 @@
-import type { AgentType, StageName } from "@fictia/shared";
+import type { AgentType, StageName, AgentModelAssignment } from "@fictia/shared";
 import { STAGE_TO_AGENT } from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
 import { getModelForAgent } from "../llm/models.js";
@@ -36,21 +36,23 @@ const AGENT_REGISTRY: Record<AgentType, AgentConstructor> = {
   "consistency-checker": ConsistencyCheckerAgent,
 };
 
+type AgentModels = Partial<Record<AgentType, AgentModelAssignment>>;
+
 /**
- * Create an agent instance for the given type.
+ * Create an agent instance for the given type. The model + api key are resolved
+ * from the providers/models tables (see provider.service / getModelForAgent).
  */
 export function createAgent(
   agentType: AgentType,
   novelDir: string,
-  apiKeys: Record<string, string>,
-  agentModels?: Record<AgentType, { provider: string; model: string }>,
+  agentModels?: AgentModels,
 ): BaseAgent {
   const AgentClass = AGENT_REGISTRY[agentType];
   if (!AgentClass) {
     throw new Error(`Unknown agent type: ${agentType}`);
   }
 
-  const { model, apiKey } = getModelForAgent(agentType, apiKeys, agentModels);
+  const { model, apiKey } = getModelForAgent(agentType, agentModels);
 
   return new AgentClass(novelDir, model, apiKey);
 }
@@ -61,11 +63,10 @@ export function createAgent(
 export async function runAgent(
   agentType: AgentType,
   novelDir: string,
-  apiKeys: Record<string, string>,
   options?: AgentRunOptions,
-  agentModels?: Record<AgentType, { provider: string; model: string }>,
+  agentModels?: AgentModels,
 ): Promise<AgentRunResult> {
-  const agent = createAgent(agentType, novelDir, apiKeys, agentModels);
+  const agent = createAgent(agentType, novelDir, agentModels);
   return agent.run(options);
 }
 
@@ -75,11 +76,10 @@ export async function runAgent(
 export function createAgentFromStage(
   stageName: StageName,
   novelDir: string,
-  apiKeys: Record<string, string>,
-  agentModels?: Record<AgentType, { provider: string; model: string }>,
+  agentModels?: AgentModels,
 ): BaseAgent {
   const agentType = STAGE_TO_AGENT[stageName];
-  return createAgent(agentType, novelDir, apiKeys, agentModels);
+  return createAgent(agentType, novelDir, agentModels);
 }
 
 export type { BaseAgent, AgentRunResult, AgentRunOptions };

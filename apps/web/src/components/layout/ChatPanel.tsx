@@ -14,9 +14,9 @@ import remarkGfm from "remark-gfm";
 import { useChatStore } from "../../stores/chatStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useUIStore } from "../../stores/uiStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { useChatStream } from "../../hooks/useChatStream";
 import { chatApi } from "../../api/chat";
-import { CHAT_MODELS, PROVIDER_LABELS, DEFAULT_CHAT_PERSONA } from "@fictia/shared";
 import type { ChatMessage } from "@fictia/shared";
 import { settingsApi } from "../../api/settings";
 
@@ -24,15 +24,18 @@ export function ChatPanel() {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const toolCalls = useChatStore((s) => s.toolCalls);
-  const selectedProvider = useChatStore((s) => s.selectedProvider);
-  const selectedModel = useChatStore((s) => s.selectedModel);
+  const selectedProviderId = useChatStore((s) => s.selectedProviderId);
+  const selectedModelId = useChatStore((s) => s.selectedModelId);
   const setModel = useChatStore((s) => s.setModel);
   const loadHistory = useChatStore((s) => s.loadHistory);
   const clearMessages = useChatStore((s) => s.clearMessages);
 
+  const providers = useSettingsStore((s) => s.providers);
+  const persona = useSettingsStore((s) => s.chatPersona);
+  const setPersona = useSettingsStore((s) => s.setChatPersona);
+
   const [input, setInput] = useState("");
   const [showPersona, setShowPersona] = useState(false);
-  const [persona, setPersona] = useState(DEFAULT_CHAT_PERSONA);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -81,16 +84,6 @@ export function ChatPanel() {
       .catch(() => {});
   }, [activeNovelId, loadHistory]);
 
-  // Load persona from settings
-  useEffect(() => {
-    settingsApi
-      .get()
-      .then((s) => {
-        if (s.chatPersona) setPersona(s.chatPersona);
-      })
-      .catch(() => {});
-  }, []);
-
   // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -132,9 +125,16 @@ export function ChatPanel() {
     }
   }, [persona]);
 
-  const currentModelLabel =
-    CHAT_MODELS.find((m) => m.provider === selectedProvider && m.model === selectedModel)?.label ??
-    `${selectedProvider}/${selectedModel}`;
+  // usable providers for the chat picker (enabled + has enabled models)
+  const usable = providers.filter((p) => p.enabled && p.models.some((m) => m.enabled));
+
+  const currentProvider = usable.find((p) => p.id === selectedProviderId);
+  const currentModel = currentProvider?.models.find((m) => m.id === selectedModelId && m.enabled);
+  const currentModelLabel = currentModel
+    ? `${currentProvider!.name} / ${currentModel.name}`
+    : selectedModelId
+      ? `${selectedProviderId}/${selectedModelId}`
+      : "未选择模型";
 
   return (
     <div className="flex flex-col h-full relative">
@@ -168,35 +168,34 @@ export function ChatPanel() {
 
           {showModelPicker && (
             <div className="absolute z-20 top-full left-0 right-0 mt-1 rounded-md border border-subtle bg-surface-card shadow-lg max-h-48 overflow-y-auto">
-              {Object.entries(
-                CHAT_MODELS.reduce(
-                  (acc, m) => {
-                    (acc[m.provider] ??= []).push(m);
-                    return acc;
-                  },
-                  {} as Record<string, typeof CHAT_MODELS>,
-                ),
-              ).map(([provider, models]) => (
-                <div key={provider}>
+              {usable.length === 0 && (
+                <p className="px-2.5 py-2 font-caption text-[11px] text-fg-muted">
+                  暂无可用模型，请到设置中配置
+                </p>
+              )}
+              {usable.map((provider) => (
+                <div key={provider.id}>
                   <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-muted bg-surface-muted/30">
-                    {PROVIDER_LABELS[provider] ?? provider}
+                    {provider.name}
                   </div>
-                  {models.map((m) => (
-                    <button
-                      key={`${m.provider}-${m.model}`}
-                      onClick={() => {
-                        setModel(m.provider, m.model);
-                        setShowModelPicker(false);
-                      }}
-                      className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors ${
-                        selectedProvider === m.provider && selectedModel === m.model
-                          ? "bg-accent-bg text-accent"
-                          : "text-fg-secondary hover:bg-surface-muted/50"
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
+                  {provider.models
+                    .filter((m) => m.enabled)
+                    .map((m) => (
+                      <button
+                        key={`${provider.id}-${m.id}`}
+                        onClick={() => {
+                          setModel(provider.id, m.id);
+                          setShowModelPicker(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors ${
+                          selectedProviderId === provider.id && selectedModelId === m.id
+                            ? "bg-accent-bg text-accent"
+                            : "text-fg-secondary hover:bg-surface-muted/50"
+                        }`}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
                 </div>
               ))}
             </div>
@@ -212,6 +211,7 @@ export function ChatPanel() {
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
             rows={4}
+            placeholder="留空将使用默认人格"
             className="w-full rounded-md border border-subtle bg-surface-card px-2.5 py-1.5 font-body text-xs text-fg-primary placeholder:text-fg-muted focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 resize-none"
           />
           <div className="flex justify-end gap-2 mt-1.5">

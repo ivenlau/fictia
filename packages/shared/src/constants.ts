@@ -1,4 +1,4 @@
-import type { AgentType, StageName } from "./types";
+import type { AgentType, StageName, AgentModelAssignment } from "./types";
 
 // ===== Stage ↔ Agent Mapping =====
 export const STAGE_TO_AGENT: Record<StageName, AgentType> = {
@@ -170,45 +170,128 @@ export const FILE_TEMPLATES: Array<{ path: string; type: string; content: string
   { path: "characters/relationships.md", type: "markdown", content: "# 人物关系图\n\n等待AI生成..." },
 ];
 
-// ===== Provider Labels =====
-export const PROVIDER_LABELS: Record<string, string> = {
-  glm: "GLM (智谱)",
-  minimax: "Minimax",
-  doubao: "Doubao (豆包)",
-};
-
-// ===== Default Models per Provider =====
-export const DEFAULT_MODELS: Record<string, string[]> = {
-  glm: ["glm-4.7", "glm-5", "glm-5.1"],
-  minimax: ["MiniMax-M2.5", "MiniMax-M2.7"],
-  doubao: ["doubao-seed-2-0-pro-260215", "doubao-seed-2-0-lite-260428", "doubao-seed-2-0-mini-260428"],
-};
-
 // ===== Default Agent Model Assignments =====
-export const DEFAULT_AGENT_MODELS: Record<AgentType, { provider: string; model: string }> = {
-  "genre-analyst": { provider: "minimax", model: "MiniMax-M2.7" },
-  "architect": { provider: "glm", model: "glm-5.1" },
-  "style-designer": { provider: "glm", model: "glm-5.1" },
-  "art-director": { provider: "glm", model: "glm-5.1" },
-  "narrative-weaver": { provider: "glm", model: "glm-5.1" },
-  "world-builder": { provider: "minimax", model: "MiniMax-M2.7" },
-  "character-designer": { provider: "glm", model: "glm-5.1" },
-  "story-designer": { provider: "glm", model: "glm-5.1" },
-  "chapter-writer": { provider: "glm", model: "glm-5.1" },
-  "editor": { provider: "minimax", model: "MiniMax-M2.7" },
-  "consistency-checker": { provider: "minimax", model: "MiniMax-M2.7" },
+// preset provider id == preset key (e.g. "glm-coding"); old "glm" runtime used the
+// coding endpoint, so defaults map to "glm-coding".
+export const DEFAULT_AGENT_MODELS: Record<AgentType, AgentModelAssignment> = {
+  "genre-analyst": { providerId: "minimax", modelId: "MiniMax-M2.7" },
+  "architect": { providerId: "glm-coding", modelId: "glm-5.1" },
+  "style-designer": { providerId: "glm-coding", modelId: "glm-5.1" },
+  "art-director": { providerId: "glm-coding", modelId: "glm-5.1" },
+  "narrative-weaver": { providerId: "glm-coding", modelId: "glm-5.1" },
+  "world-builder": { providerId: "minimax", modelId: "MiniMax-M2.7" },
+  "character-designer": { providerId: "glm-coding", modelId: "glm-5.1" },
+  "story-designer": { providerId: "glm-coding", modelId: "glm-5.1" },
+  "chapter-writer": { providerId: "glm-coding", modelId: "glm-5.1" },
+  "editor": { providerId: "minimax", modelId: "MiniMax-M2.7" },
+  "consistency-checker": { providerId: "minimax", modelId: "MiniMax-M2.7" },
 };
 
-// ===== Chat Models =====
-export const CHAT_MODELS: Array<{ provider: string; model: string; label: string }> = [
-  { provider: "glm", model: "glm-4.7", label: "GLM-4.7 (智谱)" },
-  { provider: "glm", model: "glm-5", label: "GLM-5 (智谱)" },
-  { provider: "glm", model: "glm-5.1", label: "GLM-5.1 (智谱)" },
-  { provider: "minimax", model: "MiniMax-M2.5", label: "MiniMax-M2.5" },
-  { provider: "minimax", model: "MiniMax-M2.7", label: "MiniMax-M2.7" },
-  { provider: "doubao", model: "doubao-seed-2-0-pro-260215", label: "Doubao Seed 2.0 Pro" },
-  { provider: "doubao", model: "doubao-seed-2-0-lite-260428", label: "Doubao Seed 2.0 Lite" },
-  { provider: "doubao", model: "doubao-seed-2-0-mini-260428", label: "Doubao Seed 2.0 Mini" },
+// ===== Preset Providers (built-in, seeded into DB) =====
+export interface PresetModelDef {
+  id: string;
+  name: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+}
+
+export interface PresetProviderDef {
+  key: string; // used as provider id for preset rows
+  name: string;
+  baseUrl: string;
+  apiFormat: "openai";
+  models: PresetModelDef[];
+}
+
+// Model ids are a 2026-07 baseline — users can add/remove their own in the UI,
+// so an out-of-date id is never fatal. Verify latest ids when maintaining.
+export const PRESET_PROVIDERS: PresetProviderDef[] = [
+  {
+    key: "glm",
+    name: "GLM (智谱)",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    apiFormat: "openai",
+    models: [
+      { id: "glm-4.6", name: "GLM-4.6" },
+      { id: "glm-4.7", name: "GLM-4.7" },
+      { id: "glm-5", name: "GLM-5" },
+      { id: "glm-5.1", name: "GLM-5.1", reasoning: true },
+    ],
+  },
+  {
+    key: "glm-coding",
+    name: "GLM Coding Plan (智谱)",
+    baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+    apiFormat: "openai",
+    models: [
+      { id: "glm-4.6", name: "GLM-4.6" },
+      { id: "glm-5.1", name: "GLM-5.1", reasoning: true },
+    ],
+  },
+  {
+    key: "deepseek",
+    name: "DeepSeek",
+    baseUrl: "https://api.deepseek.com",
+    apiFormat: "openai",
+    models: [
+      { id: "deepseek-chat", name: "DeepSeek-V3 (Chat)" },
+      { id: "deepseek-reasoner", name: "DeepSeek-R1 (Reasoner)", reasoning: true },
+    ],
+  },
+  {
+    key: "qwen",
+    name: "通义千问 Qwen",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    apiFormat: "openai",
+    models: [
+      { id: "qwen-max", name: "Qwen-Max" },
+      { id: "qwen-plus", name: "Qwen-Plus" },
+      { id: "qwen-turbo", name: "Qwen-Turbo" },
+    ],
+  },
+  {
+    key: "kimi",
+    name: "Kimi (月之暗面)",
+    baseUrl: "https://api.moonshot.cn/v1",
+    apiFormat: "openai",
+    models: [
+      { id: "kimi-k2-0905-preview", name: "Kimi K2" },
+      { id: "moonshot-v1-32k", name: "Moonshot v1 32k" },
+      { id: "moonshot-v1-128k", name: "Moonshot v1 128k" },
+    ],
+  },
+  {
+    key: "doubao",
+    name: "豆包 (火山方舟)",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    apiFormat: "openai",
+    models: [
+      { id: "doubao-seed-2-0-pro-260215", name: "Doubao Seed 2.0 Pro" },
+      { id: "doubao-seed-2-0-lite-260428", name: "Doubao Seed 2.0 Lite" },
+      { id: "doubao-seed-2-0-mini-260428", name: "Doubao Seed 2.0 Mini" },
+    ],
+  },
+  {
+    key: "minimax",
+    name: "Minimax",
+    baseUrl: "https://api.minimax.chat/v1",
+    apiFormat: "openai",
+    models: [
+      { id: "MiniMax-M2.5", name: "MiniMax-M2.5" },
+      { id: "MiniMax-M2.7", name: "MiniMax-M2.7" },
+    ],
+  },
+  {
+    key: "wenxin",
+    name: "百度文心 (千帆 v2)",
+    baseUrl: "https://qianfan.baidubce.com/v2",
+    apiFormat: "openai",
+    models: [
+      { id: "ernie-4.5-turbo-128k", name: "ERNIE 4.5 Turbo 128k" },
+      { id: "ernie-x1-turbo-128k", name: "ERNIE X1 Turbo 128k", reasoning: true },
+    ],
+  },
 ];
 
 // ===== Default Chat Persona =====

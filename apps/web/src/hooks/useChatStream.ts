@@ -10,8 +10,8 @@ export function useChatStream() {
 
   const streamChat = useCallback(
     async (userMessage: string, novelId?: string) => {
-      const selectedProvider = useChatStore.getState().selectedProvider;
-      const selectedModel = useChatStore.getState().selectedModel;
+      const selectedProviderId = useChatStore.getState().selectedProviderId;
+      const selectedModelId = useChatStore.getState().selectedModelId;
 
       // Add user message
       const userMsg: ChatMessage = {
@@ -33,8 +33,8 @@ export function useChatStream() {
         role: "assistant",
         content: "",
         toolCalls: null,
-        modelUsed: selectedModel,
-        providerUsed: selectedProvider,
+        modelUsed: selectedModelId,
+        providerUsed: selectedProviderId,
         createdAt: new Date().toISOString(),
       };
       addMessage(assistantMsg);
@@ -49,8 +49,8 @@ export function useChatStream() {
       const request: ChatRequest = {
         message: userMessage,
         novelId,
-        provider: selectedProvider,
-        model: selectedModel,
+        providerId: selectedProviderId,
+        modelId: selectedModelId,
         history,
       };
 
@@ -76,7 +76,6 @@ export function useChatStream() {
 
         const decoder = new TextDecoder();
         let buffer = "";
-        let receivedDone = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -109,10 +108,8 @@ export function useChatStream() {
                   break;
                 case "error":
                   appendToLast(`\n\n错误: ${data.error}`);
-                  receivedDone = true;
                   break;
                 case "done":
-                  receivedDone = true;
                   break;
               }
             } catch {
@@ -120,7 +117,6 @@ export function useChatStream() {
             }
           }
         }
-
       } catch (err: any) {
         appendToLast(`\n\n连接错误: ${err.message}`);
       } finally {

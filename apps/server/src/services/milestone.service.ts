@@ -12,7 +12,7 @@ import { createAgent } from "../agents/index.js";
 import { ConsistencyCheckerAgent } from "../agents/consistency-checker.js";
 import { parseConsistencyVerdict, type Verdict } from "../utils/verdict.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
-import type { AgentType } from "@fictia/shared";
+import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 import * as path from "path";
 
 export interface MilestoneCheck {
@@ -63,14 +63,12 @@ export function checkMilestone(count: number): MilestoneCheck | null {
  */
 export async function runConsistencyCheck(
   novelDir: string,
-  apiKeys: Record<string, string>,
-  agentModels?: Record<AgentType, { provider: string; model: string }>,
+  agentModels?: Partial<Record<AgentType, AgentModelAssignment>>,
   onProgress?: ConsistencyProgressCb,
 ): Promise<ConsistencyResult> {
   const checker = createAgent(
     "consistency-checker",
     novelDir,
-    apiKeys,
     agentModels,
   ) as ConsistencyCheckerAgent;
   const reportPath = "reviews/consistency-report.md";

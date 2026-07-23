@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import type { StageName, AgentType } from "@fictia/shared";
+import type { StageName, AgentType, AgentModelAssignment } from "@fictia/shared";
 import { db, schema } from "../db/index.js";
 import { novelService } from "../services/novel.service.js";
-import { settingsService } from "../services/settings.service.js";
 import { fileService } from "../services/file.service.js";
 import {
   exploreDirections,
@@ -13,7 +12,7 @@ import {
 
 const router = Router();
 
-function getAgentModels(): Record<AgentType, { provider: string; model: string }> | undefined {
+function getAgentModels(): Partial<Record<AgentType, AgentModelAssignment>> | undefined {
   const row = db
     .select()
     .from(schema.settings)
@@ -59,11 +58,10 @@ router.post("/novels/:novelId/brainstorm/explore", async (req, res) => {
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
 
   try {
-    const result = await exploreDirections(novelDir, stageName, keys, agentModels, directive);
+    const result = await exploreDirections(novelDir, stageName, agentModels, directive);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "探索失败" });
@@ -95,11 +93,10 @@ router.post("/novels/:novelId/brainstorm/produce", async (req, res) => {
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
 
   try {
-    const result = await produceWithDirection(novelDir, stageName, direction, keys, agentModels);
+    const result = await produceWithDirection(novelDir, stageName, direction, agentModels);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "产出失败" });

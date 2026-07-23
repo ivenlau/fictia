@@ -12,6 +12,7 @@ import { graphRoutes } from "./routes/graph.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { chatRoutes } from "./routes/chat.js";
+import { providerRoutes } from "./routes/providers.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 export function createApp() {
@@ -32,6 +33,7 @@ export function createApp() {
   app.use("/api/settings", settingsRoutes);
   app.use("/api/feedback", feedbackRoutes);
   app.use("/api/chat", chatRoutes);
+  app.use("/api/providers", providerRoutes);
 
   app.use(errorHandler);
 

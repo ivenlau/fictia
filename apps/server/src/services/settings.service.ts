@@ -1,13 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
-import { DEFAULT_AGENT_MODELS } from "../../../../packages/shared/src/constants.js";
+import { DEFAULT_AGENT_MODELS } from "@fictia/shared";
+import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 
 const now = () => new Date().toISOString();
-
-function maskKey(key: string): string {
-  if (!key || key.length < 8) return "****";
-  return "****" + key.slice(-4);
-}
 
 function getSettingValue(key: string): string | undefined {
   const row = db
@@ -36,11 +32,7 @@ function setSettingValue(key: string, value: string) {
 
 export const settingsService = {
   get() {
-    const apiKeyGlm = getSettingValue("apiKeyGlm") ?? "";
-    const apiKeyMinimax = getSettingValue("apiKeyMinimax") ?? "";
-    const apiKeyDoubao = getSettingValue("apiKeyDoubao") ?? "";
-
-    let agentModels: Record<string, { provider: string; model: string }> = { ...DEFAULT_AGENT_MODELS };
+    let agentModels: Partial<Record<AgentType, AgentModelAssignment>> = { ...DEFAULT_AGENT_MODELS };
     const agentModelsRaw = getSettingValue("agentModels");
     if (agentModelsRaw) {
       try {
@@ -56,35 +48,19 @@ export const settingsService = {
     const chatPersona = getSettingValue("chatPersona") ?? "";
     const manualConfirm = getSettingValue("manualConfirm") === "true";
     const embeddingProvider =
-      (getSettingValue("embeddingProvider") as
-        | "glm"
-        | "bge-m3"
-        | undefined) ?? "glm";
+      (getSettingValue("embeddingProvider") as "glm" | "bge-m3" | undefined) ?? "glm";
 
-    return {
-      apiKeyGlm: maskKey(apiKeyGlm),
-      apiKeyMinimax: maskKey(apiKeyMinimax),
-      apiKeyDoubao: maskKey(apiKeyDoubao),
-      agentModels,
-      chatPersona,
-      manualConfirm,
-      embeddingProvider,
-    };
+    return { agentModels, chatPersona, manualConfirm, embeddingProvider };
   },
 
-  update(data: Partial<{
-    apiKeyGlm: string;
-    apiKeyMinimax: string;
-    apiKeyDoubao: string;
-    agentModels: Record<string, { provider: string; model: string }>;
-    chatPersona: string;
-    manualConfirm: boolean;
-    embeddingProvider: "glm" | "bge-m3";
-  }>) {
-    // Skip masked keys (****xxxx) - only save real keys
-    if (data.apiKeyGlm !== undefined && !data.apiKeyGlm.startsWith("****")) setSettingValue("apiKeyGlm", data.apiKeyGlm);
-    if (data.apiKeyMinimax !== undefined && !data.apiKeyMinimax.startsWith("****")) setSettingValue("apiKeyMinimax", data.apiKeyMinimax);
-    if (data.apiKeyDoubao !== undefined && !data.apiKeyDoubao.startsWith("****")) setSettingValue("apiKeyDoubao", data.apiKeyDoubao);
+  update(
+    data: Partial<{
+      agentModels: Partial<Record<AgentType, AgentModelAssignment>>;
+      chatPersona: string;
+      manualConfirm: boolean;
+      embeddingProvider: "glm" | "bge-m3";
+    }>,
+  ) {
     if (data.agentModels !== undefined) setSettingValue("agentModels", JSON.stringify(data.agentModels));
     if (data.chatPersona !== undefined) setSettingValue("chatPersona", data.chatPersona);
     if (data.manualConfirm !== undefined) setSettingValue("manualConfirm", data.manualConfirm ? "true" : "false");
@@ -93,18 +69,7 @@ export const settingsService = {
     return this.get();
   },
 
-  getApiKeys() {
-    return {
-      glm: getSettingValue("apiKeyGlm") ?? "",
-      minimax: getSettingValue("apiKeyMinimax") ?? "",
-      doubao: getSettingValue("apiKeyDoubao") ?? "",
-    };
-  },
-
   getEmbeddingProvider(): "glm" | "bge-m3" {
-    return (getSettingValue("embeddingProvider") as
-      | "glm"
-      | "bge-m3"
-      | undefined) ?? "glm";
+    return (getSettingValue("embeddingProvider") as "glm" | "bge-m3" | undefined) ?? "glm";
   },
 };

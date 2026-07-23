@@ -6,8 +6,6 @@ import { novelService } from "../services/novel.service.js";
 import { fileService } from "../services/file.service.js";
 import { runAgent } from "../agents/index.js";
 import { ToolAgent } from "../agents/tool-agent.js";
-import { getModelForAgent } from "../llm/models.js";
-import { settingsService } from "../services/settings.service.js";
 import { AGENT_FILE_MAP } from "@fictia/shared";
 import type { AgentType } from "@fictia/shared";
 
@@ -50,7 +48,6 @@ async function executeAgent(
     const novel = novelService.getById(novelId);
     if (!novel) throw new Error("Novel not found");
 
-    const keys = settingsService.getApiKeys();
     const agentModelsRaw = (() => {
       const row = db.select().from(schema.settings).where(eq(schema.settings.key, "agentModels")).get();
       if (row?.value) {
@@ -65,7 +62,7 @@ async function executeAgent(
 
     const novelDir = fileService.getNovelDir(novelId);
 
-    const result = await runAgent(agentType, novelDir, keys, undefined, agentModelsRaw);
+    const result = await runAgent(agentType, novelDir, undefined, agentModelsRaw);
 
     // Save result to workspace file
     const workspacePath = AGENT_FILE_MAP[agentType];
@@ -373,14 +370,12 @@ router.post("/chapters/:chapterId/rewrite", async (req, res) => {
   }
 
   try {
-    const keys = settingsService.getApiKeys();
     const agentModelsRaw = (() => {
       const row = db.select().from(schema.settings).where(eq(schema.settings.key, "agentModels")).get();
       if (row?.value) { try { return JSON.parse(row.value); } catch { return null; } }
       return null;
     })();
 
-    const { model, apiKey } = getModelForAgent("chapter-writer" as AgentType, keys, agentModelsRaw);
     const novelContext = buildNovelContext(novel);
     const novelDir = fileService.getNovelDir(chapter.novelId);
 
@@ -405,7 +400,6 @@ router.post("/chapters/:chapterId/rewrite", async (req, res) => {
     const result = await runAgent(
       "chapter-writer" as AgentType,
       novelDir,
-      keys,
       { userDirective: promptSections.join("\n\n") },
       agentModelsRaw,
     );
@@ -450,7 +444,6 @@ router.post("/novels/:novelId/file-rewrite", async (req, res) => {
   }
 
   try {
-    const keys = settingsService.getApiKeys();
     const agentModelsRaw = (() => {
       const row = db.select().from(schema.settings).where(eq(schema.settings.key, "agentModels")).get();
       if (row?.value) { try { return JSON.parse(row.value); } catch { return null; } }
@@ -475,7 +468,6 @@ router.post("/novels/:novelId/file-rewrite", async (req, res) => {
     await runAgent(
       "chapter-writer" as AgentType,
       novelDir,
-      keys,
       { userDirective: promptSections.join("\n\n"), incrementalTarget: filePath },
       agentModelsRaw,
     );

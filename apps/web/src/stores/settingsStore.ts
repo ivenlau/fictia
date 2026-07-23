@@ -1,31 +1,54 @@
 import { create } from "zustand";
-import type { AgentType } from "@fictia/shared";
+import type { AgentType, AgentModelAssignment, ProviderInfo } from "@fictia/shared";
 import { DEFAULT_AGENT_MODELS } from "@fictia/shared";
 
 interface SettingsState {
-  apiKeyGlm: string;
-  apiKeyMinimax: string;
-  apiKeyDoubao: string;
-  agentModels: Record<AgentType, { provider: string; model: string }>;
+  providers: ProviderInfo[];
+  agentModels: Record<AgentType, AgentModelAssignment>;
+  chatPersona: string;
   embeddingProvider: "glm" | "bge-m3";
-  setApiKey: (provider: "glm" | "minimax" | "doubao", key: string) => void;
-  setAgentModel: (agentType: AgentType, provider: string, model: string) => void;
+  setProviders: (providers: ProviderInfo[]) => void;
+  upsertProvider: (provider: ProviderInfo) => void;
+  removeProvider: (id: string) => void;
+  setAgentModel: (agentType: AgentType, providerId: string, modelId: string) => void;
+  setChatPersona: (p: string) => void;
   setEmbeddingProvider: (p: "glm" | "bge-m3") => void;
-  loadSettings: (settings: { apiKeyGlm: string; apiKeyMinimax: string; apiKeyDoubao: string; agentModels: Record<AgentType, { provider: string; model: string }>; embeddingProvider: "glm" | "bge-m3" }) => void;
+  loadSettings: (settings: {
+    agentModels: Record<AgentType, AgentModelAssignment>;
+    chatPersona: string;
+    embeddingProvider: "glm" | "bge-m3";
+  }) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  apiKeyGlm: "",
-  apiKeyMinimax: "",
-  apiKeyDoubao: "",
+  providers: [],
   agentModels: { ...DEFAULT_AGENT_MODELS },
+  chatPersona: "",
   embeddingProvider: "glm",
-  setApiKey: (provider, key) =>
-    set((s) => ({ ...s, [`apiKey${provider.charAt(0).toUpperCase() + provider.slice(1)}`]: key })),
-  setAgentModel: (agentType, provider, model) =>
+
+  setProviders: (providers) => set({ providers }),
+
+  upsertProvider: (provider) =>
+    set((s) => {
+      const idx = s.providers.findIndex((p) => p.id === provider.id);
+      if (idx >= 0) {
+        const next = [...s.providers];
+        next[idx] = provider;
+        return { providers: next };
+      }
+      return { providers: [...s.providers, provider] };
+    }),
+
+  removeProvider: (id) =>
+    set((s) => ({ providers: s.providers.filter((p) => p.id !== id) })),
+
+  setAgentModel: (agentType, providerId, modelId) =>
     set((s) => ({
-      agentModels: { ...s.agentModels, [agentType]: { provider, model } },
+      agentModels: { ...s.agentModels, [agentType]: { providerId, modelId } },
     })),
+
+  setChatPersona: (p) => set({ chatPersona: p }),
   setEmbeddingProvider: (p) => set({ embeddingProvider: p }),
+
   loadSettings: (settings) => set(settings),
 }));

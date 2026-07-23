@@ -25,7 +25,7 @@ export class EmbeddingError extends Error {}
 
 /** 智谱 embedding-2 批量嵌入。 */
 async function embedGlm(texts: string[], apiKey: string): Promise<number[][]> {
-  if (!apiKey) throw new EmbeddingError("未配置 GLM/智谱 API key（settings.apiKeyGlm）");
+  if (!apiKey) throw new EmbeddingError("未配置 GLM API Key（请在「设置 → 模型提供商」中配置 GLM）");
 
   const resp = await fetch(GLM_API_URL, {
     method: "POST",

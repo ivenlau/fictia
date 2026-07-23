@@ -8,7 +8,9 @@
 
 import { createAgent } from "../agents/index.js";
 import { STAGE_TO_AGENT } from "@fictia/shared";
-import type { StageName, AgentType } from "@fictia/shared";
+import type { StageName, AgentType, AgentModelAssignment } from "@fictia/shared";
+
+type AgentModels = Partial<Record<AgentType, AgentModelAssignment>>;
 
 const DESIGN_STAGES: StageName[] = [
   "genre_analysis",
@@ -39,12 +41,11 @@ export interface ExploreResult {
 export async function exploreDirections(
   novelDir: string,
   stage: StageName,
-  apiKeys: Record<string, string>,
-  agentModels: Record<AgentType, { provider: string; model: string }> | undefined,
+  agentModels: AgentModels | undefined,
   directive?: string,
 ): Promise<ExploreResult> {
   assertDesignStage(stage);
-  const agent = createAgent(STAGE_TO_AGENT[stage], novelDir, apiKeys, agentModels);
+  const agent = createAgent(STAGE_TO_AGENT[stage], novelDir, agentModels);
   const directions = await agent.runExplore(directive);
   return { stage, directions };
 }
@@ -59,11 +60,10 @@ export async function produceWithDirection(
   novelDir: string,
   stage: StageName,
   direction: string,
-  apiKeys: Record<string, string>,
-  agentModels: Record<AgentType, { provider: string; model: string }> | undefined,
+  agentModels: AgentModels | undefined,
 ): Promise<ProduceResult> {
   assertDesignStage(stage);
-  const agent = createAgent(STAGE_TO_AGENT[stage], novelDir, apiKeys, agentModels);
+  const agent = createAgent(STAGE_TO_AGENT[stage], novelDir, agentModels);
   const result = await agent.run({
     userDirective: `按以下已确认的创意方向产出最终内容（严格遵循风格指南与设定）：\n\n${direction}`,
   });

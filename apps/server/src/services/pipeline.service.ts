@@ -1,7 +1,7 @@
 import { v4 as uuid } from "uuid";
 import { eq } from "drizzle-orm";
 import { Orchestrator } from "../core/orchestrator.js";
-import type { StageName, AgentType } from "@fictia/shared";
+import type { StageName, AgentType, AgentModelAssignment } from "@fictia/shared";
 import { STAGE_LABELS } from "@fictia/shared";
 import type { AgentRunResult } from "../agents/index.js";
 import { readFileSafe } from "../utils/file.js";
@@ -18,15 +18,14 @@ const orchestrators = new Map<string, Orchestrator>();
 export function getOrCreateOrchestrator(
   novelId: string,
   novelDir: string,
-  apiKeys: Record<string, string>,
-  agentModels?: Record<AgentType, { provider: string; model: string }>,
+  agentModels?: Partial<Record<AgentType, AgentModelAssignment>>,
 ): Orchestrator {
   let orch = orchestrators.get(novelId);
   if (!orch) {
-    orch = new Orchestrator(novelId, novelDir, apiKeys, agentModels);
+    orch = new Orchestrator(novelId, novelDir, agentModels);
     orchestrators.set(novelId, orch);
   } else {
-    orch.updateConfig(apiKeys, agentModels);
+    orch.updateConfig(agentModels);
   }
   return orch;
 }

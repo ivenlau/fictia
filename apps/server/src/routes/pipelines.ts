@@ -1,11 +1,10 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-import type { StageName, AgentType } from "@fictia/shared";
+import type { StageName, AgentType, AgentModelAssignment } from "@fictia/shared";
 import { STAGE_LABELS, AGENT_FILE_MAP } from "@fictia/shared";
 import { db, schema } from "../db/index.js";
 import { novelService } from "../services/novel.service.js";
-import { settingsService } from "../services/settings.service.js";
 import {
   getOrCreateOrchestrator,
   getOrCreateRunner,
@@ -25,7 +24,7 @@ function validateStage(stage: string): stage is StageName {
   return VALID_STAGES.includes(stage as StageName);
 }
 
-function getAgentModels(): Record<AgentType, { provider: string; model: string }> | undefined {
+function getAgentModels(): Partial<Record<AgentType, AgentModelAssignment>> | undefined {
   const row = db
     .select()
     .from(schema.settings)
@@ -51,8 +50,7 @@ router.get("/novels/:novelId/pipeline/status", async (req, res) => {
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
-  const orch = getOrCreateOrchestrator(novelId, novelDir, keys);
+  const orch = getOrCreateOrchestrator(novelId, novelDir);
   await orch.init();
 
   const tracker = orch.getStateTracker();
@@ -99,9 +97,8 @@ router.post("/novels/:novelId/pipeline/start", async (req, res) => {
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
-  const orch = getOrCreateOrchestrator(novelId, novelDir, keys, agentModels as any);
+  const orch = getOrCreateOrchestrator(novelId, novelDir, agentModels);
   await orch.init();
 
   const runner = getOrCreateRunner(novelId, orch, novelDir);
@@ -166,9 +163,8 @@ router.post("/novels/:novelId/pipeline/stages/:stage", async (req, res) => {
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
-  const orch = getOrCreateOrchestrator(novelId, novelDir, keys, agentModels as any);
+  const orch = getOrCreateOrchestrator(novelId, novelDir, agentModels);
   await orch.init();
 
   // Create agent_outputs record before execution
@@ -259,9 +255,8 @@ router.post("/novels/:novelId/pipeline/stages/:stage/confirm", async (req, res) 
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
-  const orch = getOrCreateOrchestrator(novelId, novelDir, keys, agentModels as any);
+  const orch = getOrCreateOrchestrator(novelId, novelDir, agentModels);
   await orch.init();
 
   try {
@@ -297,9 +292,8 @@ router.post("/novels/:novelId/pipeline/stages/:stage/modify", async (req, res) =
   }
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
-  const orch = getOrCreateOrchestrator(novelId, novelDir, keys, agentModels as any);
+  const orch = getOrCreateOrchestrator(novelId, novelDir, agentModels);
   await orch.init();
 
   try {
@@ -390,9 +384,8 @@ router.get("/novels/:novelId/pipeline/stages/:stage/stream", async (req, res) =>
   res.flushHeaders();
 
   const novelDir = fileService.getNovelDir(novelId);
-  const keys = settingsService.getApiKeys();
   const agentModels = getAgentModels();
-  const orch = getOrCreateOrchestrator(novelId, novelDir, keys, agentModels as any);
+  const orch = getOrCreateOrchestrator(novelId, novelDir, agentModels);
   await orch.init();
 
   const tracker = orch.getStateTracker();
