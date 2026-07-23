@@ -12,12 +12,14 @@ set "SERVER_LOG=%LOG_DIR%\server.log"
 set "SERVER_ERR=%LOG_DIR%\server.err.log"
 set "WEB_LOG=%LOG_DIR%\web.log"
 set "WEB_ERR=%LOG_DIR%\web.err.log"
+set "STDIN_FILE=%LOG_DIR%\stdin.empty"
 set "PID_FILE=%LOG_DIR%\dev.pid"
 set "SERVER_PID_FILE=%LOG_DIR%\server.pid"
 set "WEB_PID_FILE=%LOG_DIR%\web.pid"
 set "PORTS=3001 5173"
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
+type nul > "%STDIN_FILE%"
 
 where node >nul 2>&1 || (echo [X] node not found. Run install-dev.cmd first. & exit /b 1)
 where pnpm >nul 2>&1 || (echo [X] pnpm not found. Run install-dev.cmd first. & exit /b 1)
@@ -40,8 +42,12 @@ for %%P in (%PORTS%) do (
 
 :: Start server and web separately. This avoids concurrently's Windows
 :: process-tree behavior, which can leave Vite running while tsx never starts.
-echo ==^> Starting server and web (logs: %LOG_FILE%)
-powershell -NoProfile -Command "$s = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/c','pnpm --filter @fictia/server dev' -WorkingDirectory '%ROOT%' -WindowStyle Hidden -RedirectStandardOutput '%SERVER_LOG%' -RedirectStandardError '%SERVER_ERR%' -PassThru; $w = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/c','pnpm --filter @fictia/web dev' -WorkingDirectory '%ROOT%' -WindowStyle Hidden -RedirectStandardOutput '%WEB_LOG%' -RedirectStandardError '%WEB_ERR%' -PassThru; Set-Content -LiteralPath '%PID_FILE%' -Value $s.Id -NoNewline; Set-Content -LiteralPath '%SERVER_PID_FILE%' -Value $s.Id -NoNewline; Set-Content -LiteralPath '%WEB_PID_FILE%' -Value $w.Id -NoNewline"
+echo ==^> Starting server and web
+echo     Server log: %SERVER_LOG%
+echo     Web log:    %WEB_LOG%
+:: Redirect stdin from an empty file as well as stdout/stderr. PowerShell 5.1
+:: treats NUL as a relative path here instead of recognizing the Windows device.
+powershell -NoProfile -Command "$s = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/c','pnpm --filter @fictia/server dev' -WorkingDirectory '%ROOT%' -WindowStyle Hidden -RedirectStandardInput '%STDIN_FILE%' -RedirectStandardOutput '%SERVER_LOG%' -RedirectStandardError '%SERVER_ERR%' -PassThru; $w = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/c','pnpm --filter @fictia/web dev' -WorkingDirectory '%ROOT%' -WindowStyle Hidden -RedirectStandardInput '%STDIN_FILE%' -RedirectStandardOutput '%WEB_LOG%' -RedirectStandardError '%WEB_ERR%' -PassThru; Set-Content -LiteralPath '%PID_FILE%' -Value $s.Id -NoNewline; Set-Content -LiteralPath '%SERVER_PID_FILE%' -Value $s.Id -NoNewline; Set-Content -LiteralPath '%WEB_PID_FILE%' -Value $w.Id -NoNewline"
 if errorlevel 1 (
     echo [X] Failed to start development processes.
     exit /b 1
@@ -65,10 +71,12 @@ for /l %%I in (1,1,20) do (
 :ready
 if not defined READY (
     echo  [X] timeout
-    echo --- tail of dev.err.log ---
-    powershell -NoProfile -Command "if (Test-Path '%ERR_FILE%') { Get-Content '%ERR_FILE%' -Tail 40 }"
-    echo --- tail of dev.log ---
-    powershell -NoProfile -Command "if (Test-Path '%LOG_FILE%') { Get-Content '%LOG_FILE%' -Tail 40 }"
+    echo --- tail of server.err.log ---
+    powershell -NoProfile -Command "if (Test-Path '%SERVER_ERR%') { Get-Content '%SERVER_ERR%' -Tail 40 }"
+    echo --- tail of server.log ---
+    powershell -NoProfile -Command "if (Test-Path '%SERVER_LOG%') { Get-Content '%SERVER_LOG%' -Tail 40 }"
+    echo --- tail of web.err.log ---
+    powershell -NoProfile -Command "if (Test-Path '%WEB_ERR%') { Get-Content '%WEB_ERR%' -Tail 40 }"
     call "%~dp0stop-dev.cmd" >nul 2>&1
     exit /b 1
 )
@@ -78,7 +86,8 @@ echo.
 echo ==^> Ready
 echo     Local:  http://127.0.0.1:5173
 echo     API:    http://127.0.0.1:3001
-echo     Logs:   %LOG_FILE%
-echo     Stop:   %~dp0stop-dev.cmd
+echo     Server log: %SERVER_LOG%
+echo     Web log:    %WEB_LOG%
+echo     Stop:       %~dp0stop-dev.cmd
 endlocal
 exit /b 0
