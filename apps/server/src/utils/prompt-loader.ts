@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs/promises";
+import { listUserMaterials, getUserMaterial } from "./user-materials.js";
 
 const PROMPTS_DIR = "templates/agents";
 
@@ -91,10 +92,15 @@ function extractKnowledgeSection(md: string): string | null {
 
 /**
  * 加载 agent 的 craft 知识 +（如有且 genre 已知）对应体裁卡，返回拼接后的 markdown。
+ *
+ * 块 2 扩展：传入 novelDir 时，追加该小说的自定义写作技法（materials/craft/*.md，
+ * enabled，按可选 agents 过滤）；体裁卡内置找不到时回退用户自定义卡
+ * （materials/genre-cards/{genre}.md）。
  */
 export async function loadCraftKnowledge(
   agentName: string,
   genre?: string,
+  novelDir?: string,
 ): Promise<string> {
   const { craftFiles, hasGenreCard } = await loadCraftIndex(agentName);
   const parts: string[] = [];
@@ -102,9 +108,26 @@ export async function loadCraftKnowledge(
     const content = await readTemplateSafe(`${CRAFT_DIR}/${f}`);
     if (content) parts.push(`### ${f}\n\n${content}`);
   }
+  // 自定义写作技法（块 2）
+  if (novelDir) {
+    const custom = await listUserMaterials(novelDir, "craft");
+    for (const c of custom) {
+      if (!c.enabled) continue;
+      if (c.agents && !c.agents.includes(agentName)) continue;
+      parts.push(`### ${c.key}（自定义技法）\n\n${c.content}`);
+    }
+  }
+  // 体裁卡：用户自定义卡（若存在且启用）覆盖内置，否则内置；删除用户卡即回退内置
   if (hasGenreCard && genre) {
-    const card = await readTemplateSafe(`${GENRE_DIR}/${genre}.md`);
-    if (card) parts.push(`### genre-cards/${genre}.md\n\n${card}`);
+    let cardText: string | null = null;
+    if (novelDir) {
+      const uc = await getUserMaterial(novelDir, "genre-card", genre);
+      if (uc && uc.enabled) cardText = uc.content;
+    }
+    if (cardText === null) {
+      cardText = await readTemplateSafe(`${GENRE_DIR}/${genre}.md`);
+    }
+    if (cardText) parts.push(`### genre-cards/${genre}.md\n\n${cardText}`);
   }
   return parts.join("\n\n---\n\n");
 }

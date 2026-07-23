@@ -50,6 +50,16 @@ router.get("/:id", (req, res) => {
   res.json(novel);
 });
 
+// GET /:id/meta - read meta.json (genreCard 等运行时配置；DB 不存)
+router.get("/:id/meta", async (req, res) => {
+  const meta = await novelService.getMeta(req.params.id);
+  if (meta === null) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+  res.json(meta);
+});
+
 // PATCH /:id - update novel
 router.patch("/:id", async (req, res) => {
   const existing = novelService.getById(req.params.id);

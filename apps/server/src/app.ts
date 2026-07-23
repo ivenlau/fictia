@@ -13,6 +13,7 @@ import { settingsRoutes } from "./routes/settings.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { chatRoutes } from "./routes/chat.js";
 import { providerRoutes } from "./routes/providers.js";
+import { materialRoutes } from "./routes/materials.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 export function createApp() {
@@ -34,6 +35,7 @@ export function createApp() {
   app.use("/api/feedback", feedbackRoutes);
   app.use("/api/chat", chatRoutes);
   app.use("/api/providers", providerRoutes);
+  app.use("/api", materialRoutes);
 
   app.use(errorHandler);
 

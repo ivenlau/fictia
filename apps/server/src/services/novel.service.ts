@@ -25,6 +25,12 @@ export const novelService = {
     return parseNovel(row);
   },
 
+  /** 读取 meta.json（体裁卡选择 genreCard 等运行时配置的真相源；DB 不存这些）。 */
+  async getMeta(id: string): Promise<Record<string, any> | null> {
+    if (!this.getById(id)) return null;
+    return fileService.readNovelMeta(id);
+  },
+
   async create(data: { title: string; genre: string; description: string; targetChapters: number; tags: string[] }) {
     const id = uuid();
     const timestamp = now();
@@ -65,7 +71,7 @@ export const novelService = {
     return this.getById(id)!;
   },
 
-  async update(id: string, data: Partial<{ title: string; genre: string; description: string; targetChapters: number; status: string; tags: string[] }>) {
+  async update(id: string, data: Partial<{ title: string; genre: string; description: string; targetChapters: number; status: string; tags: string[]; genreCard: string | null }>) {
     const updates: Record<string, unknown> = { updatedAt: now() };
 
     if (data.title !== undefined) updates.title = data.title;

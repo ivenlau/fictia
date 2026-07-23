@@ -7,6 +7,7 @@ import { SearchPanel } from "./SearchPanel";
 import { ChatPanel } from "./ChatPanel";
 import { AgentPanel } from "./AgentPanel";
 import { KnowledgePanel } from "./KnowledgePanel";
+import { MaterialPanel } from "./MaterialPanel";
 import { EditorTabs } from "./EditorTabs";
 import { StatusBar } from "./StatusBar";
 import { useEditorStore } from "../../stores/editorStore";
@@ -26,7 +27,7 @@ export function IDELayout({ children }: IDELayoutProps) {
   const explorerVisible = useUIStore((s) => s.explorerVisible);
   const explorerWidth = useUIStore((s) => s.explorerWidth);
 
-  const showSidePanel = explorerVisible && (activePanel === "search" || activePanel === "agent" || activePanel === "explorer" || activePanel === "graph" || activePanel === "knowledge");
+  const showSidePanel = explorerVisible && (activePanel === "search" || activePanel === "agent" || activePanel === "explorer" || activePanel === "graph" || activePanel === "knowledge" || activePanel === "material");
 
   const novelName = activeFile?.novelTitle ?? "Fictia";
 
@@ -57,7 +58,7 @@ export function IDELayout({ children }: IDELayoutProps) {
             className="flex flex-col bg-surface-card border-r border-subtle shrink-0 overflow-hidden"
             style={{ width: explorerWidth }}
           >
-            {activePanel === "knowledge" ? <KnowledgePanel /> : activePanel === "search" ? <SearchPanel /> : activePanel === "agent" ? <ChatPanel /> : activePanel === "graph" ? <AgentPanel /> : <Explorer />}
+            {activePanel === "knowledge" ? <KnowledgePanel /> : activePanel === "material" ? <MaterialPanel /> : activePanel === "search" ? <SearchPanel /> : activePanel === "agent" ? <ChatPanel /> : activePanel === "graph" ? <AgentPanel /> : <Explorer />}
           </aside>
         )}
         <div className="flex-1 flex flex-col overflow-hidden">

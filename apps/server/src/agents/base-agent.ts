@@ -2,6 +2,7 @@ import { complete, stream, Type, type Model, type Context, type Message, type To
 import type { StageName, AgentType } from "@fictia/shared";
 import { loadPromptTemplate, loadCraftKnowledge } from "../utils/prompt-loader.js";
 import { readFileSafe, listFiles, relativePath } from "../utils/file.js";
+import { readPreferences } from "../utils/user-materials.js";
 import { buildCharacterRegistry, buildCharacterQuickCard } from "../utils/context-extractor.js";
 import { countWords, formatWordCount } from "../utils/word-counter.js";
 import * as path from "path";
@@ -62,15 +63,25 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Build system prompt: base prompt + style guide anchoring.
+   * Build system prompt: base prompt + 用户偏好 + craft 知识 + style guide anchoring。
+   * 注入顺序（都落在 # 专业能力 之前）：用户偏好 → 已加载知识 → 风格锚定。
    */
   protected async buildSystemPrompt(): Promise<string> {
     const basePrompt = await loadPromptTemplate(this.agentName);
     let prompt = basePrompt;
 
-    // 注入 craft 知识（落在 # 知识加载 段下，# 专业能力 之前）
+    // C1 用户偏好（创作偏好，优先级最高，置顶）—— materials/prompts/preferences.md
+    const prefs = await readPreferences(this.novelDir);
+    if (prefs && prefs.enabled && prefs.content.trim()) {
+      prompt = prompt.replace(
+        "# 专业能力",
+        `# 用户偏好 (作者常驻指令，优先级最高)\n\n${prefs.content.trim()}\n\n# 专业能力`,
+      );
+    }
+
+    // 注入 craft 知识（含自定义技法 + 体裁卡），落在 # 专业能力 之前
     const genre = await this.readNovelGenre();
-    const craft = await loadCraftKnowledge(this.agentName, genre);
+    const craft = await loadCraftKnowledge(this.agentName, genre, this.novelDir);
     if (craft) {
       prompt = prompt.replace(
         "# 专业能力",
@@ -90,7 +101,8 @@ export abstract class BaseAgent {
   }
 
   /**
-   * 读取 novel 的体裁（用于加载体裁卡）。优先 meta.json.genre；
+   * 读取 novel 的体裁（用于加载体裁卡）。优先 meta.json.genreCard
+   * （素材库面板选卡写入），回退 meta.json.genre（自由文本，存量书兼容）。
    * 缺失则返回 undefined（体裁卡跳过，craft 知识仍加载）。
    */
   protected async readNovelGenre(): Promise<string | undefined> {
@@ -98,6 +110,7 @@ export abstract class BaseAgent {
     if (meta) {
       try {
         const obj = JSON.parse(meta);
+        if (typeof obj.genreCard === "string" && obj.genreCard) return obj.genreCard;
         if (typeof obj.genre === "string" && obj.genre) return obj.genre;
       } catch {
         // meta.json 非合法 JSON，忽略

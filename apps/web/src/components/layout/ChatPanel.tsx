@@ -12,6 +12,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useChatStore } from "../../stores/chatStore";
+import { SnippetPicker } from "../material/SnippetPicker";
 import { useEditorStore } from "../../stores/editorStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -265,6 +266,13 @@ export function ChatPanel() {
 
       {/* Input */}
       <div className="px-3 py-2 border-t border-subtle">
+        <div className="flex items-center gap-1 mb-1">
+          <SnippetPicker
+            novelId={activeNovelId}
+            disabled={isStreaming}
+            onInsert={(c) => setInput((prev) => (prev ? `${prev}\n\n${c}` : c))}
+          />
+        </div>
         <div className="relative">
           <textarea
             ref={inputRef}

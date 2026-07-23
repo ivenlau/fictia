@@ -3,7 +3,7 @@ import { create } from "zustand";
 interface UIState {
   showSettings: boolean;
   showNewNovel: boolean;
-  activePanel: "explorer" | "search" | "graph" | "agent" | "knowledge";
+  activePanel: "explorer" | "search" | "graph" | "agent" | "knowledge" | "material";
   explorerVisible: boolean;
   explorerWidth: number;
   setShowSettings: (v: boolean) => void;
