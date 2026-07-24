@@ -13,10 +13,6 @@ export class StoryDesignerAgent extends BaseAgent {
   protected agentName = "story-designer";
   protected maxToolIterations = 0; // 不限制，支持长篇小说 150+ 章节
 
-  protected getToolTier(): "standard" | "full" {
-    return "full";
-  }
-
   constructor(novelDir: string, model: Model<"openai-completions">, apiKey: string) {
     super(novelDir, model, apiKey);
   }

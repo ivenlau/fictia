@@ -14,10 +14,6 @@ export class EditorAgent extends BaseAgent {
   protected agentType: AgentType = "editor";
   protected agentName = "editor";
 
-  protected getToolTier(): "standard" | "full" {
-    return "full";
-  }
-
   constructor(novelDir: string, model: Model<"openai-completions">, apiKey: string) {
     super(novelDir, model, apiKey);
   }

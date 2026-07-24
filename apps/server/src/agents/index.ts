@@ -16,6 +16,9 @@ import { ChapterWriterAgent } from "./chapter-writer.js";
 import { EditorAgent } from "./editor.js";
 import { ConsistencyCheckerAgent } from "./consistency-checker.js";
 
+// 触发工具平台注册：注册所有工具工厂 + agent 工具清单（替代 BaseAgent.getToolTier）。
+import "../tools/index.js";
+
 type AgentConstructor = new (
   novelDir: string,
   model: Model<"openai-completions">,

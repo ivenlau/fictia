@@ -5,7 +5,6 @@ import { db, schema } from "../db/index.js";
 import { novelService } from "../services/novel.service.js";
 import { fileService } from "../services/file.service.js";
 import { runAgent } from "../agents/index.js";
-import { ToolAgent } from "../agents/tool-agent.js";
 import { AGENT_FILE_MAP } from "@fictia/shared";
 import type { AgentType } from "@fictia/shared";
 

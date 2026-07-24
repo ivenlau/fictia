@@ -19,10 +19,6 @@ export class ChapterWriterAgent extends BaseAgent {
   protected agentType: AgentType = "chapter-writer";
   protected agentName = "chapter-writer";
 
-  protected getToolTier(): "standard" | "full" {
-    return "full";
-  }
-
   constructor(novelDir: string, model: Model<"openai-completions">, apiKey: string) {
     super(novelDir, model, apiKey);
   }

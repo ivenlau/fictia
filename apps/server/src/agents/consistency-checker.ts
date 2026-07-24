@@ -15,10 +15,6 @@ export class ConsistencyCheckerAgent extends BaseAgent {
   protected agentType: AgentType = "consistency-checker";
   protected agentName = "consistency-checker";
 
-  protected getToolTier(): "standard" | "full" {
-    return "full";
-  }
-
   constructor(novelDir: string, model: Model<"openai-completions">, apiKey: string) {
     super(novelDir, model, apiKey);
   }
