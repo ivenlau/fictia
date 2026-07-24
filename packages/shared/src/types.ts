@@ -152,6 +152,7 @@ export interface AgentModelAssignment {
 export interface Settings {
   agentModels: Record<AgentType, AgentModelAssignment>;
   chatPersona: string;
+  chatModel: AgentModelAssignment;
   embeddingProvider: EmbeddingProvider;
 }
 
@@ -169,9 +170,29 @@ export interface ChatMessage {
 export interface ChatRequest {
   message: string;
   novelId?: string;
-  providerId: string;
-  modelId: string;
+  providerId?: string;
+  modelId?: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
+}
+
+// ===== AI 生成「主体文字」（共用端点，按 kind 选 prompt） =====
+export type AiGenerateKind =
+  | "novel-description"
+  | "craft"
+  | "genre-card"
+  | "prompt-snippet"
+  | "preferences";
+
+export interface AiGenerateTextRequest {
+  kind: AiGenerateKind;
+  /** 已填字段（name/description/title/genre/tags…），拼进 user prompt */
+  fields: Record<string, string>;
+  /** 现有主体文字，作为「更新/扩展」参考；不传则新生成 */
+  current?: string;
+}
+
+export interface AiGenerateTextResponse {
+  content: string;
 }
 
 export interface CreateNovelRequest {
@@ -209,4 +230,26 @@ export interface StageRunOptions {
   redo?: boolean;
   directive?: string;
   incrementalTarget?: string;
+}
+
+// ===== Foreshadowing State Machine =====
+// States track the lifecycle of a 伏笔 (hook/foreshadow). `suspended` is a
+// deliberate hold (作者主动悬置), distinct from the planted→strengthened→resolved arc.
+export type ForeshadowState = "planted" | "strengthened" | "resolved" | "suspended";
+
+export interface ForeshadowHistoryEntry {
+  ch: string; // e.g. "ch07" — the chapter where the op occurred
+  op: string; // 埋设/推进/强化/回收/悬置
+  state: ForeshadowState;
+  note?: string;
+}
+
+export interface ForeshadowStats {
+  total: number;
+  planted: number;
+  strengthened: number;
+  resolved: number;
+  suspended: number;
+  closureRate: number; // resolved / total, 0..1
+  open: Array<{ id: string; name: string; state: ForeshadowState; desc?: string }>;
 }

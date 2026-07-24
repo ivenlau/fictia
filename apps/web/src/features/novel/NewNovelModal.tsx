@@ -8,6 +8,7 @@ import {
 import { useUIStore } from "@/stores/uiStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { useCreateNovel } from "@/hooks/useNovel";
+import { AiGenerateButton } from "@/components/ui/AiGenerateButton";
 import { FILE_TEMPLATES, AGENT_TYPE_LABELS } from "@fictia/shared";
 import type { AgentType } from "@fictia/shared";
 
@@ -160,9 +161,23 @@ export function NewNovelModal() {
             </div>
 
             <div>
-              <label className="block font-caption text-xs text-fg-muted mb-1.5">
-                小说简介
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block font-caption text-xs text-fg-muted">
+                  小说简介
+                </label>
+                <AiGenerateButton
+                  kind="novel-description"
+                  fields={{
+                    title,
+                    genre,
+                    targetChapters: String(targetChapters),
+                    tags: tags.join(", "),
+                  }}
+                  current={description}
+                  onResult={setDescription}
+                  disabled={!title.trim()}
+                />
+              </div>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}

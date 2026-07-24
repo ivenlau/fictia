@@ -2,6 +2,7 @@ import { Router } from "express";
 import { v4 as uuid } from "uuid";
 import { db, schema } from "../db/index.js";
 import { providerService } from "../services/provider.service.js";
+import { settingsService } from "../services/settings.service.js";
 import { buildModel } from "../llm/providers.js";
 import { runChatAgent } from "../agents/chat.agent.js";
 import type { ChatRequest } from "@fictia/shared";
@@ -39,17 +40,23 @@ router.delete("/history", (req, res) => {
 
 // POST / — SSE streaming chat
 router.post("/", async (req, res) => {
-  const { message, novelId, providerId, modelId, history } = req.body as ChatRequest;
+  const { message, novelId, history } = req.body as ChatRequest;
 
   if (!message?.trim()) {
     res.status(400).json({ error: "message is required" });
     return;
   }
 
-  // Resolve provider + model from DB
+  // Resolve provider + model: prefer request body, fall back to settings.chatModel
+  let { providerId, modelId } = req.body as ChatRequest;
+  if (!providerId || !modelId) {
+    const fallback = settingsService.get().chatModel;
+    providerId = providerId || fallback.providerId;
+    modelId = modelId || fallback.modelId;
+  }
   const resolved = providerService.resolveModel(providerId, modelId);
   if (!resolved) {
-    res.status(400).json({ error: `Provider/model 未配置: ${providerId}/${modelId}` });
+    res.status(400).json({ error: `Provider/model 未配置: ${providerId}/${modelId}，请到设置重新选择对话模型` });
     return;
   }
   const apiKey = resolved.provider.apiKey ?? "";
@@ -117,8 +124,8 @@ router.post("/", async (req, res) => {
         novelId: novelId ?? null,
         role: "assistant",
         content: fullResponse,
-        modelUsed: modelId,
-        providerUsed: providerId,
+        modelUsed: modelId ?? "",
+        providerUsed: providerId ?? "",
         createdAt: now(),
       })
       .run();

@@ -6,7 +6,6 @@ import { SettingsModal } from "./features/settings/SettingsModal";
 import { NewNovelModal } from "./features/novel/NewNovelModal";
 import { useUIStore } from "./stores/uiStore";
 import { useSettingsStore } from "./stores/settingsStore";
-import { useChatStore } from "./stores/chatStore";
 import { settingsApi } from "./api/settings";
 import { providersApi } from "./api/providers";
 
@@ -19,16 +18,6 @@ export default function App() {
   useEffect(() => {
     settingsApi.get().then(loadSettings).catch(() => {});
     providersApi.list().then(setProviders).catch(() => {});
-    // default chat model = first usable provider/model
-    providersApi
-      .usable()
-      .then((usable) => {
-        const chat = useChatStore.getState();
-        if (!chat.selectedProviderId && usable[0]?.models[0]) {
-          chat.setModel(usable[0].id, usable[0].models[0].id);
-        }
-      })
-      .catch(() => {});
   }, [loadSettings, setProviders]);
 
   return (

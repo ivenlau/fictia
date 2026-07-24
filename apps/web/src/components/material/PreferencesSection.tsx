@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { materialsApi } from "@/api/materials";
+import { AiGenerateButton } from "@/components/ui/AiGenerateButton";
 
 /**
  * C1 创作偏好（提示词 tab）：作者常驻指令，启用后注入所有 agent 的 system prompt
@@ -76,6 +77,18 @@ export function PreferencesSection({ novelId }: { novelId: string }) {
           />
           <span className="font-body text-xs text-fg-secondary">启用并注入</span>
         </label>
+
+        <div className="flex items-center justify-end">
+          <AiGenerateButton
+            kind="preferences"
+            fields={{}}
+            current={content}
+            onResult={(c) => {
+              setContent(c);
+              setSaved(false);
+            }}
+          />
+        </div>
 
         <textarea
           value={content}

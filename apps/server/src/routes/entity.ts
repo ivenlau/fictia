@@ -8,7 +8,13 @@ import {
   searchEntities,
   entityStats,
 } from "../services/entity-store.js";
-import { indexAllEntities, assembleWritingSpace } from "../services/entity.service.js";
+import {
+  indexAllEntities,
+  assembleWritingSpace,
+  assembleDynamicContext,
+  foreshadowStats,
+} from "../services/entity.service.js";
+import { readAllSummaries } from "../services/chapter-summary-store.js";
 
 const router = Router();
 
@@ -143,5 +149,78 @@ router.get("/novels/:novelId/writing-space", async (req, res) => {
     res.status(500).json({ error: err?.message ?? "写作空间组装失败" });
   }
 });
+
+/**
+ * GET /novels/:novelId/foreshadowing/stats
+ * 伏笔闭合统计：各态计数 + closureRate + open 未闭合列表。
+ */
+router.get("/novels/:novelId/foreshadowing/stats", (req, res) => {
+  const { novelId } = req.params;
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+  void fileService.getNovelDir(novelId);
+  res.json(foreshadowStats(novelId));
+});
+
+/**
+ * GET /novels/:novelId/chapter-summaries
+ * 返回摘要链全量映射 { "1": "...", "2": "..." }（key = 章节号）。
+ */
+router.get("/novels/:novelId/chapter-summaries", (req, res) => {
+  const { novelId } = req.params;
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+  void fileService.getNovelDir(novelId);
+  res.json({ novelId, summaries: readAllSummaries(novelId) });
+});
+
+/**
+ * GET /novels/:novelId/context-preview?chapter=N
+ * 把 assembleDynamicContext（前文摘要链 + 角色状态 + 本章伏笔指令）拆成 section，
+ * 供前端注入预览（与 materials/injection-preview 同形状）。
+ */
+router.get("/novels/:novelId/context-preview", (req, res) => {
+  const { novelId } = req.params;
+  const chapter = Number(req.query.chapter);
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+  if (!Number.isInteger(chapter) || chapter < 1) {
+    res.status(400).json({ error: "chapter 必须是正整数" });
+    return;
+  }
+  void fileService.getNovelDir(novelId);
+  const content = assembleDynamicContext(novelId, chapter);
+  res.json({ novelId, chapter, sections: parseContextSections(content), raw: content });
+});
+
+/** 把组装好的动态上下文按 `## ` 标题拆成 section（镜像注入预览形状）。 */
+function parseContextSections(content: string) {
+  if (!content.trim()) return [];
+  const blocks = content
+    .split(/\n(?=## )/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+  return blocks.map((b, i) => {
+    const m = b.match(/^##\s+(.+?)(\n[\s\S]*)?$/);
+    const title = m ? m[1].trim() : `段${i + 1}`;
+    const body = m && m[2] ? m[2].trim() : m ? "" : b;
+    return {
+      key: title,
+      title,
+      present: body.length > 0,
+      charCount: body.length,
+      detail: body.slice(0, 500),
+    };
+  });
+}
 
 export const entityRoutes = router;

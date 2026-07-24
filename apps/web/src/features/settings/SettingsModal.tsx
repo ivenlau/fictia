@@ -1,12 +1,12 @@
 import { useState, useCallback } from "react";
 import { Loader2, Plug, Bot, MessageSquare, Database, Info } from "lucide-react";
-import { useUIStore } from "@/stores/uiStore";
+import { useUIStore, type SettingsTab } from "@/stores/uiStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { settingsApi } from "@/api/settings";
 import { ProviderSection } from "./ProviderSection";
 import { AgentModelSection } from "./AgentModelSection";
 
-type TabKey = "providers" | "agents" | "assistant" | "knowledge" | "about";
+type TabKey = SettingsTab;
 
 const TABS: { key: TabKey; label: string; icon: typeof Plug }[] = [
   { key: "providers", label: "模型提供商", icon: Plug },
@@ -18,8 +18,9 @@ const TABS: { key: TabKey; label: string; icon: typeof Plug }[] = [
 
 export function SettingsModal() {
   const setShowSettings = useUIStore((s) => s.setShowSettings);
+  const initialTab = useUIStore((s) => s.settingsInitialTab);
   const settingsStore = useSettingsStore();
-  const [tab, setTab] = useState<TabKey>("providers");
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -30,6 +31,7 @@ export function SettingsModal() {
       await settingsApi.update({
         agentModels: settingsStore.agentModels,
         chatPersona: settingsStore.chatPersona,
+        chatModel: settingsStore.chatModel,
         embeddingProvider: settingsStore.embeddingProvider,
       });
       setSaved(true);
@@ -106,18 +108,83 @@ export function SettingsModal() {
 function AssistantSection() {
   const chatPersona = useSettingsStore((s) => s.chatPersona);
   const setChatPersona = useSettingsStore((s) => s.setChatPersona);
+  const chatModel = useSettingsStore((s) => s.chatModel);
+  const setChatModel = useSettingsStore((s) => s.setChatModel);
+  const providers = useSettingsStore((s) => s.providers);
+
+  // usable providers (enabled + has at least one enabled model)
+  const usable = providers.filter((p) => p.enabled && p.models.some((m) => m.enabled));
+  const provider = providers.find((p) => p.id === chatModel.providerId);
+  const models = provider?.models.filter((m) => m.enabled) ?? [];
+  const providerDisabled = !!chatModel.providerId && !usable.some((p) => p.id === chatModel.providerId);
+
+  const handleProviderChange = (providerId: string) => {
+    const p = providers.find((pr) => pr.id === providerId);
+    const firstModel = p?.models.find((m) => m.enabled)?.id ?? "";
+    setChatModel(providerId, firstModel);
+  };
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
         <h3 className="mb-1 font-heading text-base font-semibold text-fg-primary">对话助手</h3>
-        <p className="font-body text-sm text-fg-secondary">AI 助手的人格设定（顶部「保存」生效）</p>
+        <p className="font-body text-sm text-fg-secondary">AI 助手的人格设定与对话模型（顶部「保存」生效）</p>
       </div>
-      <textarea
-        value={chatPersona}
-        onChange={(e) => setChatPersona(e.target.value)}
-        rows={12}
-        className="w-full resize-none rounded-md border border-subtle bg-surface-card px-3 py-2 font-body text-sm text-fg-primary focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
-      />
+
+      {/* 对话模型 */}
+      <div className="rounded-lg border border-subtle bg-surface-card p-3.5 space-y-2">
+        <p className="font-body text-sm font-medium text-fg-primary">对话模型</p>
+        {usable.length === 0 ? (
+          <p className="font-caption text-xs text-fg-muted">
+            尚无可用模型，请先到「模型提供商」配置 API Key 并启用模型。
+          </p>
+        ) : (
+          <>
+            <select
+              value={chatModel.providerId}
+              onChange={(e) => handleProviderChange(e.target.value)}
+              className="w-full rounded-md border border-subtle bg-surface-muted px-2.5 py-1.5 font-caption text-xs text-fg-primary focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+            >
+              {usable.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+              {providerDisabled && (
+                <option value={chatModel.providerId}>
+                  {provider?.name ?? chatModel.providerId}（已停用）
+                </option>
+              )}
+            </select>
+            <select
+              value={chatModel.modelId}
+              onChange={(e) => setChatModel(chatModel.providerId, e.target.value)}
+              className="w-full rounded-md border border-subtle bg-surface-muted px-2.5 py-1.5 font-caption text-xs text-fg-primary focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+            >
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+              {chatModel.modelId && !models.some((m) => m.id === chatModel.modelId) && (
+                <option value={chatModel.modelId}>{chatModel.modelId}（已停用）</option>
+              )}
+            </select>
+          </>
+        )}
+      </div>
+
+      {/* 人格设定 */}
+      <div>
+        <p className="mb-1.5 font-body text-sm font-medium text-fg-primary">人格设定</p>
+        <textarea
+          value={chatPersona}
+          onChange={(e) => setChatPersona(e.target.value)}
+          rows={10}
+          placeholder="留空将使用默认人格"
+          className="w-full resize-none rounded-md border border-subtle bg-surface-card px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+        />
+      </div>
     </div>
   );
 }

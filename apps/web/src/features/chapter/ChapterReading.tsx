@@ -3,13 +3,15 @@ import remarkGfm from "remark-gfm";
 
 interface ChapterReadingProps {
   content: string;
+  /** 空内容时的提示文案，默认「章节内容为空」；设计文档等场景可覆盖。 */
+  emptyLabel?: string;
 }
 
-export function ChapterReading({ content }: ChapterReadingProps) {
+export function ChapterReading({ content, emptyLabel = "章节内容为空" }: ChapterReadingProps) {
   if (!content) {
     return (
       <div className="rounded-lg border border-dashed border-strong bg-surface-muted p-8 text-center">
-        <p className="font-body text-sm text-fg-muted">章节内容为空</p>
+        <p className="font-body text-sm text-fg-muted">{emptyLabel}</p>
       </div>
     );
   }

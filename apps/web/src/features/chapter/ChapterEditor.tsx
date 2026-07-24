@@ -7,6 +7,7 @@ import { useTriggerChapterAgent } from "@/hooks/useAgent";
 import { useAgentStore } from "@/stores/agentStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { chaptersApi } from "@/api/chapters";
+import { knowledgeApi } from "@/api/knowledge";
 import { novelsApi } from "@/api/novels";
 import { pipelinesApi } from "@/api/pipelines";
 import { agentsApi } from "@/api/agents";
@@ -127,6 +128,8 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
   const [selectionPos, setSelectionPos] = useState<{ x: number; y: number } | null>(null);
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [chapterSummary, setChapterSummary] = useState<string | null>(null);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const writingChapterId = useAgentStore((s) => s.writingChapterId);
@@ -177,6 +180,36 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
       setHasChanges(false);
     }
   }, [isFileMode, chapter]);
+
+  // 本章摘要：DB 模式优先 chapter.summary，否则从摘要链映射按章号取（覆盖 file 模式）
+  useEffect(() => {
+    if (!novelId) {
+      setChapterSummary(null);
+      return;
+    }
+    if (!isFileMode && chapter?.summary) {
+      setChapterSummary(chapter.summary);
+      return;
+    }
+    const num = isFileMode
+      ? parseInt(filePath?.match(/ch(\d+)\.md/)?.[1] ?? "0")
+      : chapter?.number ?? 0;
+    if (!num) {
+      setChapterSummary(null);
+      return;
+    }
+    let cancelled = false;
+    knowledgeApi
+      .chapterSummaries(novelId)
+      .then((r) => {
+        if (cancelled) return;
+        setChapterSummary(r.summaries[String(num)] ?? null);
+      })
+      .catch(() => !cancelled && setChapterSummary(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [novelId, isFileMode, filePath, chapter]);
 
   // Sync writing state from backend on mount
   useEffect(() => {
@@ -568,6 +601,34 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
 
       <div className="flex-1 overflow-auto p-4 lg:p-6">
         <div className="mx-auto max-w-3xl space-y-6">
+          {chapterSummary && (
+            <div className="rounded-lg border border-subtle bg-surface-card overflow-hidden">
+              <button
+                onClick={() => setSummaryExpanded((v) => !v)}
+                className="flex w-full items-center justify-between px-4 py-2.5"
+              >
+                <div className="flex items-center gap-2">
+                  <Eye size={14} className="text-accent" />
+                  <h3 className="font-heading text-sm font-semibold text-fg-primary">本章摘要</h3>
+                  <span className="font-caption text-[10px] text-fg-muted">
+                    写作循环定稿后自动蒸馏，供后续章节跨章记忆
+                  </span>
+                </div>
+                {summaryExpanded ? (
+                  <ChevronUp size={14} className="text-fg-muted" />
+                ) : (
+                  <ChevronDown size={14} className="text-fg-muted" />
+                )}
+              </button>
+              {summaryExpanded && (
+                <div className="border-t border-subtle px-4 py-3">
+                  <p className="font-body text-sm text-fg-secondary leading-relaxed whitespace-pre-wrap">
+                    {chapterSummary}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           {viewMode === "preview" ? (
             <div ref={contentRef} onMouseUp={handleTextSelection} className="relative">
               <ChapterReading content={content} />

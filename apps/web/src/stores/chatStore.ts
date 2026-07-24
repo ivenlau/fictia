@@ -10,10 +10,7 @@ interface ToolCallEntry {
 interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
-  selectedProviderId: string;
-  selectedModelId: string;
   toolCalls: ToolCallEntry[];
-  setModel: (providerId: string, modelId: string) => void;
   addMessage: (msg: ChatMessage) => void;
   appendToLast: (delta: string) => void;
   addToolCall: (tc: ToolCallEntry) => void;
@@ -25,12 +22,7 @@ interface ChatState {
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   isStreaming: false,
-  selectedProviderId: "",
-  selectedModelId: "",
   toolCalls: [],
-
-  setModel: (providerId, modelId) =>
-    set({ selectedProviderId: providerId, selectedModelId: modelId }),
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
 

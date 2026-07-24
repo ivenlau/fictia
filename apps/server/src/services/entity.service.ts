@@ -13,7 +13,14 @@
 
 import * as yaml from "js-yaml";
 import * as path from "path";
+import { transitionForeshadow, FORESHADOW_OP_TO_STATE } from "@fictia/shared";
+import type {
+  ForeshadowState,
+  ForeshadowHistoryEntry,
+  ForeshadowStats,
+} from "@fictia/shared";
 import { fileService } from "./file.service.js";
+import { readSummariesBefore } from "./chapter-summary-store.js";
 import { listFiles, readFileSafe } from "../utils/file.js";
 import {
   buildCharacterRegistry,
@@ -365,7 +372,7 @@ export async function assembleWritingSpace(
 
 // ---------- 动态状态更新（从章节写作备注） ----------
 
-async function resolveChapterFile(
+export async function resolveChapterFile(
   novelDir: string,
   chapterNumber: number,
 ): Promise<string | null> {
@@ -438,14 +445,35 @@ export async function updateEntitiesFromChapterNotes(
 
   const foreshadowValue = getNoteValue(notes, "伏笔操作");
   if (foreshadowValue) {
+    const chTag = `ch${String(chapterNumber).padStart(2, "0")}`;
     for (const f of foreshadows) {
-      const reOp = new RegExp(`(埋设|推进|强化|回收)[^F]*${escapeRe(f.id)}`);
+      const reOp = new RegExp(`(埋设|推进|强化|回收|悬置)[^F]*${escapeRe(f.id)}`);
       const m = foreshadowValue.match(reOp);
-      if (m) {
-        const op = m[1];
-        const state = op === "回收" ? "resolved" : op === "埋设" ? "planted" : "strengthened";
-        updated.push({ ...f, state });
+      if (!m) continue;
+      const op = m[1];
+      const cur = (f.state as ForeshadowState) || "planted";
+      const history = Array.isArray(f.fields.history)
+        ? [...(f.fields.history as ForeshadowHistoryEntry[])]
+        : [];
+      // 首次实际章节事件：state 可能来自 narrative-weave 计划而非实际章节，
+      // 直接采纳 op 映射；之后按状态机校验，禁止回退（如 resolved 后再埋设）。
+      const isFirstRealEvent = history.length === 0;
+      const next = isFirstRealEvent
+        ? (FORESHADOW_OP_TO_STATE[op] ?? null)
+        : transitionForeshadow(cur, op);
+      if (!next) continue;
+      history.push({ ch: chTag, op, state: next });
+      const fields: Record<string, unknown> = { ...f.fields, history };
+      if (next === "planted" && !fields.plantedCh) fields.plantedCh = chTag;
+      if (next === "strengthened") {
+        const arr = Array.isArray(fields.strengthenChs)
+          ? [...(fields.strengthenChs as string[])]
+          : [];
+        if (!arr.includes(chTag)) arr.push(chTag);
+        fields.strengthenChs = arr;
       }
+      if (next === "resolved") fields.resolvedCh = chTag;
+      updated.push({ ...f, state: next, fields });
     }
   }
 
@@ -454,7 +482,7 @@ export async function updateEntitiesFromChapterNotes(
 }
 
 /**
- * 组装动态上下文（角色当前状态 + 本章伏笔指令），注入 chapter-writer。
+ * 组装动态上下文（前文摘要链 + 角色当前状态 + 本章伏笔指令），注入 chapter-writer。
  */
 export function assembleDynamicContext(
   novelId: string,
@@ -463,6 +491,16 @@ export function assembleDynamicContext(
   const num = String(chapterNumber).padStart(2, "0");
   const chTag = `ch${num}`;
   const parts: string[] = [];
+
+  // 前文摘要链：每章压缩摘要串成跨章骨架，治长篇失忆（N-1 全文仍由 chapter-writer 另读）
+  const summaries = readSummariesBefore(novelId, chapterNumber);
+  if (summaries.length) {
+    parts.push(
+      `## 前文摘要链（每章压缩，跨章骨架）\n${summaries
+        .map((s) => `[${s.number}] ${s.summary}`)
+        .join("\n")}`,
+    );
+  }
 
   const charEntities = listEntities(novelId, "characters");
   const withState = charEntities.filter((e) => e.state && e.state !== "active");
@@ -493,6 +531,31 @@ export function assembleDynamicContext(
   }
 
   return parts.join("\n\n");
+}
+
+/**
+ * 伏笔闭合统计：各态计数 + closureRate + 未闭合（open）列表。
+ * `open` = 非 resolved 且非 suspended 的伏笔。
+ */
+export function foreshadowStats(novelId: string): ForeshadowStats {
+  const foreshadows = listEntities(novelId, "foreshadowing");
+  const counts = { planted: 0, strengthened: 0, resolved: 0, suspended: 0 };
+  const open: ForeshadowStats["open"] = [];
+  for (const f of foreshadows) {
+    const st = (f.state as ForeshadowState) || "planted";
+    if (st in counts) (counts as Record<string, number>)[st]++;
+    if (st !== "resolved" && st !== "suspended") {
+      open.push({
+        id: f.id,
+        name: f.name,
+        state: st,
+        desc: typeof f.fields.desc === "string" && f.fields.desc ? f.fields.desc : undefined,
+      });
+    }
+  }
+  const total = foreshadows.length;
+  const closureRate = total > 0 ? counts.resolved / total : 0;
+  return { total, ...counts, closureRate, open };
 }
 
 export { extractCharacters, extractForeshadowing, extractStorylines, extractTimeline };

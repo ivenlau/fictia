@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { ModalOverlay } from "@/components/layout/ModalOverlay";
+import { AiGenerateButton } from "@/components/ui/AiGenerateButton";
 import {
   materialsApi,
   type UserMaterial,
@@ -121,7 +122,23 @@ export function MaterialEditorModal({
               />
             </Field>
           )}
-          <Field label="正文（Markdown）">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <label className="font-caption text-[10px] uppercase tracking-wider text-fg-muted">
+                正文（Markdown）
+              </label>
+              <AiGenerateButton
+                kind={type}
+                fields={{
+                  name,
+                  description,
+                  ...(type === "craft" && agents.trim() ? { agents } : {}),
+                }}
+                current={content}
+                onResult={setContent}
+                disabled={!name.trim() && !description.trim()}
+              />
+            </div>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -135,7 +152,7 @@ export function MaterialEditorModal({
               }
               className="font-body text-xs leading-relaxed bg-surface-secondary border border-subtle rounded-md px-2 py-1.5 text-fg-primary focus:outline-none focus:border-accent w-full resize-y"
             />
-          </Field>
+          </div>
           {type !== "prompt-snippet" && (
             <label className="flex items-center gap-2 cursor-pointer">
               <input

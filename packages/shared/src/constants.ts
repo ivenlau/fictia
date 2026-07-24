@@ -1,4 +1,4 @@
-import type { AgentType, StageName, AgentModelAssignment } from "./types";
+import type { AgentType, StageName, AgentModelAssignment, ForeshadowState } from "./types";
 
 // ===== Stage ↔ Agent Mapping =====
 export const STAGE_TO_AGENT: Record<StageName, AgentType> = {
@@ -294,6 +294,52 @@ export const PRESET_PROVIDERS: PresetProviderDef[] = [
   },
 ];
 
+// ===== Default Chat Model (AI assistant conversation) =====
+export const DEFAULT_CHAT_MODEL: AgentModelAssignment = {
+  providerId: "glm-coding",
+  modelId: "glm-5.1",
+};
+
 // ===== Default Chat Persona =====
 export const DEFAULT_CHAT_PERSONA =
   "你是一位专业的小说创作助手。你熟悉故事结构、角色塑造、世界观构建等创作技巧。\n你可以帮用户查看和修改小说的各种文档，提供建设性的创作建议。\n请用中文回复，语气友善专业。";
+
+// ===== Foreshadowing State Machine =====
+// States: planted(埋设) → strengthened(推进/强化) → resolved(回收).
+// `suspended`(悬置) is an out-of-band hold reachable from any non-resolved state.
+export const FORESHADOW_STATES: ForeshadowState[] = [
+  "planted",
+  "strengthened",
+  "resolved",
+  "suspended",
+];
+
+/** operation keyword (from chapter 写作备注) → resulting state */
+export const FORESHADOW_OP_TO_STATE: Record<string, ForeshadowState> = {
+  埋设: "planted",
+  推进: "strengthened",
+  强化: "strengthened",
+  回收: "resolved",
+  悬置: "suspended",
+};
+
+/** valid forward transitions; anything not listed is rejected to prevent regressions
+ *  (e.g. a resolved 伏笔 cannot be re-planted). */
+export const FORESHADOW_TRANSITIONS: Record<ForeshadowState, ForeshadowState[]> = {
+  planted: ["strengthened", "resolved", "suspended"],
+  strengthened: ["resolved", "suspended"],
+  suspended: ["strengthened", "resolved"],
+  resolved: [],
+};
+
+/**
+ * Returns the next state for an op given the current state, or null if the op
+ * is unknown or would regress (e.g. re-planting a resolved 伏笔). A no-op
+ * (op maps to the current state) returns the current state.
+ */
+export function transitionForeshadow(current: ForeshadowState, op: string): ForeshadowState | null {
+  const next = FORESHADOW_OP_TO_STATE[op];
+  if (!next) return null;
+  if (next === current) return current;
+  return FORESHADOW_TRANSITIONS[current].includes(next) ? next : null;
+}

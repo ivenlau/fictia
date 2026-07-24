@@ -5,7 +5,7 @@ import {
   Send,
   ChevronDown,
   ChevronRight,
-  Settings2,
+  Settings,
   Loader2,
   Wrench,
 } from "lucide-react";
@@ -19,25 +19,19 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useChatStream } from "../../hooks/useChatStream";
 import { chatApi } from "../../api/chat";
 import type { ChatMessage } from "@fictia/shared";
-import { settingsApi } from "../../api/settings";
 
 export function ChatPanel() {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const toolCalls = useChatStore((s) => s.toolCalls);
-  const selectedProviderId = useChatStore((s) => s.selectedProviderId);
-  const selectedModelId = useChatStore((s) => s.selectedModelId);
-  const setModel = useChatStore((s) => s.setModel);
   const loadHistory = useChatStore((s) => s.loadHistory);
   const clearMessages = useChatStore((s) => s.clearMessages);
 
   const providers = useSettingsStore((s) => s.providers);
-  const persona = useSettingsStore((s) => s.chatPersona);
-  const setPersona = useSettingsStore((s) => s.setChatPersona);
+  const chatModel = useSettingsStore((s) => s.chatModel);
+  const openSettings = useUIStore((s) => s.openSettings);
 
   const [input, setInput] = useState("");
-  const [showPersona, setShowPersona] = useState(false);
-  const [showModelPicker, setShowModelPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const explorerWidth = useUIStore((s) => s.explorerWidth);
@@ -117,24 +111,13 @@ export function ChatPanel() {
     [handleSend],
   );
 
-  const handleSavePersona = useCallback(async () => {
-    try {
-      await settingsApi.update({ chatPersona: persona });
-      setShowPersona(false);
-    } catch {
-      // ignore
-    }
-  }, [persona]);
-
-  // usable providers for the chat picker (enabled + has enabled models)
-  const usable = providers.filter((p) => p.enabled && p.models.some((m) => m.enabled));
-
-  const currentProvider = usable.find((p) => p.id === selectedProviderId);
-  const currentModel = currentProvider?.models.find((m) => m.id === selectedModelId && m.enabled);
+  // current chat model label (read-only; managed in Settings, 对话助手 tab)
+  const currentProvider = providers.find((p) => p.id === chatModel.providerId);
+  const currentModel = currentProvider?.models.find((m) => m.id === chatModel.modelId);
   const currentModelLabel = currentModel
     ? `${currentProvider!.name} / ${currentModel.name}`
-    : selectedModelId
-      ? `${selectedProviderId}/${selectedModelId}`
+    : chatModel.modelId
+      ? `${chatModel.providerId}/${chatModel.modelId}（已停用）`
       : "未选择模型";
 
   return (
@@ -145,92 +128,16 @@ export function ChatPanel() {
           <p className="font-caption text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
             AI 助手
           </p>
-          <div className="flex items-center gap-1">
-            {/* Persona settings */}
-            <button
-              onClick={() => setShowPersona(!showPersona)}
-              className="p-1 rounded hover:bg-surface-muted/50 text-fg-muted hover:text-fg-primary transition-colors"
-              title="人格设置"
-            >
-              <Settings2 size={13} />
-            </button>
-          </div>
         </div>
-
-        {/* Model selector */}
-        <div className="relative">
-          <button
-            onClick={() => setShowModelPicker(!showModelPicker)}
-            className="w-full flex items-center justify-between rounded-md border border-subtle bg-surface-card px-2.5 py-1.5 text-xs text-fg-secondary hover:border-accent/40 transition-colors"
-          >
-            <span className="truncate">{currentModelLabel}</span>
-            <ChevronDown size={12} className="shrink-0 ml-1" />
-          </button>
-
-          {showModelPicker && (
-            <div className="absolute z-20 top-full left-0 right-0 mt-1 rounded-md border border-subtle bg-surface-card shadow-lg max-h-48 overflow-y-auto">
-              {usable.length === 0 && (
-                <p className="px-2.5 py-2 font-caption text-[11px] text-fg-muted">
-                  暂无可用模型，请到设置中配置
-                </p>
-              )}
-              {usable.map((provider) => (
-                <div key={provider.id}>
-                  <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-muted bg-surface-muted/30">
-                    {provider.name}
-                  </div>
-                  {provider.models
-                    .filter((m) => m.enabled)
-                    .map((m) => (
-                      <button
-                        key={`${provider.id}-${m.id}`}
-                        onClick={() => {
-                          setModel(provider.id, m.id);
-                          setShowModelPicker(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors ${
-                          selectedProviderId === provider.id && selectedModelId === m.id
-                            ? "bg-accent-bg text-accent"
-                            : "text-fg-secondary hover:bg-surface-muted/50"
-                        }`}
-                      >
-                        {m.name}
-                      </button>
-                    ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={() => openSettings("assistant")}
+          className="w-full flex items-center justify-between rounded-md border border-subtle bg-surface-card px-2.5 py-1.5 text-xs text-fg-secondary hover:border-accent/40 transition-colors"
+          title="在设置中修改对话模型与人格"
+        >
+          <span className="truncate">{currentModelLabel}</span>
+          <Settings size={12} className="shrink-0 ml-1 text-fg-muted" />
+        </button>
       </div>
-
-      {/* Persona editor (collapsible) */}
-      {showPersona && (
-        <div className="px-3 py-2 border-b border-subtle bg-surface-muted/20">
-          <p className="font-caption text-[10px] text-fg-muted mb-1.5">AI 人格设定</p>
-          <textarea
-            value={persona}
-            onChange={(e) => setPersona(e.target.value)}
-            rows={4}
-            placeholder="留空将使用默认人格"
-            className="w-full rounded-md border border-subtle bg-surface-card px-2.5 py-1.5 font-body text-xs text-fg-primary placeholder:text-fg-muted focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 resize-none"
-          />
-          <div className="flex justify-end gap-2 mt-1.5">
-            <button
-              onClick={() => setShowPersona(false)}
-              className="px-2 py-1 text-[11px] rounded text-fg-muted hover:text-fg-primary transition-colors"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleSavePersona}
-              className="px-2 py-1 text-[11px] rounded bg-accent text-white hover:bg-accent/90 transition-colors"
-            >
-              保存
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">

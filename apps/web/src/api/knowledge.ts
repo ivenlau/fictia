@@ -137,6 +137,35 @@ export interface GraphBuildResult {
   [key: string]: unknown;
 }
 
+// ---------- 伏笔状态机 + 上下文注入预览 ----------
+
+export type ForeshadowState = "planted" | "strengthened" | "resolved" | "suspended";
+
+export interface ForeshadowStats {
+  total: number;
+  planted: number;
+  strengthened: number;
+  resolved: number;
+  suspended: number;
+  closureRate: number; // 0..1
+  open: Array<{ id: string; name: string; state: ForeshadowState; desc?: string }>;
+}
+
+export interface ContextPreviewSectionItem {
+  key: string;
+  title: string;
+  present: boolean;
+  charCount: number;
+  detail: string;
+}
+
+export interface ContextPreview {
+  novelId: string;
+  chapter: number;
+  sections: ContextPreviewSectionItem[];
+  raw: string;
+}
+
 // ---------- json endpoints ----------
 
 export const knowledgeApi = {
@@ -176,6 +205,16 @@ export const knowledgeApi = {
     api.get<GraphStatus>(`/novels/${novelId}/graph/status`),
   graphExport: (novelId: string) =>
     api.get<GraphExport>(`/novels/${novelId}/graph/export`),
+
+  // 伏笔状态机 + 上下文注入预览
+  foreshadowStats: (novelId: string) =>
+    api.get<ForeshadowStats>(`/novels/${novelId}/foreshadowing/stats`),
+  contextPreview: (novelId: string, chapter: number) =>
+    api.get<ContextPreview>(`/novels/${novelId}/context-preview?chapter=${chapter}`),
+  chapterSummaries: (novelId: string) =>
+    api.get<{ novelId: string; summaries: Record<string, string> }>(
+      `/novels/${novelId}/chapter-summaries`,
+    ),
 };
 
 // ---------- SSE: 向量全量索引 ----------

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useChatStore } from "../stores/chatStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import type { ChatMessage, ChatRequest } from "@fictia/shared";
 
 export function useChatStream() {
@@ -10,8 +11,7 @@ export function useChatStream() {
 
   const streamChat = useCallback(
     async (userMessage: string, novelId?: string) => {
-      const selectedProviderId = useChatStore.getState().selectedProviderId;
-      const selectedModelId = useChatStore.getState().selectedModelId;
+      const { providerId, modelId } = useSettingsStore.getState().chatModel;
 
       // Add user message
       const userMsg: ChatMessage = {
@@ -33,8 +33,8 @@ export function useChatStream() {
         role: "assistant",
         content: "",
         toolCalls: null,
-        modelUsed: selectedModelId,
-        providerUsed: selectedProviderId,
+        modelUsed: modelId,
+        providerUsed: providerId,
         createdAt: new Date().toISOString(),
       };
       addMessage(assistantMsg);
@@ -49,8 +49,8 @@ export function useChatStream() {
       const request: ChatRequest = {
         message: userMessage,
         novelId,
-        providerId: selectedProviderId,
-        modelId: selectedModelId,
+        providerId,
+        modelId,
         history,
       };
 

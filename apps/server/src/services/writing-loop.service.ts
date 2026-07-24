@@ -23,6 +23,7 @@ import {
   assembleDynamicContext,
   updateEntitiesFromChapterNotes,
 } from "./entity.service.js";
+import { generateChapterSummary } from "./summary-chain.service.js";
 
 export type LoopPhase =
   | "writing"
@@ -51,6 +52,8 @@ export interface LoopResult {
   proseBlockingRemaining: number;
   proseAdvisory: number;
   entitiesUpdated: number;
+  /** 本章摘要链生成结果：llm=LLM 蒸馏，fallback=确定性兜底，null=未生成/失败。 */
+  summarySource?: "llm" | "fallback" | null;
 }
 
 export type ProgressCb = (p: LoopProgress) => void;
@@ -169,7 +172,19 @@ export class WritingLoopService {
         } catch {
           // 状态更新失败不阻塞
         }
-        emit({ phase: "done", round, message: `第 ${chapterNumber} 章通过（${round} 轮），实体状态更新 ${entitiesUpdated} 条` });
+        // 蒸馏本章摘要写入摘要链（LLM 主路径 + 确定性兜底），供后续章节跨章上下文
+        let summarySource: "llm" | "fallback" | null = null;
+        try {
+          const s = await generateChapterSummary(this.novelId, chapterNumber);
+          summarySource = s?.source ?? null;
+        } catch {
+          // 摘要生成失败不阻塞
+        }
+        emit({
+          phase: "done",
+          round,
+          message: `第 ${chapterNumber} 章通过（${round} 轮），实体状态更新 ${entitiesUpdated} 条，摘要=${summarySource ?? "无"}`,
+        });
         return {
           chapterNumber,
           chapterPath,
@@ -180,6 +195,7 @@ export class WritingLoopService {
           proseBlockingRemaining,
           proseAdvisory,
           entitiesUpdated,
+          summarySource,
         };
       }
 
