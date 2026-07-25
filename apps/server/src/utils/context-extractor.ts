@@ -778,22 +778,39 @@ export function parseChapterNumber(outlinePath: string): number {
  */
 export function chapterToAct(chapterNumber: number, blueprint?: string): number {
   if (blueprint) {
+    // 优先：解析 ## 幕定义 后的 JSON 幕块（architect 输出的结构化「幕→章节」映射）
+    const section = blueprint.split(/## 幕定义/)[1] ?? "";
+    const fence =
+      section.match(/```(?:json)?\s*([\s\S]*?)```/) ?? section.match(/~~~(?:json)?\s*([\s\S]*?)~~~/);
+    if (fence) {
+      try {
+        const acts = JSON.parse(fence[1].trim()) as Array<{ act: number; chapters?: number[] }>;
+        for (const a of acts) {
+          if (Array.isArray(a.chapters) && a.chapters.includes(chapterNumber)) {
+            return Number(a.act);
+          }
+        }
+      } catch {
+        // JSON 解析失败，回退到旧格式 / 兜底
+      }
+    }
+    // 兼容旧格式：name:"幕名" chapters:[...]
     const actMatches = blueprint.match(/name:\s*"[^"]+"\s*\n\s*chapters:\s*\[([^\]]+)\]/g);
     if (actMatches) {
       let actNum = 1;
       for (const match of actMatches) {
         const nums = match.match(/\d+/g);
-        if (nums && nums.some(n => Number(n) === chapterNumber)) {
+        if (nums && nums.some((n) => Number(n) === chapterNumber)) {
           return actNum;
         }
         actNum++;
       }
     }
   }
-  // Default mapping
-  if (chapterNumber <= 3) return 0;  // 序篇
-  if (chapterNumber <= 15) return 1; // 第一幕
-  if (chapterNumber <= 30) return 2; // 第二幕
-  if (chapterNumber <= 45) return 3; // 第三幕
-  return 4; // 终篇
+  // 兜底（blueprint 无幕定义时）：序篇 / 三幕 / 终篇
+  if (chapterNumber <= 3) return 0;
+  if (chapterNumber <= 15) return 1;
+  if (chapterNumber <= 30) return 2;
+  if (chapterNumber <= 45) return 3;
+  return 4;
 }
