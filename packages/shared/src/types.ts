@@ -153,6 +153,7 @@ export interface Settings {
   agentModels: Record<AgentType, AgentModelAssignment>;
   chatPersona: string;
   chatModel: AgentModelAssignment;
+  systemModel: AgentModelAssignment;
   embeddingProvider: EmbeddingProvider;
 }
 

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
-import { DEFAULT_AGENT_MODELS, DEFAULT_CHAT_MODEL } from "@fictia/shared";
+import { DEFAULT_AGENT_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_SYSTEM_MODEL } from "@fictia/shared";
 import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 
 const now = () => new Date().toISOString();
@@ -63,7 +63,20 @@ export const settingsService = {
       }
     }
 
-    return { agentModels, chatPersona, chatModel, manualConfirm, embeddingProvider };
+    let systemModel: AgentModelAssignment = { ...DEFAULT_SYSTEM_MODEL };
+    const systemModelRaw = getSettingValue("systemModel");
+    if (systemModelRaw) {
+      try {
+        const parsed = JSON.parse(systemModelRaw);
+        if (parsed && typeof parsed === "object" && parsed.providerId && parsed.modelId) {
+          systemModel = { providerId: parsed.providerId, modelId: parsed.modelId };
+        }
+      } catch {
+        // fall back to default
+      }
+    }
+
+    return { agentModels, chatPersona, chatModel, systemModel, manualConfirm, embeddingProvider };
   },
 
   update(
@@ -71,6 +84,7 @@ export const settingsService = {
       agentModels: Partial<Record<AgentType, AgentModelAssignment>>;
       chatPersona: string;
       chatModel: AgentModelAssignment;
+      systemModel: AgentModelAssignment;
       manualConfirm: boolean;
       embeddingProvider: "glm" | "bge-m3";
     }>,
@@ -78,6 +92,7 @@ export const settingsService = {
     if (data.agentModels !== undefined) setSettingValue("agentModels", JSON.stringify(data.agentModels));
     if (data.chatPersona !== undefined) setSettingValue("chatPersona", data.chatPersona);
     if (data.chatModel !== undefined) setSettingValue("chatModel", JSON.stringify(data.chatModel));
+    if (data.systemModel !== undefined) setSettingValue("systemModel", JSON.stringify(data.systemModel));
     if (data.manualConfirm !== undefined) setSettingValue("manualConfirm", data.manualConfirm ? "true" : "false");
     if (data.embeddingProvider !== undefined) setSettingValue("embeddingProvider", data.embeddingProvider);
 

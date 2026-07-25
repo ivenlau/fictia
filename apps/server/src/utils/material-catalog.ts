@@ -4,6 +4,8 @@ import * as yaml from "js-yaml";
 import { loadPromptTemplate, loadCraftIndex, loadCraftKnowledge } from "./prompt-loader.js";
 import { readFileSafe } from "./file.js";
 import { readPreferences, listUserMaterials } from "./user-materials.js";
+import { assembleReferenceForInjection } from "./reference-works.js";
+import { injectSectionsBefore, type PromptSection } from "./prompt-sections.js";
 
 /**
  * 素材目录（catalog）+ 注入预览工具。
@@ -151,7 +153,14 @@ export async function listAgentNames(): Promise<string[]> {
 // ==================== 注入预览 ====================
 
 export interface InjectionSection {
-  key: "base" | "preferences" | "craft" | "style-guide";
+  key:
+    | "base"
+    | "preferences"
+    | "craft"
+    | "reference"
+    | "reference-genre"
+    | "reference-craft"
+    | "style-guide";
   title: string;
   present: boolean;
   charCount: number;
@@ -253,6 +262,37 @@ export async function buildInjectionPreview(
     detail: craftDetail || "(该 agent 的知识加载表为空)",
   });
 
+  // 参考作品产出（风格指纹 / 参考体裁 / 参考技法）
+  const refAssembled = await assembleReferenceForInjection(novelDir);
+  const refDetail = (
+    s: { names: string[]; truncated: boolean },
+    empty: string,
+  ): string =>
+    s.names.length
+      ? `作品: ${s.names.join(", ")}${s.truncated ? "（已截断）" : ""}`
+      : empty;
+  sections.push({
+    key: "reference",
+    title: "风格锚定·对标参考（风格指纹）",
+    present: refAssembled.fingerprint.text.length > 0,
+    charCount: refAssembled.fingerprint.text.length,
+    detail: refDetail(refAssembled.fingerprint, "未启用任何参考作品（在「对标」tab 上传并启用）"),
+  });
+  sections.push({
+    key: "reference-genre",
+    title: "参考体裁（体裁卡提炼）",
+    present: refAssembled.genre.text.length > 0,
+    charCount: refAssembled.genre.text.length,
+    detail: refDetail(refAssembled.genre, "无"),
+  });
+  sections.push({
+    key: "reference-craft",
+    title: "参考技法（技法示范）",
+    present: refAssembled.craft.text.length > 0,
+    charCount: refAssembled.craft.text.length,
+    detail: refDetail(refAssembled.craft, "无"),
+  });
+
   // 风格锚定
   const styleGuide = await readFileSafe(path.join(novelDir, "design/style-guide.md"));
   sections.push({
@@ -263,26 +303,47 @@ export async function buildInjectionPreview(
     detail: styleGuide ? "已启用" : "尚未创建（style-designer 阶段产出）",
   });
 
-  // 拼装（复刻 BaseAgent.buildSystemPrompt 顺序：用户偏好 → 已加载知识 → 风格锚定）
-  let assembled = basePrompt;
+  // 拼装（与 BaseAgent.buildSystemPrompt 同源，sections 顺序即注入顺序）
+  const promptSections: PromptSection[] = [];
   if (prefsActive && prefs) {
-    assembled = assembled.replace(
-      "# 专业能力",
-      `# 用户偏好 (作者常驻指令，优先级最高)\n\n${prefs.content.trim()}\n\n# 专业能力`,
-    );
+    promptSections.push({
+      level: 1,
+      title: "用户偏好 (作者常驻指令，优先级最高)",
+      body: prefs.content.trim(),
+    });
   }
   if (craftText) {
-    assembled = assembled.replace(
-      "# 专业能力",
-      `## 已加载知识\n\n${craftText}\n\n# 专业能力`,
-    );
+    promptSections.push({ level: 2, title: "已加载知识", body: craftText });
+  }
+  if (refAssembled.fingerprint.text) {
+    promptSections.push({
+      level: 1,
+      title: "风格锚定·对标参考 (借鉴其创作规律，禁止复制原句)",
+      body: refAssembled.fingerprint.text,
+    });
+  }
+  if (refAssembled.genre.text) {
+    promptSections.push({
+      level: 1,
+      title: "参考体裁 (借鉴其体裁打法，禁止照搬设定)",
+      body: refAssembled.genre.text,
+    });
+  }
+  if (refAssembled.craft.text) {
+    promptSections.push({
+      level: 1,
+      title: "参考技法 (借鉴其技法，禁止复制原文)",
+      body: refAssembled.craft.text,
+    });
   }
   if (styleGuide) {
-    assembled = assembled.replace(
-      "# 专业能力",
-      `# 风格锚定 (所有产出必须严格遵守)\n\n${styleGuide}\n\n# 专业能力`,
-    );
+    promptSections.push({
+      level: 1,
+      title: "风格锚定 (所有产出必须严格遵守)",
+      body: styleGuide,
+    });
   }
+  const assembled = injectSectionsBefore(basePrompt, promptSections);
 
   return {
     agent: agentName,

@@ -6,6 +6,7 @@
 import { Type } from "@earendil-works/pi-ai";
 import { listGenreCards, listCraftDocs } from "../utils/material-catalog.js";
 import { listUserMaterials, getUserMaterial, readPreferences } from "../utils/user-materials.js";
+import { listReferences, getReference } from "../utils/reference-works.js";
 import type { FictiaTool, ToolContext } from "./types.js";
 
 export function createMaterialTools(ctx: ToolContext): FictiaTool[] {
@@ -85,6 +86,69 @@ export function createMaterialTools(ctx: ToolContext): FictiaTool[] {
         if (!prefs) return { content: [{ type: "text", text: "尚未创建创作偏好" }], details: { enabled: false } };
         const text = `创作偏好（${prefs.enabled ? "已启用" : "已禁用"}）:\n${prefs.content}`;
         return { content: [{ type: "text", text }], details: { enabled: prefs.enabled } };
+      },
+    },
+
+    // ---- 参考作品（对标素材 P2）----
+    {
+      name: "list_reference_works",
+      label: "列出参考作品",
+      tier: "readonly",
+      description: "列出本作上传的参考作品（解析出风格指纹/体裁卡/技法）。写作/设计时按需参考。",
+      parameters: Type.Object({}),
+      async execute() {
+        const refs = await listReferences(ctx.novelDir);
+        const lines = refs.map(
+          (r) =>
+            `- ${r.key}: ${r.name} (字数 ${r.charCount}, ${r.enabled ? "已启用" : "已禁用"}, ${r.parseStatus})`,
+        );
+        const text = lines.length ? `参考作品:\n${lines.join("\n")}` : "无参考作品";
+        return { content: [{ type: "text", text }], details: { count: refs.length } };
+      },
+    },
+    {
+      name: "get_reference_fingerprint",
+      label: "获取参考作品风格指纹",
+      tier: "readonly",
+      description: "获取某参考作品的风格指纹（文风约束清单）。借鉴其文风规律，禁止复制原句。",
+      parameters: Type.Object({
+        key: Type.String({ description: "参考作品 key" }),
+      }),
+      async execute(_id, { key }) {
+        const work = await getReference(ctx.novelDir, key as string);
+        if (!work) throw new Error(`未找到参考作品: ${key}`);
+        const text = work.fingerprint ?? "（尚未产出风格指纹）";
+        return { content: [{ type: "text", text }], details: { key, enabled: work.enabled } };
+      },
+    },
+    {
+      name: "get_reference_genre",
+      label: "获取参考作品体裁卡",
+      tier: "readonly",
+      description: "获取某参考作品提炼的体裁打法卡。借鉴其体裁打法，禁止照搬设定。",
+      parameters: Type.Object({
+        key: Type.String({ description: "参考作品 key" }),
+      }),
+      async execute(_id, { key }) {
+        const work = await getReference(ctx.novelDir, key as string);
+        if (!work) throw new Error(`未找到参考作品: ${key}`);
+        const text = work.genreCard ?? "（尚未产出版裁卡）";
+        return { content: [{ type: "text", text }], details: { key, enabled: work.enabled } };
+      },
+    },
+    {
+      name: "get_reference_craft",
+      label: "获取参考作品技法",
+      tier: "readonly",
+      description: "获取某参考作品提炼的写作技法。借鉴其技法，禁止复制原文。",
+      parameters: Type.Object({
+        key: Type.String({ description: "参考作品 key" }),
+      }),
+      async execute(_id, { key }) {
+        const work = await getReference(ctx.novelDir, key as string);
+        if (!work) throw new Error(`未找到参考作品: ${key}`);
+        const text = work.craft ?? "（尚未产出技法）";
+        return { content: [{ type: "text", text }], details: { key, enabled: work.enabled } };
       },
     },
   ];

@@ -10,7 +10,7 @@ type TabKey = SettingsTab;
 
 const TABS: { key: TabKey; label: string; icon: typeof Plug }[] = [
   { key: "providers", label: "模型提供商", icon: Plug },
-  { key: "agents", label: "Agent 模型", icon: Bot },
+  { key: "agents", label: "模型", icon: Bot },
   { key: "assistant", label: "对话助手", icon: MessageSquare },
   { key: "knowledge", label: "知识库", icon: Database },
   { key: "about", label: "关于", icon: Info },
@@ -32,6 +32,7 @@ export function SettingsModal() {
         agentModels: settingsStore.agentModels,
         chatPersona: settingsStore.chatPersona,
         chatModel: settingsStore.chatModel,
+        systemModel: settingsStore.systemModel,
         embeddingProvider: settingsStore.embeddingProvider,
       });
       setSaved(true);
@@ -108,70 +109,14 @@ export function SettingsModal() {
 function AssistantSection() {
   const chatPersona = useSettingsStore((s) => s.chatPersona);
   const setChatPersona = useSettingsStore((s) => s.setChatPersona);
-  const chatModel = useSettingsStore((s) => s.chatModel);
-  const setChatModel = useSettingsStore((s) => s.setChatModel);
-  const providers = useSettingsStore((s) => s.providers);
-
-  // usable providers (enabled + has at least one enabled model)
-  const usable = providers.filter((p) => p.enabled && p.models.some((m) => m.enabled));
-  const provider = providers.find((p) => p.id === chatModel.providerId);
-  const models = provider?.models.filter((m) => m.enabled) ?? [];
-  const providerDisabled = !!chatModel.providerId && !usable.some((p) => p.id === chatModel.providerId);
-
-  const handleProviderChange = (providerId: string) => {
-    const p = providers.find((pr) => pr.id === providerId);
-    const firstModel = p?.models.find((m) => m.enabled)?.id ?? "";
-    setChatModel(providerId, firstModel);
-  };
 
   return (
     <div className="space-y-4">
       <div>
         <h3 className="mb-1 font-heading text-base font-semibold text-fg-primary">对话助手</h3>
-        <p className="font-body text-sm text-fg-secondary">AI 助手的人格设定与对话模型（顶部「保存」生效）</p>
-      </div>
-
-      {/* 对话模型 */}
-      <div className="rounded-lg border border-subtle bg-surface-card p-3.5 space-y-2">
-        <p className="font-body text-sm font-medium text-fg-primary">对话模型</p>
-        {usable.length === 0 ? (
-          <p className="font-caption text-xs text-fg-muted">
-            尚无可用模型，请先到「模型提供商」配置 API Key 并启用模型。
-          </p>
-        ) : (
-          <>
-            <select
-              value={chatModel.providerId}
-              onChange={(e) => handleProviderChange(e.target.value)}
-              className="w-full rounded-md border border-subtle bg-surface-muted px-2.5 py-1.5 font-caption text-xs text-fg-primary focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
-            >
-              {usable.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-              {providerDisabled && (
-                <option value={chatModel.providerId}>
-                  {provider?.name ?? chatModel.providerId}（已停用）
-                </option>
-              )}
-            </select>
-            <select
-              value={chatModel.modelId}
-              onChange={(e) => setChatModel(chatModel.providerId, e.target.value)}
-              className="w-full rounded-md border border-subtle bg-surface-muted px-2.5 py-1.5 font-caption text-xs text-fg-primary focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-              {chatModel.modelId && !models.some((m) => m.id === chatModel.modelId) && (
-                <option value={chatModel.modelId}>{chatModel.modelId}（已停用）</option>
-              )}
-            </select>
-          </>
-        )}
+        <p className="font-body text-sm text-fg-secondary">
+          AI 助手的人格设定（对话模型配置已移至「模型」tab，顶部「保存」生效）
+        </p>
       </div>
 
       {/* 人格设定 */}
@@ -180,7 +125,7 @@ function AssistantSection() {
         <textarea
           value={chatPersona}
           onChange={(e) => setChatPersona(e.target.value)}
-          rows={10}
+          rows={12}
           placeholder="留空将使用默认人格"
           className="w-full resize-none rounded-md border border-subtle bg-surface-card px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
         />

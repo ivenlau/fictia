@@ -57,6 +57,10 @@ const MATERIAL_TOOLS = [
   "list_craft_docs",
   "get_craft_doc",
   "get_preferences",
+  "list_reference_works",
+  "get_reference_fingerprint",
+  "get_reference_genre",
+  "get_reference_craft",
 ];
 const SEMANTIC_TOOLS = ["semantic_search"];
 /** 状态手动推进（write）：伏笔状态机 + 角色状态。 */

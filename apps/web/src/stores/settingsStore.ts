@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import type { AgentType, AgentModelAssignment, ProviderInfo } from "@fictia/shared";
-import { DEFAULT_AGENT_MODELS, DEFAULT_CHAT_MODEL } from "@fictia/shared";
+import { DEFAULT_AGENT_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_SYSTEM_MODEL } from "@fictia/shared";
 
 interface SettingsState {
   providers: ProviderInfo[];
   agentModels: Record<AgentType, AgentModelAssignment>;
   chatPersona: string;
   chatModel: AgentModelAssignment;
+  systemModel: AgentModelAssignment;
   embeddingProvider: "glm" | "bge-m3";
   setProviders: (providers: ProviderInfo[]) => void;
   upsertProvider: (provider: ProviderInfo) => void;
@@ -14,11 +15,13 @@ interface SettingsState {
   setAgentModel: (agentType: AgentType, providerId: string, modelId: string) => void;
   setChatPersona: (p: string) => void;
   setChatModel: (providerId: string, modelId: string) => void;
+  setSystemModel: (providerId: string, modelId: string) => void;
   setEmbeddingProvider: (p: "glm" | "bge-m3") => void;
   loadSettings: (settings: {
     agentModels: Record<AgentType, AgentModelAssignment>;
     chatPersona: string;
     chatModel: AgentModelAssignment;
+    systemModel: AgentModelAssignment;
     embeddingProvider: "glm" | "bge-m3";
   }) => void;
 }
@@ -28,6 +31,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   agentModels: { ...DEFAULT_AGENT_MODELS },
   chatPersona: "",
   chatModel: { ...DEFAULT_CHAT_MODEL },
+  systemModel: { ...DEFAULT_SYSTEM_MODEL },
   embeddingProvider: "glm",
 
   setProviders: (providers) => set({ providers }),
@@ -53,6 +57,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   setChatPersona: (p) => set({ chatPersona: p }),
   setChatModel: (providerId, modelId) => set({ chatModel: { providerId, modelId } }),
+  setSystemModel: (providerId, modelId) => set({ systemModel: { providerId, modelId } }),
   setEmbeddingProvider: (p) => set({ embeddingProvider: p }),
 
   loadSettings: (settings) => set(settings),

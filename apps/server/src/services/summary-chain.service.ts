@@ -5,10 +5,8 @@
  * 主路径 = LLM 一次性补全（最便宜已启用模型）；失败/无凭证 → 确定性兜底
  * （压缩章节末尾「写作备注」的关键条目）。整条链路失败不阻塞 writing loop。
  */
-import { stream, type Model, type Context } from "@earendil-works/pi-ai";
-import { settingsService } from "./settings.service.js";
-import { providerService } from "./provider.service.js";
-import { buildModel } from "../llm/providers.js";
+import { stream, type Context } from "@earendil-works/pi-ai";
+import { pickAvailableModel } from "./model-picker.js";
 import { resolveChapterFile } from "./entity.service.js";
 import { writeSummary, getSummary } from "./chapter-summary-store.js";
 import { fileService } from "./file.service.js";
@@ -18,22 +16,6 @@ const SUMMARY_MAX_CHARS = 300;
 const SUMMARY_TIMEOUT_MS = 30_000;
 const LLM_INPUT_LIMIT = 20_000;
 
-/** 选一个可用模型：优先设置里的 chatModel，否则第一个 usable provider 的首个模型。 */
-function pickModel(): { model: Model<"openai-completions">; apiKey: string } | null {
-  const chat = settingsService.get().chatModel;
-  let resolved = providerService.resolveModel(chat.providerId, chat.modelId);
-  if (!resolved) {
-    const usable = providerService.listUsable()[0];
-    if (usable && usable.models[0]) {
-      resolved = providerService.resolveModel(usable.id, usable.models[0].id);
-    }
-  }
-  if (!resolved) return null;
-  const apiKey = resolved.provider.apiKey ?? "";
-  if (!apiKey) return null;
-  return { model: buildModel(resolved.provider, resolved.model), apiKey };
-}
-
 const SYSTEM_PROMPT =
   "你是小说摘要编辑。把给定章节正文与写作备注蒸馏成一段不超过" +
   `${SUMMARY_MAX_CHARS}` +
@@ -42,7 +24,7 @@ const SYSTEM_PROMPT =
 
 /** LLM 蒸馏；任何失败（无模型/无凭证/超时/流错误）返回 null 走兜底。 */
 async function summarizeByLLM(content: string): Promise<string | null> {
-  const picked = pickModel();
+  const picked = pickAvailableModel();
   if (!picked) return null;
   const context: Context = {
     systemPrompt: SYSTEM_PROMPT,

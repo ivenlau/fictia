@@ -25,7 +25,7 @@ export interface AgentsResponse {
 }
 
 export interface InjectionSection {
-  key: "base" | "preferences" | "craft" | "style-guide";
+  key: "base" | "preferences" | "craft" | "reference" | "style-guide";
   title: string;
   present: boolean;
   charCount: number;

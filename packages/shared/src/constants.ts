@@ -298,6 +298,12 @@ export const DEFAULT_CHAT_MODEL: AgentModelAssignment = {
   modelId: "glm-5.1",
 };
 
+// ===== Default System Model (background LLM: 参考作品解析 / 章节摘要) =====
+export const DEFAULT_SYSTEM_MODEL: AgentModelAssignment = {
+  providerId: "glm-coding",
+  modelId: "glm-5.1",
+};
+
 // ===== Default Chat Persona =====
 export const DEFAULT_CHAT_PERSONA =
   "你是一位专业的小说创作助手。你熟悉故事结构、角色塑造、世界观构建等创作技巧。\n你可以帮用户查看和修改小说的各种文档，提供建设性的创作建议。\n请用中文回复，语气友善专业。";

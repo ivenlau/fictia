@@ -4,6 +4,8 @@ import { loadPromptTemplate, loadCraftKnowledge } from "../utils/prompt-loader.j
 import { readFileSafe } from "../utils/file.js";
 import { listCharacterFiles } from "../utils/chapter-files.js";
 import { readPreferences } from "../utils/user-materials.js";
+import { assembleReferenceForInjection, type AssembledReference } from "../utils/reference-works.js";
+import { injectSectionsBefore, type PromptSection } from "../utils/prompt-sections.js";
 import { buildCharacterRegistry } from "../utils/context-extractor.js";
 import { runAgentSession } from "./agent-runner.js";
 import { toolRegistry, type ToolContext } from "../tools/index.js";
@@ -64,41 +66,66 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Build system prompt: base prompt + 用户偏好 + craft 知识 + style guide anchoring。
-   * 注入顺序（都落在 # 专业能力 之前）：用户偏好 → 已加载知识 → 风格锚定。
+   * Build system prompt: base prompt + 注入段。各段按 sections 数组顺序拼到
+   * `# 专业能力` 之前（injectSectionsBefore）：用户偏好 → 已加载知识 →
+   * 风格锚定·对标参考 → 风格锚定。
    */
   protected async buildSystemPrompt(): Promise<string> {
     const basePrompt = await loadPromptTemplate(this.agentName);
-    let prompt = basePrompt;
+    const sections: PromptSection[] = [];
 
     // C1 用户偏好（创作偏好，优先级最高，置顶）—— materials/prompts/preferences.md
     const prefs = await readPreferences(this.novelDir);
     if (prefs && prefs.enabled && prefs.content.trim()) {
-      prompt = prompt.replace(
-        "# 专业能力",
-        `# 用户偏好 (作者常驻指令，优先级最高)\n\n${prefs.content.trim()}\n\n# 专业能力`,
-      );
+      sections.push({
+        level: 1,
+        title: "用户偏好 (作者常驻指令，优先级最高)",
+        body: prefs.content.trim(),
+      });
     }
 
-    // 注入 craft 知识（含自定义技法 + 体裁卡），落在 # 专业能力 之前
+    // 已加载知识（craft 写作技法 + 体裁卡）
     const genre = await this.readNovelGenre();
     const craft = await loadCraftKnowledge(this.agentName, genre, this.novelDir);
     if (craft) {
-      prompt = prompt.replace(
-        "# 专业能力",
-        `## 已加载知识\n\n${craft}\n\n# 专业能力`,
-      );
+      sections.push({ level: 2, title: "已加载知识", body: craft });
+    }
+
+    // 参考作品产出（风格指纹 / 参考体裁 / 参考技法；借鉴创作规律，禁止复制原句）
+    const ref = await this.readReferenceInjection();
+    if (ref?.fingerprint.text) {
+      sections.push({
+        level: 1,
+        title: "风格锚定·对标参考 (借鉴其创作规律，禁止复制原句)",
+        body: ref.fingerprint.text,
+      });
+    }
+    if (ref?.genre.text) {
+      sections.push({
+        level: 1,
+        title: "参考体裁 (借鉴其体裁打法，禁止照搬设定)",
+        body: ref.genre.text,
+      });
+    }
+    if (ref?.craft.text) {
+      sections.push({
+        level: 1,
+        title: "参考技法 (借鉴其技法，禁止复制原文)",
+        body: ref.craft.text,
+      });
     }
 
     // 风格锚定
     const styleGuide = await this.readStyleGuide();
     if (styleGuide) {
-      prompt = prompt.replace(
-        "# 专业能力",
-        `# 风格锚定 (所有产出必须严格遵守)\n\n${styleGuide}\n\n# 专业能力`,
-      );
+      sections.push({
+        level: 1,
+        title: "风格锚定 (所有产出必须严格遵守)",
+        body: styleGuide,
+      });
     }
-    return prompt;
+
+    return injectSectionsBefore(basePrompt, sections);
   }
 
   /**
@@ -152,6 +179,16 @@ export abstract class BaseAgent {
    */
   protected async readStyleGuide(): Promise<string | null> {
     return readFileSafe(path.join(this.novelDir, DESIGN_DIR, "style-guide.md"));
+  }
+
+  /**
+   * 读取已启用参考作品的三类产出（风格指纹 / 参考体裁 / 参考技法），拼成注入段
+   * （借鉴创作规律，禁止复制原句）。三类任一有内容即返回，否则 null。
+   */
+  protected async readReferenceInjection(): Promise<AssembledReference | null> {
+    const ref = await assembleReferenceForInjection(this.novelDir);
+    if (!ref.fingerprint.text && !ref.genre.text && !ref.craft.text) return null;
+    return ref;
   }
 
   /**

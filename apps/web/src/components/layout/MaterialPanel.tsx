@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Boxes, BookOpen, Eye, Layers, MessageSquareText } from "lucide-react";
+import { BookMarked, Boxes, BookOpen, Eye, Layers, MessageSquareText } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useUIStore } from "@/stores/uiStore";
 import { GenreCardSection } from "@/components/material/GenreCardSection";
@@ -7,13 +7,15 @@ import { CraftSection } from "@/components/material/CraftSection";
 import { InjectionPreviewSection } from "@/components/material/InjectionPreviewSection";
 import { PreferencesSection } from "@/components/material/PreferencesSection";
 import { UserMaterialsManager } from "@/components/material/UserMaterialsManager";
+import { ReferenceSection } from "@/components/material/ReferenceSection";
 
-type Tab = "genre" | "craft" | "prompt" | "preview";
+type Tab = "genre" | "craft" | "prompt" | "reference" | "preview";
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "genre", label: "体裁卡", icon: Layers },
   { key: "craft", label: "技法", icon: BookOpen },
   { key: "prompt", label: "提示词", icon: MessageSquareText },
+  { key: "reference", label: "对标", icon: BookMarked },
   { key: "preview", label: "注入预览", icon: Eye },
 ];
 
@@ -119,6 +121,8 @@ export function MaterialPanel() {
             <PreferencesSection novelId={novelId} />
             <UserMaterialsManager novelId={novelId} type="prompt-snippet" />
           </div>
+        ) : tab === "reference" ? (
+          <ReferenceSection novelId={novelId} />
         ) : (
           <InjectionPreviewSection novelId={novelId} />
         )}
