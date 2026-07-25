@@ -20,8 +20,8 @@ export class EditorAgent extends BaseAgent {
 
   getInputFiles(): string[] {
     return [
-      "art-design.md",
-      "narrative-weave.md",
+      "design/art-design.md",
+      "design/narrative-weave.md",
       "world/setting.md",
       "world/rules.md",
     ];
@@ -60,15 +60,15 @@ export class EditorAgent extends BaseAgent {
     const systemPrompt = await this.buildSystemPrompt();
     const chapterContent = await this.readProjectFile(chapterPath);
 
-    const artDesign = await this.readProjectFile("art-design.md");
-    const narrativeWeave = await this.readProjectFile("narrative-weave.md");
+    const artDesign = await this.readProjectFile("design/art-design.md");
+    const narrativeWeave = await this.readProjectFile("design/narrative-weave.md");
     const worldSetting = await this.readProjectFile("world/setting.md");
     const worldRules = await this.readProjectFile("world/rules.md");
     const characterRegistry = await this.loadCharacterRegistry();
 
     const contextParts: string[] = [];
-    if (artDesign) contextParts.push(`## art-design.md（概览）\n\n${buildArtDesignSummary(artDesign)}`);
-    if (narrativeWeave) contextParts.push(`## narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
+    if (artDesign) contextParts.push(`## design/art-design.md（概览）\n\n${buildArtDesignSummary(artDesign)}`);
+    if (narrativeWeave) contextParts.push(`## design/narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
     const worldRef = buildWorldQuickRef(worldSetting, worldRules);
     if (worldRef) contextParts.push(`## 世界观速查\n\n${worldRef}`);
     contextParts.push(`## 角色总览\n\n${characterRegistry}`);
@@ -100,7 +100,7 @@ ${context}
 
 请从以下维度审核本章，每个维度给出 1-10 分：
 1. 文学质量（语言流畅度、用词精准度、修辞手法）
-2. 风格一致性（是否偏离 style-guide.md）
+2. 风格一致性（是否偏离 design/style-guide.md）
 3. 设定准确性（世界观、术语、力量体系是否与设定一致）
 4. 人物一致性（对话和行为是否符合角色设定）
 5. 情节逻辑（事件因果、决策合理性）

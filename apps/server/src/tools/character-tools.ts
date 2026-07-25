@@ -1,10 +1,11 @@
 /**
  * 角色工具（来自 BaseAgent.get_character）。
  * 直接读 characters/ 目录文件（文件即真相），支持 card（压缩参考卡）/ full（完整文件）两种级别。
+ * 命名扁平：characters/{名字}_{类型}.md，listCharacterFiles 按后缀过滤角色文件。
  */
 import { Type } from "@earendil-works/pi-ai";
-import * as path from "path";
-import { readFileSafe, listFiles } from "../utils/file.js";
+import { readFileSafe } from "../utils/file.js";
+import { listCharacterFiles } from "../utils/chapter-files.js";
 import { buildCharacterQuickCard } from "../utils/context-extractor.js";
 import type { FictiaTool, ToolContext } from "./types.js";
 
@@ -26,12 +27,7 @@ export function createCharacterTools(ctx: ToolContext): FictiaTool[] {
         chapter_number: Type.Optional(Type.Number({ description: "当前章节号（可选，用于过滤成长弧线）" })),
       }),
       async execute(_toolCallId, { character_name, detail_level, chapter_number }) {
-        const charDir = path.join(ctx.novelDir, "characters");
-        const candidates = [
-          path.join(charDir, "protagonist.md"),
-          path.join(charDir, "antagonist.md"),
-          ...(await listFiles(path.join(charDir, "supporting"), { extensions: [".md"] })),
-        ];
+        const candidates = await listCharacterFiles(ctx.novelDir);
         for (const candidate of candidates) {
           const content = await readFileSafe(candidate);
           if (content && content.includes(character_name as string)) {

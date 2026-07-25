@@ -12,11 +12,11 @@ export class ArtDirectorAgent extends BaseAgent {
   }
 
   getInputFiles(): string[] {
-    return ["genre-analysis.md", "blueprint.md", "style-guide.md"];
+    return ["design/genre-analysis.md", "design/blueprint.md", "design/style-guide.md"];
   }
 
   getOutputFiles(): string[] {
-    return ["art-design.md"];
+    return ["design/art-design.md"];
   }
 
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -25,7 +25,7 @@ export class ArtDirectorAgent extends BaseAgent {
 
     let input: string;
     if (options?.isRedo) {
-      const current = await this.readProjectFile("art-design.md");
+      const current = await this.readProjectFile("design/art-design.md");
       input = `## 重新设计艺术方案
 
 ### 当前艺术设计
@@ -39,7 +39,7 @@ ${options.userDirective ?? "请重新审视艺术设计"}
 
 请重新设计艺术方案，输出完整内容。`;
     } else if (options?.incrementalTarget || options?.userDirective) {
-      const current = await this.readProjectFile("art-design.md");
+      const current = await this.readProjectFile("design/art-design.md");
       input = `## 修改艺术设计
 
 ### 当前艺术设计
@@ -70,7 +70,7 @@ ${context}
 
     return {
       output,
-      filesWritten: ["art-design.md"],
+      filesWritten: ["design/art-design.md"],
       success: true,
     };
   }

@@ -1,52 +1,25 @@
 /**
  * 章节工具。
  *
- * 全部走文件系统（chapters/ 目录扫描），不依赖 chapters DB 表。
- * 原因：writing-loop 写章节只落文件、不建 DB 行，DB 与文件不一致；
- * 文件是真相。兼容两种命名：
- * - writing-loop: chapters/act-X/chXX.md（2 位）
- * - chapterService.create: chapters/001-标题.md（3 位 + 标题）
- *
- * get_chapter_context / count_words 来自 BaseAgent（本就文件系统），保留。
+ * 全部走文件系统（扫 chapters/ 目录），不依赖 chapters DB 表。
+ * 命名统一为 chapters/ch{NN}_act{N}-{标题}.md（扁平，act 进文件名）。
+ * 历史：writing-loop 曾写 act-X/chXX.md、chapterService 写 NNN-标题.md，
+ * 两套并存；现已统一，路径生成/解析集中在 @fictia/shared/paths。
  */
 import { Type } from "@earendil-works/pi-ai";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { parseChapterNumber, DESIGN_DIR } from "@fictia/shared";
 import { readFileSafe, listFiles, relativePath } from "../utils/file.js";
+import {
+  findChapterFile,
+  findOutlineFile,
+  listCharacterFiles,
+  parseHeadingTitle,
+} from "../utils/chapter-files.js";
 import { buildCharacterQuickCard } from "../utils/context-extractor.js";
 import { countWords, formatWordCount } from "../utils/word-counter.js";
 import type { FictiaTool, ToolContext } from "./types.js";
-
-/** 从文件名解析章节号。支持 chXX.md 和 001-标题.md 两种命名。 */
-function parseChapterNumber(basename: string): number | null {
-  let m = basename.match(/^ch(\d+)\.md$/);
-  if (m) return Number(m[1]);
-  m = basename.match(/^(\d+)-.*\.md$/);
-  if (m) return Number(m[1]);
-  return null;
-}
-
-/** 扫 chapters/ 找指定章节号对应的文件。优先 writing-loop 命名，回退 chapterService 命名。 */
-async function findChapterFile(novelDir: string, number: number): Promise<string | null> {
-  const num2 = String(number).padStart(2, "0");
-  const chaptersDir = path.join(novelDir, "chapters");
-  const files = await listFiles(chaptersDir, { recursive: true, extensions: [".md"] });
-  const byCh = files.find((f) => path.basename(f) === `ch${num2}.md`);
-  if (byCh) return byCh;
-  const num3 = String(number).padStart(3, "0");
-  const byNum = files.find((f) => {
-    const base = path.basename(f);
-    return base.startsWith(`${num3}-`) && base.endsWith(".md");
-  });
-  return byNum ?? null;
-}
-
-/** 从正文首行 H1 解析标题；无则返回 null。 */
-function parseTitle(content: string | null): string | null {
-  if (!content) return null;
-  const m = content.match(/^#\s+(.+?)\s*$/m);
-  return m?.[1] ?? null;
-}
 
 export function createChapterTools(ctx: ToolContext): FictiaTool[] {
   return [
@@ -60,12 +33,12 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
         chapter_number: Type.Number({ description: "章节编号" }),
       }),
       async execute(_toolCallId, { chapter_number }) {
-        const num = String(chapter_number).padStart(2, "0");
         const context: Record<string, string | null> = {};
-        context.outline = await readFileSafe(path.join(ctx.novelDir, `outline/chapters/ch${num}.md`));
-        context.styleGuide = await readFileSafe(path.join(ctx.novelDir, "style-guide.md"));
-        context.artDesign = await readFileSafe(path.join(ctx.novelDir, "art-design.md"));
-        context.narrativeWeave = await readFileSafe(path.join(ctx.novelDir, "narrative-weave.md"));
+        const outlineFile = await findOutlineFile(ctx.novelDir, chapter_number as number);
+        context.outline = outlineFile ? await readFileSafe(outlineFile) : null;
+        context.styleGuide = await readFileSafe(path.join(ctx.novelDir, DESIGN_DIR, "style-guide.md"));
+        context.artDesign = await readFileSafe(path.join(ctx.novelDir, DESIGN_DIR, "art-design.md"));
+        context.narrativeWeave = await readFileSafe(path.join(ctx.novelDir, DESIGN_DIR, "narrative-weave.md"));
         context.worldSetting = await readFileSafe(path.join(ctx.novelDir, "world/setting.md"));
         context.worldRules = await readFileSafe(path.join(ctx.novelDir, "world/rules.md"));
 
@@ -79,11 +52,7 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
               if (names) names.forEach((n) => charNames.add(n.replace(/"/g, "")));
             }
             const charCards: string[] = [];
-            const candidates = [
-              path.join(ctx.novelDir, "characters/protagonist.md"),
-              path.join(ctx.novelDir, "characters/antagonist.md"),
-              ...(await listFiles(path.join(ctx.novelDir, "characters/supporting"), { extensions: [".md"] })),
-            ];
+            const candidates = await listCharacterFiles(ctx.novelDir);
             for (const charName of charNames) {
               for (const candidate of candidates) {
                 const content = await readFileSafe(candidate);
@@ -98,7 +67,7 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
           }
         }
 
-        // 前一章正文（走文件系统，兼容两种命名）
+        // 前一章正文（扫 chapters/ 定位）
         if ((chapter_number as number) > 1) {
           const prevFile = await findChapterFile(ctx.novelDir, (chapter_number as number) - 1);
           if (prevFile) context.previousChapter = await readFileSafe(prevFile);
@@ -125,14 +94,14 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
       async execute(_toolCallId, { number }) {
         const file = await findChapterFile(ctx.novelDir, number as number);
         if (!file) {
-          throw new Error(`第${number}章不存在（未找到 chapters/**/ch${String(number).padStart(2, "0")}.md）`);
+          throw new Error(`第${number}章不存在（未找到 chapters/ch${String(number).padStart(2, "0")}_act*-[标题].md）`);
         }
         const content = await readFileSafe(file);
         if (!content) {
           return { content: [{ type: "text", text: `第${number}章暂无内容` }], details: { number } };
         }
         const wordCount = countWords(content);
-        const title = parseTitle(content) ?? "无标题";
+        const title = parseHeadingTitle(content) ?? "无标题";
         const text = `第${number}章 "${title}" (${wordCount}字) [${relativePath(ctx.novelDir, file)}]:\n\`\`\`\n${content}\n\`\`\``;
         return { content: [{ type: "text", text }], details: { number, wordCount } };
       },
@@ -178,8 +147,7 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
       description: "列出当前小说所有章节（扫 chapters/ 目录，返回章节号/标题/字数/路径，不依赖 DB）。",
       parameters: Type.Object({}),
       async execute() {
-        const chaptersDir = path.join(ctx.novelDir, "chapters");
-        const files = await listFiles(chaptersDir, { recursive: true, extensions: [".md"] });
+        const files = await listFiles(path.join(ctx.novelDir, "chapters"), { extensions: [".md"] });
         const items: { number: number; title: string; wordCount: number; path: string }[] = [];
         for (const f of files) {
           const num = parseChapterNumber(path.basename(f));
@@ -188,7 +156,7 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
           const wordCount = content ? countWords(content) : 0;
           items.push({
             number: num,
-            title: parseTitle(content) ?? "无标题",
+            title: parseHeadingTitle(content) ?? "无标题",
             wordCount,
             path: relativePath(ctx.novelDir, f),
           });

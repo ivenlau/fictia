@@ -1,14 +1,20 @@
 import { eq } from "drizzle-orm";
-import { v4 as uuid } from "uuid";
+import { chapterPath, DESIGN_DIR } from "@fictia/shared";
 import { db, schema } from "../db/index.js";
 import { fileService } from "./file.service.js";
+import { chapterToAct } from "../utils/context-extractor.js";
 
 const now = () => new Date().toISOString();
 
-function generateFilename(number: number, title?: string): string {
-  const padded = String(number).padStart(3, "0");
-  const safeTitle = (title || "未命名").replace(/[/\\:*?"<>|]/g, "_");
-  return `${padded}-${safeTitle}.md`;
+/** 读 blueprint 算章节所属幕号（统一真相源，与 chapter-writer 一致）。 */
+async function computeAct(novelId: string, number: number): Promise<number> {
+  const blueprint = await fileService.readWorkspaceFile(novelId, `${DESIGN_DIR}/blueprint.md`);
+  return chapterToAct(number, blueprint || undefined);
+}
+
+/** 生成章节文件 basename（chapters/ 下的文件名，不含目录前缀）。 */
+function generateFilename(number: number, act: number, title?: string): string {
+  return chapterPath(number, act, title).replace(/^chapters\//, "");
 }
 
 export const chapterService = {
@@ -41,35 +47,6 @@ export const chapterService = {
     return { ...row, content };
   },
 
-  async create(data: { novelId: string; number: number; title?: string; summary?: string; goal?: string }) {
-    const id = uuid();
-    const timestamp = now();
-    const title = data.title ?? "";
-    const filename = generateFilename(data.number, title);
-
-    // 创建空文件
-    await fileService.writeChapter(data.novelId, filename, "");
-
-    db.insert(schema.chapters)
-      .values({
-        id,
-        novelId: data.novelId,
-        number: data.number,
-        title,
-        summary: data.summary ?? "",
-        filename,
-        version: 1,
-        status: "empty",
-        goal: data.goal ?? "",
-        wordCount: 0,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      })
-      .run();
-
-    return this.getById(id)!;
-  },
-
   async update(id: string, data: Partial<{ title: string; summary: string; content: string; status: string; goal: string; version: number }>) {
     const chapter = await this.getById(id);
     if (!chapter) return null;
@@ -78,11 +55,12 @@ export const chapterService = {
 
     // 处理内容更新
     if (data.content !== undefined) {
-      let filename = chapter.filename || generateFilename(chapter.number, chapter.title ?? undefined);
+      const act = await computeAct(chapter.novelId, chapter.number);
+      let filename = chapter.filename || generateFilename(chapter.number, act, chapter.title ?? undefined);
 
       // 如果标题改变了，需要重命名文件
       if (data.title !== undefined && data.title !== chapter.title) {
-        const newFilename = generateFilename(chapter.number, data.title);
+        const newFilename = generateFilename(chapter.number, act, data.title);
         if (chapter.filename) {
           await fileService.renameChapter(chapter.novelId, chapter.filename, newFilename);
         }
@@ -95,7 +73,8 @@ export const chapterService = {
       updates.wordCount = data.content.replace(/\s/g, "").length;
     } else if (data.title !== undefined && data.title !== chapter.title) {
       // 只改标题，不改内容
-      const newFilename = generateFilename(chapter.number, data.title);
+      const act = await computeAct(chapter.novelId, chapter.number);
+      const newFilename = generateFilename(chapter.number, act, data.title);
       if (chapter.filename) {
         await fileService.renameChapter(chapter.novelId, chapter.filename, newFilename);
       }

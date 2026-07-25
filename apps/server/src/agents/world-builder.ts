@@ -12,7 +12,7 @@ export class WorldBuilderAgent extends BaseAgent {
   }
 
   getInputFiles(): string[] {
-    return ["genre-analysis.md", "blueprint.md", "art-design.md", "narrative-weave.md"];
+    return ["design/genre-analysis.md", "design/blueprint.md", "design/art-design.md", "design/narrative-weave.md"];
   }
 
   getOutputFiles(): string[] {

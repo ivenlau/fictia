@@ -12,20 +12,20 @@ export class ArchitectAgent extends BaseAgent {
   }
 
   getInputFiles(): string[] {
-    return ["genre-analysis.md"];
+    return ["design/genre-analysis.md"];
   }
 
   getOutputFiles(): string[] {
-    return ["blueprint.md"];
+    return ["design/blueprint.md"];
   }
 
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
     const systemPrompt = await this.buildSystemPrompt();
-    const genreAnalysis = await this.readProjectFile("genre-analysis.md");
+    const genreAnalysis = await this.readProjectFile("design/genre-analysis.md");
 
     let input: string;
     if (options?.isRedo) {
-      const current = await this.readProjectFile("blueprint.md");
+      const current = await this.readProjectFile("design/blueprint.md");
       input = `## 重新设计架构
 
 ### 当前架构
@@ -39,7 +39,7 @@ ${options.userDirective ?? "请重新审视架构设计"}
 
 请重新设计小说架构，输出完整内容。`;
     } else if (options?.incrementalTarget || options?.userDirective) {
-      const current = await this.readProjectFile("blueprint.md");
+      const current = await this.readProjectFile("design/blueprint.md");
       input = `## 修改架构设计
 
 ### 当前架构
@@ -64,14 +64,14 @@ ${genreAnalysis}
 3. 规划关键情节点
 4. 设计节奏策略（高潮、低谷、喘息）
 
-请输出完整的架构蓝图（Markdown 格式）。`;
+请输出完整的架构蓝图（Markdown 格式），必须包含 \`## 幕定义\` JSON 块（每幕的 act 编号 + chapters 章节号列表，所有章节须覆盖且不重叠）。`;
     }
 
     const output = await this.runLLM(input, systemPrompt);
 
     return {
       output,
-      filesWritten: ["blueprint.md"],
+      filesWritten: ["design/blueprint.md"],
       success: true,
     };
   }

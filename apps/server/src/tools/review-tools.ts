@@ -13,7 +13,7 @@ export function createReviewTools(ctx: ToolContext): FictiaTool[] {
       name: "validate_style",
       label: "风格校验",
       tier: "readonly",
-      description: "校验文本是否符合 style-guide.md 中定义的风格规范（句长/节奏/对话比例）。返回校验结果和偏差提示。",
+      description: "校验文本是否符合 design/style-guide.md 中定义的风格规范（句长/节奏/对话比例）。返回校验结果和偏差提示。",
       parameters: Type.Object({
         text: Type.String({ description: "要校验的文本" }),
         dimension: Type.Optional(
@@ -22,8 +22,8 @@ export function createReviewTools(ctx: ToolContext): FictiaTool[] {
       }),
       async execute(_toolCallId, { text, dimension }) {
         const dim = (dimension as string) ?? "all";
-        const styleContent = await readFileSafe(path.join(ctx.novelDir, "style-guide.md"));
-        if (!styleContent) throw new Error("style-guide.md 尚未创建，无法校验");
+        const styleContent = await readFileSafe(path.join(ctx.novelDir, "design/style-guide.md"));
+        if (!styleContent) throw new Error("design/style-guide.md 尚未创建，无法校验");
         const issues: string[] = [];
         if (dim === "all" || dim === "sentence_length") {
           const sentences = (text as string).split(/[。！？.!?]/).filter((s) => s.trim().length > 0);
@@ -64,7 +64,7 @@ export function createReviewTools(ctx: ToolContext): FictiaTool[] {
       async execute(_toolCallId, { scope }) {
         const sc = (scope as string) ?? "all";
         const issues: string[] = [];
-        const narrativeWeave = await readFileSafe(path.join(ctx.novelDir, "narrative-weave.md"));
+        const narrativeWeave = await readFileSafe(path.join(ctx.novelDir, "design/narrative-weave.md"));
         const chapterFiles = await listFiles(path.join(ctx.novelDir, "chapters"), {
           recursive: true,
           extensions: [".md"],
@@ -80,7 +80,7 @@ export function createReviewTools(ctx: ToolContext): FictiaTool[] {
             for (const match of matches) {
               const id = match.match(/"([^"]+)"/)?.[1];
               if (id && !Object.values(chapters).some((c) => c.includes(id))) {
-                issues.push(`伏笔 ${id} 在 narrative-weave.md 中定义但未在任何章节中出现`);
+                issues.push(`伏笔 ${id} 在 design/narrative-weave.md 中定义但未在任何章节中出现`);
               }
             }
           }

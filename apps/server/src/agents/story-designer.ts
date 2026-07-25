@@ -19,9 +19,9 @@ export class StoryDesignerAgent extends BaseAgent {
 
   getInputFiles(): string[] {
     return [
-      "blueprint.md",
-      "art-design.md",
-      "narrative-weave.md",
+      "design/blueprint.md",
+      "design/art-design.md",
+      "design/narrative-weave.md",
       "world/setting.md",
       "world/rules.md",
     ];
@@ -34,17 +34,17 @@ export class StoryDesignerAgent extends BaseAgent {
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
     const systemPrompt = await this.buildSystemPrompt();
 
-    const blueprint = await this.readProjectFile("blueprint.md");
-    const artDesign = await this.readProjectFile("art-design.md");
-    const narrativeWeave = await this.readProjectFile("narrative-weave.md");
+    const blueprint = await this.readProjectFile("design/blueprint.md");
+    const artDesign = await this.readProjectFile("design/art-design.md");
+    const narrativeWeave = await this.readProjectFile("design/narrative-weave.md");
     const worldSetting = await this.readProjectFile("world/setting.md");
     const worldRules = await this.readProjectFile("world/rules.md");
     const characterRegistry = await this.loadCharacterRegistry();
 
     const contextParts: string[] = [];
-    if (blueprint) contextParts.push(`## blueprint.md\n\n${blueprint}`);
-    if (artDesign) contextParts.push(`## art-design.md（概览）\n\n${buildArtDesignSummary(artDesign)}`);
-    if (narrativeWeave) contextParts.push(`## narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
+    if (blueprint) contextParts.push(`## design/blueprint.md\n\n${blueprint}`);
+    if (artDesign) contextParts.push(`## design/art-design.md（概览）\n\n${buildArtDesignSummary(artDesign)}`);
+    if (narrativeWeave) contextParts.push(`## design/narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
     const worldRef = buildWorldQuickRef(worldSetting, worldRules);
     if (worldRef) contextParts.push(`## 世界观速查\n\n${worldRef}`);
     contextParts.push(`## 角色总览\n\n${characterRegistry}`);
@@ -95,7 +95,7 @@ ${context}
 - 包含的章节
 - 幕级概要
 
-### 2. 各章详细大纲 (outline/chapters/ch01.md, ch02.md, ...)
+### 2. 各章详细大纲 (outline/chapters/ch{NN}_act{N}-{标题}.md，如 ch01_act1-静室之谜.md)
 每章包含：
 - 章节号、标题、POV、场景
 - 场景列表（地点、角色、目的、事件、情感弧线）
@@ -104,7 +104,7 @@ ${context}
 - 风格提示
 - 连续性检查点
 
-请用 \`===FILE: outline/act-1.md===\` 等分隔符分隔各文件内容。`;
+请用 \`===FILE: outline/act-1.md===\`、\`===FILE: outline/chapters/ch01_act1-标题.md===\` 等分隔符分隔各文件内容（章节细纲按 \`ch{NN}_act{N}-{标题}.md\` 命名，章节号补 2 位，act 取自 blueprint 幕定义，标题用本章标题）。`;
     }
 
     const output = await this.runLLM(input, systemPrompt);

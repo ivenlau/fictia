@@ -21,7 +21,7 @@ import { useChatStream } from "../../hooks/useChatStream";
 import { chatApi } from "../../api/chat";
 import { novelsApi } from "../../api/novels";
 import { MemoryButton } from "../chat/MemoryButton";
-import type { ChatMessage } from "@fictia/shared";
+import { MEMORY_PATH, type ChatMessage } from "@fictia/shared";
 
 export function ChatPanel() {
   const messages = useChatStore((s) => s.messages);
@@ -108,7 +108,7 @@ export function ChatPanel() {
       novelsApi
         .getFiles(activeNovelId)
         .then((files) => {
-          const mem = files.find((f) => f.path === "AI助手/记忆.md");
+          const mem = files.find((f) => f.path === MEMORY_PATH);
           addMessage({
             id: `temp-memory-${Date.now()}`,
             novelId: activeNovelId,

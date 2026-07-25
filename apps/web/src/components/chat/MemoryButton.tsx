@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { History, Loader2 } from "lucide-react";
 import { novelsApi } from "@/api/novels";
+import { MEMORY_PATH } from "@fictia/shared";
 
 interface MemoryButtonProps {
   novelId: string | undefined;
@@ -9,7 +10,7 @@ interface MemoryButtonProps {
 
 /**
  * AI 记忆查看按钮：形式同 SnippetPicker（图标按钮 + 向上弹面板）。
- * 只读展示 AI助手/记忆.md（save_memory 工具积累的内容），不可编辑。
+ * 只读展示 ai/memory.md（save_memory 工具积累的内容），不可编辑。
  */
 export function MemoryButton({ novelId, disabled }: MemoryButtonProps) {
   const [open, setOpen] = useState(false);
@@ -22,7 +23,7 @@ export function MemoryButton({ novelId, disabled }: MemoryButtonProps) {
     setLoading(true);
     try {
       const files = await novelsApi.getFiles(novelId);
-      const mem = files.find((f) => f.path === "AI助手/记忆.md");
+      const mem = files.find((f) => f.path === MEMORY_PATH);
       setContent(mem?.content ?? null);
     } catch {
       setContent(null);

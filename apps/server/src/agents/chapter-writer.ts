@@ -1,8 +1,16 @@
 import { BaseAgent, type AgentRunResult, type AgentRunOptions } from "./base-agent.js";
-import type { StageName, AgentType } from "@fictia/shared";
+import {
+  chapterPath,
+  parseChapterPath,
+  parseChapterNumber,
+  DESIGN_DIR,
+  type StageName,
+  type AgentType,
+} from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
 import { countWords } from "../utils/word-counter.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
+import { findChapterFile, findOutlineFile, extractOutlineTitle } from "../utils/chapter-files.js";
 import {
   extractChapterNarrativeWeave,
   extractChapterArtDesign,
@@ -12,7 +20,6 @@ import {
   chapterToAct,
 } from "../utils/context-extractor.js";
 import * as path from "path";
-import * as fs from "fs/promises";
 
 export class ChapterWriterAgent extends BaseAgent {
   protected stageName: StageName = "chapters";
@@ -25,10 +32,10 @@ export class ChapterWriterAgent extends BaseAgent {
 
   getInputFiles(): string[] {
     return [
-      "style-guide.md",
-      "art-design.md",
-      "narrative-weave.md",
-      "blueprint.md",
+      `${DESIGN_DIR}/style-guide.md`,
+      `${DESIGN_DIR}/art-design.md`,
+      `${DESIGN_DIR}/narrative-weave.md`,
+      `${DESIGN_DIR}/blueprint.md`,
       "world/setting.md",
       "world/rules.md",
       "outline/chapters/*.md",
@@ -36,7 +43,7 @@ export class ChapterWriterAgent extends BaseAgent {
   }
 
   getOutputFiles(): string[] {
-    return ["chapters/**/*.md"];
+    return ["chapters/*.md"];
   }
 
   async hasMoreWork(): Promise<boolean> {
@@ -51,7 +58,7 @@ export class ChapterWriterAgent extends BaseAgent {
 
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
     if (options?.incrementalTarget) {
-      const match = options.incrementalTarget.match(/ch(\d+)\.md$/);
+      const match = options.incrementalTarget.match(/ch(\d+)/);
       if (match) {
         return this.writeChapter(Number(match[1]), options);
       }
@@ -73,16 +80,20 @@ export class ChapterWriterAgent extends BaseAgent {
     options?: AgentRunOptions
   ): Promise<AgentRunResult> {
     const systemPrompt = await this.buildSystemPrompt();
-    const chapterNum = String(chapterNumber).padStart(2, "0");
 
-    const actNumber = await this.findActForChapter(chapterNumber);
-    const outputPath = `chapters/act-${actNumber}/ch${chapterNum}.md`;
+    // act 统一用 chapterToAct（修复历史兜底不一致导致的 ch08 跨 act 重复）；标题从大纲取
+    const blueprint = await this.readProjectFile(`${DESIGN_DIR}/blueprint.md`);
+    const actNumber = chapterToAct(chapterNumber, blueprint || undefined);
+    const outlineFile = await findOutlineFile(this.novelDir, chapterNumber);
+    const outlineContent = outlineFile ? (await readFileSafe(outlineFile)) ?? "" : "";
+    const title = this.resolveChapterTitle(outlineFile, outlineContent);
+    const outputPath = chapterPath(chapterNumber, actNumber, title);
 
     let input: string;
     if (options?.incrementalTarget || options?.userDirective) {
-      const current = await this.readProjectFile(
-        options?.incrementalTarget ?? outputPath
-      );
+      // 用 findChapterFile 定位当前正文，不依赖 incrementalTarget 的路径格式
+      const curFile = await findChapterFile(this.novelDir, chapterNumber);
+      const current = curFile ? (await readFileSafe(curFile)) ?? "" : "";
       input = `## 修改第 ${chapterNumber} 章
 
 ### 当前章节正文
@@ -93,19 +104,17 @@ ${options.userDirective}
 
 请根据要求修改章节，输出完整的修改后内容。`;
     } else {
-      const outline = await this.readProjectFile(`outline/chapters/ch${chapterNum}.md`);
+      const outline = outlineContent;
 
-      const styleGuide = await this.readProjectFile("style-guide.md");
-      const artDesign = await this.readProjectFile("art-design.md");
-      const narrativeWeave = await this.readProjectFile("narrative-weave.md");
+      const styleGuide = await this.readProjectFile(`${DESIGN_DIR}/style-guide.md`);
+      const artDesign = await this.readProjectFile(`${DESIGN_DIR}/art-design.md`);
+      const narrativeWeave = await this.readProjectFile(`${DESIGN_DIR}/narrative-weave.md`);
       const worldSetting = await this.readProjectFile("world/setting.md");
       const worldRules = await this.readProjectFile("world/rules.md");
 
-      const stageIndex = chapterToAct(chapterNumber);
-
       const narrativeWeaveExcerpt = extractChapterNarrativeWeave(narrativeWeave, chapterNumber);
       const artDesignExcerpt = extractChapterArtDesign(artDesign, chapterNumber);
-      const styleStageNotes = extractStyleStageNotes(styleGuide, stageIndex);
+      const styleStageNotes = extractStyleStageNotes(styleGuide, actNumber);
 
       const characterRegistry = await this.loadCharacterRegistry();
 
@@ -114,13 +123,12 @@ ${options.userDirective}
       let previousChapterNotes = "";
       let previousChapterText = "";
       if (chapterNumber > 1) {
-        const prevNum = String(chapterNumber - 1).padStart(2, "0");
-        const prevAct = await this.findActForChapter(chapterNumber - 1);
-        previousChapterText = await this.readProjectFile(
-          `chapters/act-${prevAct}/ch${prevNum}.md`
-        );
-        if (previousChapterText) {
-          previousChapterNotes = buildPreviousChapterSummary(previousChapterText);
+        const prevFile = await findChapterFile(this.novelDir, chapterNumber - 1);
+        if (prevFile) {
+          previousChapterText = (await readFileSafe(prevFile)) ?? "";
+          if (previousChapterText) {
+            previousChapterNotes = buildPreviousChapterSummary(previousChapterText);
+          }
         }
       }
 
@@ -181,6 +189,15 @@ ${previousChapterText || "（这是第一章）"}
     };
   }
 
+  /** 章节标题：优先大纲文件名（已含 sanitized 标题），回退大纲正文「标题：」行或 H1。 */
+  private resolveChapterTitle(outlineFile: string | null, outlineContent: string): string | undefined {
+    if (outlineFile) {
+      const fromName = parseChapterPath(path.basename(outlineFile))?.title;
+      if (fromName && fromName !== "未命名") return fromName;
+    }
+    return extractOutlineTitle(outlineContent);
+  }
+
   private async findNextChapter(): Promise<number | null> {
     const outlineDir = path.join(this.novelDir, "outline", "chapters");
     const outlineFiles = await listFiles(outlineDir, { extensions: [".md"] });
@@ -189,15 +206,10 @@ ${previousChapterText || "（这是第一章）"}
     const totalChapters = outlineFiles.length;
 
     const written = new Set<number>();
-    const chaptersDir = path.join(this.novelDir, "chapters");
-    try {
-      const acts = await listFiles(chaptersDir, { recursive: true, extensions: [".md"] });
-      for (const filePath of acts) {
-        const match = path.basename(filePath).match(/^ch(\d+)\.md$/);
-        if (match) written.add(Number(match[1]));
-      }
-    } catch {
-      // chapters/ doesn't exist yet
+    const files = await listFiles(path.join(this.novelDir, "chapters"), { extensions: [".md"] });
+    for (const filePath of files) {
+      const num = parseChapterNumber(path.basename(filePath));
+      if (num !== null) written.add(num);
     }
 
     for (let i = 1; i <= totalChapters; i++) {
@@ -205,41 +217,5 @@ ${previousChapterText || "（这是第一章）"}
     }
 
     return null;
-  }
-
-  private async findActForChapter(chapterNumber: number): Promise<number> {
-    const num = String(chapterNumber).padStart(2, "0");
-    const chaptersDir = path.join(this.novelDir, "chapters");
-    try {
-      const entries = await fs.readdir(chaptersDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory() && entry.name.startsWith("act-")) {
-          const filePath = path.join(chaptersDir, entry.name, `ch${num}.md`);
-          try {
-            await fs.access(filePath);
-            return Number(entry.name.replace("act-", ""));
-          } catch {
-            // not in this act
-          }
-        }
-      }
-    } catch {
-      // chapters/ doesn't exist
-    }
-
-    const blueprint = await this.readProjectFile("blueprint.md");
-    const actMatches = blueprint.match(/name:\s*"([^"]+)"\s*\n\s*chapters:\s*\[([^\]]+)\]/g);
-    if (actMatches) {
-      let actNum = 1;
-      for (const match of actMatches) {
-        const nums = match.match(/\d+/g);
-        if (nums && nums.some(n => Number(n) === chapterNumber)) {
-          return actNum;
-        }
-        actNum++;
-      }
-    }
-
-    return chapterNumber <= 7 ? 1 : chapterNumber <= 14 ? 2 : 3;
   }
 }

@@ -141,15 +141,15 @@ export const PIPELINE_PHASES: PipelinePhaseGroup[] = [
 
 // ===== Agent File Map (Agent output → workspace file path) =====
 export const AGENT_FILE_MAP: Record<AgentType, string> = {
-  "genre-analyst": "genre-analysis.md",
-  "architect": "blueprint.md",
-  "style-designer": "style-guide.md",
-  "art-director": "art-design.md",
-  "narrative-weaver": "narrative-weave.md",
+  "genre-analyst": "design/genre-analysis.md",
+  "architect": "design/blueprint.md",
+  "style-designer": "design/style-guide.md",
+  "art-director": "design/art-design.md",
+  "narrative-weaver": "design/narrative-weave.md",
   "world-builder": "world/setting.md",
-  "character-designer": "characters/protagonist.md",
+  "character-designer": "characters/",
   "story-designer": "outline/act-1.md",
-  "chapter-writer": "chapters/act-1/ch01.md",
+  "chapter-writer": "chapters/",
   "editor": "reviews/",
   "consistency-checker": "reviews/consistency-report.md",
 };
@@ -157,16 +157,14 @@ export const AGENT_FILE_MAP: Record<AgentType, string> = {
 // ===== File Templates (placeholder files for new novel) =====
 export const FILE_TEMPLATES: Array<{ path: string; type: string; content: string }> = [
   { path: "meta.json", type: "json", content: "{}" },
-  { path: "genre-analysis.md", type: "markdown", content: "# 题材分析\n\n等待AI生成..." },
-  { path: "blueprint.md", type: "markdown", content: "# 架构蓝图\n\n等待AI生成..." },
-  { path: "style-guide.md", type: "markdown", content: "# 风格指南\n\n等待AI生成..." },
-  { path: "art-design.md", type: "markdown", content: "# 艺术设计\n\n等待AI生成..." },
-  { path: "narrative-weave.md", type: "markdown", content: "# 叙事编织\n\n等待AI生成..." },
+  { path: "design/genre-analysis.md", type: "markdown", content: "# 题材分析\n\n等待AI生成..." },
+  { path: "design/blueprint.md", type: "markdown", content: "# 架构蓝图\n\n等待AI生成..." },
+  { path: "design/style-guide.md", type: "markdown", content: "# 风格指南\n\n等待AI生成..." },
+  { path: "design/art-design.md", type: "markdown", content: "# 艺术设计\n\n等待AI生成..." },
+  { path: "design/narrative-weave.md", type: "markdown", content: "# 叙事编织\n\n等待AI生成..." },
   { path: "world/setting.md", type: "markdown", content: "# 世界设定\n\n等待AI生成..." },
   { path: "world/rules.md", type: "markdown", content: "# 规则体系\n\n等待AI生成..." },
   { path: "world/timeline.md", type: "markdown", content: "# 时间线\n\n等待AI生成..." },
-  { path: "characters/protagonist.md", type: "markdown", content: "# 主角\n\n等待AI生成..." },
-  { path: "characters/antagonist.md", type: "markdown", content: "# 反派\n\n等待AI生成..." },
   { path: "characters/relationships.md", type: "markdown", content: "# 人物关系图\n\n等待AI生成..." },
 ];
 

@@ -12,21 +12,21 @@ export class StyleDesignerAgent extends BaseAgent {
   }
 
   getInputFiles(): string[] {
-    return ["genre-analysis.md", "blueprint.md"];
+    return ["design/genre-analysis.md", "design/blueprint.md"];
   }
 
   getOutputFiles(): string[] {
-    return ["style-guide.md"];
+    return ["design/style-guide.md"];
   }
 
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
     const systemPrompt = await this.buildSystemPrompt();
-    const genreAnalysis = await this.readProjectFile("genre-analysis.md");
-    const blueprint = await this.readProjectFile("blueprint.md");
+    const genreAnalysis = await this.readProjectFile("design/genre-analysis.md");
+    const blueprint = await this.readProjectFile("design/blueprint.md");
 
     let input: string;
     if (options?.isRedo) {
-      const current = await this.readProjectFile("style-guide.md");
+      const current = await this.readProjectFile("design/style-guide.md");
       input = `## 重新设计风格
 
 ### 当前风格指南
@@ -43,7 +43,7 @@ ${options.userDirective ?? "请重新审视风格设计"}
 
 请重新设计风格指南，输出完整内容。`;
     } else if (options?.incrementalTarget || options?.userDirective) {
-      const current = await this.readProjectFile("style-guide.md");
+      const current = await this.readProjectFile("design/style-guide.md");
       input = `## 修改风格指南
 
 ### 当前风格指南
@@ -82,7 +82,7 @@ ${blueprint}
 
     return {
       output,
-      filesWritten: ["style-guide.md"],
+      filesWritten: ["design/style-guide.md"],
       success: true,
     };
   }

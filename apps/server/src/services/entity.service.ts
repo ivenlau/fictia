@@ -3,8 +3,8 @@
  *
  * 提取 4 类实体：
  *   characters    <- characters/*.md 的 YAML front-matter（含 relationships）
- *   foreshadowing <- narrative-weave.md 的伏笔表
- *   storylines    <- narrative-weave.md 的支线表
+ *   foreshadowing <- design/narrative-weave.md 的伏笔表
+ *   storylines    <- design/narrative-weave.md 的支线表
  *   timeline      <- world/timeline.md 的时间线表
  *
  * 知识图谱：从 characters.relationships + storylines.characters 抽三元组。
@@ -110,7 +110,7 @@ async function extractCharacters(novelDir: string): Promise<Entity[]> {
 }
 
 async function extractForeshadowing(novelDir: string): Promise<Entity[]> {
-  const nw = await readFileSafe(path.join(novelDir, "narrative-weave.md"));
+  const nw = await readFileSafe(path.join(novelDir, "design/narrative-weave.md"));
   if (!nw) return [];
   const rows = parseTableRows(nw, /编号.*名称.*类型.*埋设章节/);
   return rows
@@ -131,7 +131,7 @@ async function extractForeshadowing(novelDir: string): Promise<Entity[]> {
 }
 
 async function extractStorylines(novelDir: string): Promise<Entity[]> {
-  const nw = await readFileSafe(path.join(novelDir, "narrative-weave.md"));
+  const nw = await readFileSafe(path.join(novelDir, "design/narrative-weave.md"));
   if (!nw) return [];
   const rows = parseTableRows(nw, /编号.*名称.*类型.*起始章节/);
   return rows
@@ -315,7 +315,7 @@ export async function assembleWritingSpace(
   );
   if (outline) parts.push(`## 章节大纲（ch${num}）\n\n${outline}`);
 
-  const styleGuide = await readFileSafe(path.join(novelDir, "style-guide.md"));
+  const styleGuide = await readFileSafe(path.join(novelDir, "design/style-guide.md"));
   if (styleGuide) {
     const act = chapterToAct(chapterNumber);
     const notes = extractStyleStageNotes(styleGuide, act);

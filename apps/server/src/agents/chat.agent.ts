@@ -3,6 +3,7 @@ import { novelService } from "../services/novel.service.js";
 import { chapterService } from "../services/chapter.service.js";
 import { fileService } from "../services/file.service.js";
 import { runAgentSession } from "./agent-runner.js";
+import { MEMORY_PATH } from "@fictia/shared";
 import { toolRegistry, CHAT_TOOLS, type ToolContext } from "../tools/index.js";
 
 export interface ChatToolCall {
@@ -50,7 +51,7 @@ async function buildNovelContext(novelId: string): Promise<string> {
     .join("\n");
 
   // Load memory file if exists
-  const memoryFile = files.find((f) => f.path === "AI助手/记忆.md");
+  const memoryFile = files.find((f) => f.path === MEMORY_PATH);
   const memorySection = memoryFile?.content
     ? `\n\n## 记忆\n以下是之前对话中保存的重要信息：\n${memoryFile.content}`
     : "";

@@ -15,7 +15,7 @@ import { readFileSafe, writeFile, listFiles } from "./file.js";
 /** material type → novelDir/materials/ 下的子目录。 */
 export const MATERIAL_SUBDIR: Record<string, string> = {
   "genre-card": "genre-cards",
-  craft: "craft",
+  craft: "crafts",
   "prompt-snippet": "prompts/snippets",
 };
 

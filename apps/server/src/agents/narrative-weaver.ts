@@ -12,11 +12,11 @@ export class NarrativeWeaverAgent extends BaseAgent {
   }
 
   getInputFiles(): string[] {
-    return ["genre-analysis.md", "blueprint.md", "art-design.md", "style-guide.md"];
+    return ["design/genre-analysis.md", "design/blueprint.md", "design/art-design.md", "design/style-guide.md"];
   }
 
   getOutputFiles(): string[] {
-    return ["narrative-weave.md"];
+    return ["design/narrative-weave.md"];
   }
 
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -25,7 +25,7 @@ export class NarrativeWeaverAgent extends BaseAgent {
 
     let input: string;
     if (options?.isRedo) {
-      const current = await this.readProjectFile("narrative-weave.md");
+      const current = await this.readProjectFile("design/narrative-weave.md");
       input = `## 重新设计叙事编织
 
 ### 当前叙事编织
@@ -39,7 +39,7 @@ ${options.userDirective ?? "请重新审视叙事编织设计"}
 
 请重新设计叙事编织方案，输出完整内容。`;
     } else if (options?.incrementalTarget || options?.userDirective) {
-      const current = await this.readProjectFile("narrative-weave.md");
+      const current = await this.readProjectFile("design/narrative-weave.md");
       input = `## 修改叙事编织
 
 ### 当前叙事编织
@@ -100,7 +100,7 @@ ${context}
 
     return {
       output,
-      filesWritten: ["narrative-weave.md"],
+      filesWritten: ["design/narrative-weave.md"],
       success: true,
     };
   }

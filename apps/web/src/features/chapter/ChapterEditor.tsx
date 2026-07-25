@@ -162,9 +162,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
   // File mode: load existing review suggestions on mount
   useEffect(() => {
     if (!isFileMode || !novelId || !filePath) return;
-    const chNum = filePath.match(/ch(\d+)/)?.[1];
-    if (!chNum) return;
-    const reviewPath = `reviews/ch${chNum}-review.md`;
+    const reviewPath = filePath.replace(/^chapters\//, "reviews/").replace(/\.md$/, "-review.md");
     novelsApi.getFiles(novelId).then((files: WorkspaceFile[]) => {
       const reviewFile = files.find((f) => f.path === reviewPath);
       if (reviewFile?.content) {
@@ -301,8 +299,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             incrementalTarget: filePath,
           });
           // runStage blocks until agent completes — load review file directly
-          const chNum = filePath.match(/ch(\d+)/)?.[1] ?? "01";
-          const reviewPath = `reviews/ch${chNum}-review.md`;
+          const reviewPath = filePath.replace(/^chapters\//, "reviews/").replace(/\.md$/, "-review.md");
           const files = await novelsApi.getFiles(novelId);
           const reviewFile = files.find((f: WorkspaceFile) => f.path === reviewPath);
           if (reviewFile?.content) {
@@ -352,8 +349,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
         instruction: suggestion.suggestion,
       });
       // Update suggestion status in the review file
-      const chNum = filePath.match(/ch(\d+)/)?.[1] ?? "01";
-      const reviewPath = `reviews/ch${chNum}-review.md`;
+      const reviewPath = filePath.replace(/^chapters\//, "reviews/").replace(/\.md$/, "-review.md");
       const files = await novelsApi.getFiles(novelId);
       const reviewFile = files.find((f: WorkspaceFile) => f.path === reviewPath);
       if (reviewFile?.content) {
@@ -379,8 +375,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
     if (!novelId || !filePath) return;
     try {
       const newStatus = suggestion.status === "ignored" ? "pending" : "ignored";
-      const chNum = filePath.match(/ch(\d+)/)?.[1] ?? "01";
-      const reviewPath = `reviews/ch${chNum}-review.md`;
+      const reviewPath = filePath.replace(/^chapters\//, "reviews/").replace(/\.md$/, "-review.md");
       const files = await novelsApi.getFiles(novelId);
       const reviewFile = files.find((f: WorkspaceFile) => f.path === reviewPath);
       if (reviewFile?.content) {

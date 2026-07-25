@@ -9,7 +9,9 @@
     "check": "tsc --noEmit",
     "start": "node dist/index.js",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:migrate-to-files": "tsx src/db/migrate-to-files.ts"
+    "db:migrate-to-files": "tsx src/db/migrate-to-files.ts",
+    "db:migrate-naming": "tsx src/db/migrate-naming.ts",
+    "db:refresh-act": "tsx src/db/refresh-act.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.74.0",

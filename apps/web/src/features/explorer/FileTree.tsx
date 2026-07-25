@@ -79,12 +79,12 @@ function buildTree(files: WorkspaceFile[], chapters: Chapter[]): TreeNode[] {
       // Determine the path: use filename if available, otherwise generate one
       let chapterPath: string;
       if (ch.filename) {
-        // filename might be "act-1/ch01.md" or just "ch01.md"
+        // filename 为扁平命名，如 "ch08_act2-标题.md"
         chapterPath = `chapters/${ch.filename}`;
       } else {
-        // Generate a default path based on chapter number
-        const actNum = ch.number <= 10 ? 1 : ch.number <= 20 ? 2 : 3;
-        chapterPath = `chapters/act-${actNum}/ch${String(ch.number).padStart(2, "0")}.md`;
+        // Generate a default path based on chapter number (act 兜底映射)
+        const actNum = ch.number <= 3 ? 0 : ch.number <= 15 ? 1 : ch.number <= 30 ? 2 : ch.number <= 45 ? 3 : 4;
+        chapterPath = `chapters/ch${String(ch.number).padStart(2, "0")}_act${actNum}-未命名.md`;
       }
 
       const parts = chapterPath.split("/");

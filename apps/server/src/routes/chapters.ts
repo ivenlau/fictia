@@ -16,31 +16,6 @@ router.get("/novels/:novelId/chapters", async (req, res) => {
   res.json(chapters);
 });
 
-// POST /novels/:novelId/chapters - create a chapter
-router.post("/novels/:novelId/chapters", async (req, res) => {
-  const novel = novelService.getById(req.params.novelId);
-  if (!novel) {
-    res.status(404).json({ error: "Novel not found" });
-    return;
-  }
-
-  const { number, title, goal } = req.body;
-
-  if (number === undefined) {
-    res.status(400).json({ error: "number is required" });
-    return;
-  }
-
-  const chapter = await chapterService.create({
-    novelId: req.params.novelId,
-    number,
-    title,
-    goal,
-  });
-
-  res.status(201).json(chapter);
-});
-
 // GET /chapters/:id - get chapter by id
 router.get("/chapters/:id", async (req, res) => {
   const chapter = await chapterService.getById(req.params.id);

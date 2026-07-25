@@ -1,7 +1,8 @@
 import { stream, type Model, type Context, type Message } from "@earendil-works/pi-ai";
-import type { StageName, AgentType } from "@fictia/shared";
+import { DESIGN_DIR, type StageName, type AgentType } from "@fictia/shared";
 import { loadPromptTemplate, loadCraftKnowledge } from "../utils/prompt-loader.js";
-import { readFileSafe, listFiles } from "../utils/file.js";
+import { readFileSafe } from "../utils/file.js";
+import { listCharacterFiles } from "../utils/chapter-files.js";
 import { readPreferences } from "../utils/user-materials.js";
 import { buildCharacterRegistry } from "../utils/context-extractor.js";
 import { runAgentSession } from "./agent-runner.js";
@@ -150,7 +151,7 @@ export abstract class BaseAgent {
    * Read style-guide.md as an anchor for all agents.
    */
   protected async readStyleGuide(): Promise<string | null> {
-    return readFileSafe(path.join(this.novelDir, "style-guide.md"));
+    return readFileSafe(path.join(this.novelDir, DESIGN_DIR, "style-guide.md"));
   }
 
   /**
@@ -181,13 +182,7 @@ export abstract class BaseAgent {
    * Load all character files and build a lightweight registry (Tier 1).
    */
   protected async loadCharacterRegistry(): Promise<string> {
-    const charDir = path.join(this.novelDir, "characters");
-    const supportingFiles = await listFiles(path.join(charDir, "supporting"), { extensions: [".md"] });
-    const candidates = [
-      path.join(charDir, "protagonist.md"),
-      path.join(charDir, "antagonist.md"),
-      ...supportingFiles,
-    ];
+    const candidates = await listCharacterFiles(this.novelDir);
 
     const characterFiles: { path: string; content: string }[] = [];
     for (const filePath of candidates) {

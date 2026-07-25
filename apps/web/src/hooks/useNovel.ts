@@ -81,13 +81,4 @@ export function useChapterFeedback(chapterId: string | undefined) {
   });
 }
 
-export function useCreateChapter(novelId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { number: number; title: string; goal: string }) =>
-      chaptersApi.create(novelId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["chapters", novelId] });
-    },
-  });
-}
+

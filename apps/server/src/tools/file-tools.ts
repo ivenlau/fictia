@@ -30,7 +30,7 @@ export function createFileTools(ctx: ToolContext): FictiaTool[] {
       description:
         "读取当前小说项目中的文件内容。可读取任意工作区文件（设定/角色/大纲/章节等）。路径相对项目根目录。",
       parameters: Type.Object({
-        path: Type.String({ description: "相对项目根目录的文件路径，如 'world/setting.md', 'characters/protagonist.md', 'meta.json'" }),
+        path: Type.String({ description: "相对项目根目录的文件路径，如 'world/setting.md', 'characters/苏蔓_主角.md', 'meta.json'" }),
       }),
       async execute(_toolCallId, { path: relPath }) {
         const full = safeResolve(ctx.novelDir, relPath as string);
@@ -49,7 +49,7 @@ export function createFileTools(ctx: ToolContext): FictiaTool[] {
       description:
         "将内容写入项目文件。文件不存在则自动创建（含父目录）。路径相对项目根目录。大幅重写或新建文件用此工具。",
       parameters: Type.Object({
-        path: Type.String({ description: "相对项目根目录的文件路径，如 'genre-analysis.md', 'world/setting.md'" }),
+        path: Type.String({ description: "相对项目根目录的文件路径，如 'design/genre-analysis.md', 'world/setting.md'" }),
         content: Type.String({ description: "要写入的文件内容（Markdown 格式）" }),
       }),
       async execute(_toolCallId, { path: relPath, content }) {

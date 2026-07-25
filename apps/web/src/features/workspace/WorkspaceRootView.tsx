@@ -50,9 +50,9 @@ interface ChapterFileInfo {
 
 function parseChapterFiles(files: WorkspaceFile[]): ChapterFileInfo[] {
   return files
-    .filter((f) => /^chapters\/act-\d+\/ch\d+\.md$/.test(f.path))
+    .filter((f) => /^chapters\/ch\d+_act\d+-.*\.md$/.test(f.path))
     .map((f) => {
-      const numMatch = f.path.match(/ch(\d+)\.md/);
+      const numMatch = f.path.match(/ch(\d+)_act\d+/);
       const number = numMatch ? parseInt(numMatch[1]) : 0;
       const titleMatch = (f.content ?? "").match(/^#\s+(.+)$/m);
       const title = titleMatch ? titleMatch[1].trim() : "";

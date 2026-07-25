@@ -16,7 +16,7 @@ export class GenreAnalystAgent extends BaseAgent {
   }
 
   getOutputFiles(): string[] {
-    return ["genre-analysis.md"];
+    return ["design/genre-analysis.md"];
   }
 
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -24,7 +24,7 @@ export class GenreAnalystAgent extends BaseAgent {
 
     let input: string;
     if (options?.isRedo) {
-      const current = await this.readProjectFile("genre-analysis.md");
+      const current = await this.readProjectFile("design/genre-analysis.md");
       input = `## 重新进行题材分析
 
 ### 当前分析结果
@@ -35,7 +35,7 @@ ${options.userDirective ?? "请重新审视题材分析"}
 
 请根据 meta.json 中的 genre 和其他元数据，重新进行题材分析。`;
     } else if (options?.incrementalTarget || options?.userDirective) {
-      const current = await this.readProjectFile("genre-analysis.md");
+      const current = await this.readProjectFile("design/genre-analysis.md");
       input = `## 修改题材分析
 
 ### 当前分析结果
@@ -71,7 +71,7 @@ ${meta}
 
     return {
       output,
-      filesWritten: ["genre-analysis.md"],
+      filesWritten: ["design/genre-analysis.md"],
       success: true,
     };
   }

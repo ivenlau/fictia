@@ -254,10 +254,10 @@ export async function buildInjectionPreview(
   });
 
   // 风格锚定
-  const styleGuide = await readFileSafe(path.join(novelDir, "style-guide.md"));
+  const styleGuide = await readFileSafe(path.join(novelDir, "design/style-guide.md"));
   sections.push({
     key: "style-guide",
-    title: "风格锚定（style-guide.md）",
+    title: "风格锚定（design/style-guide.md）",
     present: !!styleGuide,
     charCount: styleGuide?.length ?? 0,
     detail: styleGuide ? "已启用" : "尚未创建（style-designer 阶段产出）",

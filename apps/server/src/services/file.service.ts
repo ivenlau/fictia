@@ -24,21 +24,17 @@ export const fileService = {
   async initNovelDir(novelId: string): Promise<void> {
     const base = this.getNovelDir(novelId);
     await fs.mkdir(path.join(base, "world"), { recursive: true });
-    await fs.mkdir(path.join(base, "characters", "supporting"), { recursive: true });
+    await fs.mkdir(path.join(base, "characters"), { recursive: true });
     await fs.mkdir(path.join(base, "outline", "chapters"), { recursive: true });
-    await fs.mkdir(path.join(base, "chapters", "act-1"), { recursive: true });
-    await fs.mkdir(path.join(base, "chapters", "act-2"), { recursive: true });
-    await fs.mkdir(path.join(base, "chapters", "act-3"), { recursive: true });
+    await fs.mkdir(path.join(base, "chapters"), { recursive: true });
     await fs.mkdir(path.join(base, "reviews"), { recursive: true });
     await fs.mkdir(path.join(base, "agent-outputs"), { recursive: true });
 
     // Write .gitkeep to empty directories so they show up in file listing
-    await fs.writeFile(path.join(base, "characters", "supporting", ".gitkeep"), "", "utf-8");
+    await fs.writeFile(path.join(base, "characters", ".gitkeep"), "", "utf-8");
     await fs.writeFile(path.join(base, "outline", ".gitkeep"), "", "utf-8");
     await fs.writeFile(path.join(base, "outline", "chapters", ".gitkeep"), "", "utf-8");
-    await fs.writeFile(path.join(base, "chapters", "act-1", ".gitkeep"), "", "utf-8");
-    await fs.writeFile(path.join(base, "chapters", "act-2", ".gitkeep"), "", "utf-8");
-    await fs.writeFile(path.join(base, "chapters", "act-3", ".gitkeep"), "", "utf-8");
+    await fs.writeFile(path.join(base, "chapters", ".gitkeep"), "", "utf-8");
     await fs.writeFile(path.join(base, "reviews", ".gitkeep"), "", "utf-8");
     await fs.writeFile(path.join(base, "agent-outputs", ".gitkeep"), "", "utf-8");
   },

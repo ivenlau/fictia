@@ -95,11 +95,11 @@ export async function indexAll(
   onProgress?.("索引 design");
   const designChunks: FileChunk[] = [];
   for (const name of [
-    "genre-analysis.md",
-    "blueprint.md",
-    "style-guide.md",
-    "art-design.md",
-    "narrative-weave.md",
+    "design/genre-analysis.md",
+    "design/blueprint.md",
+    "design/style-guide.md",
+    "design/art-design.md",
+    "design/narrative-weave.md",
   ]) {
     const text = await readFileSafe(path.join(novelDir, name));
     if (text && text.trim()) designChunks.push({ id: name, text });

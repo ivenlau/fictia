@@ -1,9 +1,10 @@
 /**
  * chat 助手专属工具（来自 runChatAgent.executeTool）。
- * save_memory：追加写 AI助手/记忆.md。create_novel：经 novelService 建书。
+ * save_memory：追加写 ai/memory.md。create_novel：经 novelService 建书。
  * 这两个工具仅 chat 助手使用（pipeline agents 不建书/存记忆）。
  */
 import { Type } from "@earendil-works/pi-ai";
+import { MEMORY_PATH } from "@fictia/shared";
 import { novelService } from "../services/novel.service.js";
 import type { FictiaTool, ToolContext } from "./types.js";
 
@@ -13,19 +14,19 @@ export function createChatTools(ctx: ToolContext): FictiaTool[] {
       name: "save_memory",
       label: "保存记忆",
       tier: "write",
-      description: "保存信息到记忆文件（AI助手/记忆.md），供后续对话引用。重要事实、用户偏好、待办等可存。",
+      description: "保存信息到记忆文件（ai/memory.md），供后续对话引用。重要事实、用户偏好、待办等可存。",
       parameters: Type.Object({
         content: Type.String({ description: "要保存的内容" }),
       }),
       async execute(_toolCallId, { content }) {
-        const memoryPath = "AI助手/记忆.md";
+        const memoryPath = MEMORY_PATH;
         const existing = await novelService.getWorkspaceFile(ctx.novelId, memoryPath);
         const timestamp = new Date().toISOString().slice(0, 16).replace("T", " ");
         const newEntry = `\n\n## ${timestamp}\n${content as string}`;
         if (existing) {
           await novelService.updateWorkspaceFile(ctx.novelId, memoryPath, existing.content + newEntry);
         } else {
-          await novelService.createWorkspaceFile(ctx.novelId, memoryPath, `# AI助手记忆\n${newEntry}`);
+          await novelService.createWorkspaceFile(ctx.novelId, memoryPath, `# AI 记忆\n${newEntry}`);
         }
         return { content: [{ type: "text", text: "已保存到记忆文件" }], details: { path: memoryPath } };
       },

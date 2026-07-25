@@ -21,8 +21,8 @@ export class ConsistencyCheckerAgent extends BaseAgent {
 
   getInputFiles(): string[] {
     return [
-      "art-design.md",
-      "narrative-weave.md",
+      "design/art-design.md",
+      "design/narrative-weave.md",
       "world/setting.md",
       "world/rules.md",
       "world/timeline.md",
@@ -43,16 +43,16 @@ export class ConsistencyCheckerAgent extends BaseAgent {
     );
     const sortedChapterFiles = chapterFiles.sort();
 
-    const artDesign = await this.readProjectFile("art-design.md");
-    const narrativeWeave = await this.readProjectFile("narrative-weave.md");
+    const artDesign = await this.readProjectFile("design/art-design.md");
+    const narrativeWeave = await this.readProjectFile("design/narrative-weave.md");
     const worldSetting = await this.readProjectFile("world/setting.md");
     const worldRules = await this.readProjectFile("world/rules.md");
     const worldTimeline = await this.readProjectFile("world/timeline.md");
     const characterRegistry = await this.loadCharacterRegistry();
 
     const settingParts: string[] = [];
-    if (artDesign) settingParts.push(`## art-design.md（概览）\n\n${buildArtDesignSummary(artDesign)}`);
-    if (narrativeWeave) settingParts.push(`## narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
+    if (artDesign) settingParts.push(`## design/art-design.md（概览）\n\n${buildArtDesignSummary(artDesign)}`);
+    if (narrativeWeave) settingParts.push(`## design/narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
     const worldRef = buildWorldQuickRef(worldSetting, worldRules);
     if (worldRef) settingParts.push(`## 世界观速查\n\n${worldRef}`);
     if (worldTimeline) settingParts.push(`## world/timeline.md\n\n${worldTimeline}`);
@@ -107,7 +107,7 @@ ${chapterContents.join("\n\n---\n\n")}
 1. 设定一致性：世界观规则是否被违反（力量等级、术语、尺度、文化）
 2. 人物一致性：角色性格、能力、外貌、关系是否前后一致
 3. 时间线一致性：事件顺序、时间跨度、旅程时间是否合理
-4. 伏笔回收：已埋伏笔是否按计划回收（参考 narrative-weave.md）
+4. 伏笔回收：已埋伏笔是否按计划回收（参考 design/narrative-weave.md）
 5. 支线连续性：支线是否按计划推进和收束
 6. 风格漂移：文风是否在不知不觉中改变
 7. 意象一致性：核心意象的使用是否连贯
