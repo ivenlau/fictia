@@ -11,7 +11,6 @@ import { indexAllEntities } from "../services/entity.service.js";
 import { entityStats } from "../services/entity-store.js";
 import { indexAll } from "../services/vector-index.service.js";
 import { settingsService } from "../services/settings.service.js";
-import { providerService } from "../services/provider.service.js";
 import type { FictiaTool, ToolContext } from "./types.js";
 
 export function createTriggerTools(ctx: ToolContext): FictiaTool[] {
@@ -59,8 +58,9 @@ export function createTriggerTools(ctx: ToolContext): FictiaTool[] {
       parameters: Type.Object({}),
       async execute() {
         const provider = settingsService.getEmbeddingProvider();
-        const glmKey = providerService.getGlmKey();
-        const result = await indexAll(ctx.novelId, provider, glmKey);
+        const glmKey = settingsService.getEmbeddingGlmKey();
+        const modelDir = settingsService.getEmbeddingModelDir();
+        const result = await indexAll(ctx.novelId, provider, glmKey, modelDir);
         const text = `向量索引重建完成:\n${Object.entries(result.indexed)
           .map(([k, v]) => `- ${k}: ${v}`)
           .join("\n")}`;

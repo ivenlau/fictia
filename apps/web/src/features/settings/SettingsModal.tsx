@@ -34,6 +34,8 @@ export function SettingsModal() {
         chatModel: settingsStore.chatModel,
         systemModel: settingsStore.systemModel,
         embeddingProvider: settingsStore.embeddingProvider,
+        embeddingModelDir: settingsStore.embeddingModelDir,
+        embeddingApiKey: settingsStore.embeddingApiKey,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -137,10 +139,16 @@ function AssistantSection() {
 function KnowledgeSection() {
   const embeddingProvider = useSettingsStore((s) => s.embeddingProvider);
   const setEmbeddingProvider = useSettingsStore((s) => s.setEmbeddingProvider);
+  const embeddingModelDir = useSettingsStore((s) => s.embeddingModelDir);
+  const setEmbeddingModelDir = useSettingsStore((s) => s.setEmbeddingModelDir);
+  const embeddingApiKey = useSettingsStore((s) => s.embeddingApiKey);
+  const setEmbeddingApiKey = useSettingsStore((s) => s.setEmbeddingApiKey);
   const options: { key: "glm" | "bge-m3"; label: string; desc: string }[] = [
-    { key: "glm", label: "智谱 GLM embedding-2", desc: "需配置 GLM API Key，质量较好" },
-    { key: "bge-m3", label: "本地 bge-m3", desc: "无需 Key，本地推理，首次加载较慢" },
+    { key: "glm", label: "智谱 GLM embedding-2", desc: "云端 API，1024 维，质量较好" },
+    { key: "bge-m3", label: "本地 bge-m3", desc: "本地推理，1024 维，无需 Key（首次加载约 2.2GB）" },
   ];
+  const inputCls =
+    "w-full rounded-md border border-subtle bg-surface-card px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20";
   return (
     <div className="space-y-3">
       <div>
@@ -163,13 +171,45 @@ function KnowledgeSection() {
               onChange={() => setEmbeddingProvider(o.key)}
               className="mt-0.5"
             />
-            <div>
+            <div className="flex-1">
               <p className="font-body text-sm font-medium text-fg-primary">{o.label}</p>
               <p className="font-caption text-xs text-fg-muted">{o.desc}</p>
             </div>
           </label>
         ))}
       </div>
+
+      {embeddingProvider === "glm" && (
+        <div>
+          <p className="mb-1.5 font-body text-sm font-medium text-fg-primary">GLM Embedding API Key</p>
+          <input
+            type="password"
+            value={embeddingApiKey}
+            onChange={(e) => setEmbeddingApiKey(e.target.value)}
+            placeholder="留空则复用「模型提供商」里的 GLM Key"
+            className={inputCls}
+          />
+          <p className="mt-1 font-caption text-xs text-fg-muted">
+            为 embedding 单独配一个 Key（可与对话/写作 Key 分开计费）。
+          </p>
+        </div>
+      )}
+
+      {embeddingProvider === "bge-m3" && (
+        <div>
+          <p className="mb-1.5 font-body text-sm font-medium text-fg-primary">本地模型目录（可选）</p>
+          <input
+            type="text"
+            value={embeddingModelDir}
+            onChange={(e) => setEmbeddingModelDir(e.target.value)}
+            placeholder="留空则远程下载 Xenova/bge-m3；填本地目录则从目录加载"
+            className={inputCls}
+          />
+          <p className="mt-1 font-caption text-xs text-fg-muted">
+            填包含模型文件（model.onnx 等）的目录绝对路径，用于离线或自定义模型。
+          </p>
+        </div>
+      )}
     </div>
   );
 }

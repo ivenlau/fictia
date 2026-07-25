@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { DEFAULT_AGENT_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_SYSTEM_MODEL } from "@fictia/shared";
 import type { AgentType, AgentModelAssignment } from "@fictia/shared";
+import { providerService } from "./provider.service.js";
 
 const now = () => new Date().toISOString();
 
@@ -49,6 +50,8 @@ export const settingsService = {
     const manualConfirm = getSettingValue("manualConfirm") === "true";
     const embeddingProvider =
       (getSettingValue("embeddingProvider") as "glm" | "bge-m3" | undefined) ?? "glm";
+    const embeddingModelDir = getSettingValue("embeddingModelDir") ?? "";
+    const embeddingApiKey = getSettingValue("embeddingApiKey") ?? "";
 
     let chatModel: AgentModelAssignment = { ...DEFAULT_CHAT_MODEL };
     const chatModelRaw = getSettingValue("chatModel");
@@ -76,7 +79,7 @@ export const settingsService = {
       }
     }
 
-    return { agentModels, chatPersona, chatModel, systemModel, manualConfirm, embeddingProvider };
+    return { agentModels, chatPersona, chatModel, systemModel, manualConfirm, embeddingProvider, embeddingModelDir, embeddingApiKey };
   },
 
   update(
@@ -87,6 +90,8 @@ export const settingsService = {
       systemModel: AgentModelAssignment;
       manualConfirm: boolean;
       embeddingProvider: "glm" | "bge-m3";
+      embeddingModelDir: string;
+      embeddingApiKey: string;
     }>,
   ) {
     if (data.agentModels !== undefined) setSettingValue("agentModels", JSON.stringify(data.agentModels));
@@ -95,11 +100,24 @@ export const settingsService = {
     if (data.systemModel !== undefined) setSettingValue("systemModel", JSON.stringify(data.systemModel));
     if (data.manualConfirm !== undefined) setSettingValue("manualConfirm", data.manualConfirm ? "true" : "false");
     if (data.embeddingProvider !== undefined) setSettingValue("embeddingProvider", data.embeddingProvider);
+    if (data.embeddingModelDir !== undefined) setSettingValue("embeddingModelDir", data.embeddingModelDir);
+    if (data.embeddingApiKey !== undefined) setSettingValue("embeddingApiKey", data.embeddingApiKey);
 
     return this.get();
   },
 
   getEmbeddingProvider(): "glm" | "bge-m3" {
     return (getSettingValue("embeddingProvider") as "glm" | "bge-m3" | undefined) ?? "glm";
+  },
+
+  /** bge-m3 本地模型目录（空=远程下载 Xenova/bge-m3）。 */
+  getEmbeddingModelDir(): string {
+    return getSettingValue("embeddingModelDir")?.trim() ?? "";
+  },
+
+  /** GLM embedding key：优先 embedding 专用 key，回退 providers 表的 GLM key。 */
+  getEmbeddingGlmKey(): string {
+    const k = getSettingValue("embeddingApiKey");
+    return k && k.trim() ? k : providerService.getGlmKey();
   },
 };

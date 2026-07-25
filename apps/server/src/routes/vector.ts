@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { novelService } from "../services/novel.service.js";
 import { settingsService } from "../services/settings.service.js";
-import { providerService } from "../services/provider.service.js";
 import { fileService } from "../services/file.service.js";
 import {
   collectionStats,
@@ -45,9 +44,10 @@ router.get("/novels/:novelId/search", async (req, res) => {
     return;
   }
 
-  const glmKey = providerService.getGlmKey();
+  const glmKey = settingsService.getEmbeddingGlmKey();
+  const modelDir = settingsService.getEmbeddingModelDir();
   try {
-    const queryVec = await embedOne(q, provider, glmKey);
+    const queryVec = await embedOne(q, provider, glmKey, modelDir);
     const hits = queryVectors(novelId, collection, queryVec, topK);
     res.json({ query: q, collection, hits });
   } catch (err: any) {
@@ -76,10 +76,11 @@ router.post("/novels/:novelId/vector/index", async (req, res) => {
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
   const provider = settingsService.getEmbeddingProvider();
-  const glmKey = providerService.getGlmKey();
+  const glmKey = settingsService.getEmbeddingGlmKey();
+  const modelDir = settingsService.getEmbeddingModelDir();
   try {
     send({ type: "start" });
-    const result = await indexAll(novelId, provider, glmKey, (msg) =>
+    const result = await indexAll(novelId, provider, glmKey, modelDir, (msg) =>
       send({ type: "progress", message: msg }),
     );
     send({ type: "result", result });

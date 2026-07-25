@@ -52,17 +52,19 @@ export async function embed(
   texts: string[],
   provider: EmbeddingProvider,
   glmKey: string,
+  modelDir?: string,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
-  return provider === "bge-m3" ? localEmbed(texts) : embedGlm(texts, glmKey);
+  return provider === "bge-m3" ? localEmbed(texts, modelDir) : embedGlm(texts, glmKey);
 }
 
 export async function embedOne(
   text: string,
   provider: EmbeddingProvider,
   glmKey: string,
+  modelDir?: string,
 ): Promise<number[]> {
-  const vecs = await embed([text], provider, glmKey);
+  const vecs = await embed([text], provider, glmKey, modelDir);
   return vecs[0];
 }
 

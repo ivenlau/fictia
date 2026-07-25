@@ -52,6 +52,7 @@ async function indexChunks(
   chunks: FileChunk[],
   provider: EmbeddingProvider,
   apiKey: string,
+  modelDir?: string,
 ): Promise<number> {
   if (chunks.length === 0) return 0;
   clearCollection(novelId, collection);
@@ -59,6 +60,7 @@ async function indexChunks(
     chunks.map((c) => c.text.slice(0, 8000)),
     provider,
     apiKey,
+    modelDir,
   );
   const items: VectorItem[] = chunks.map((c, i) => ({
     id: c.id,
@@ -74,13 +76,18 @@ export async function indexAll(
   novelId: string,
   provider: EmbeddingProvider,
   apiKey: string,
+  modelDir?: string,
   onProgress?: (msg: string) => void,
 ): Promise<{ indexed: Record<string, number> }> {
   const novelDir = fileService.getNovelDir(novelId);
   const indexed: Record<string, number> = {};
 
   if (provider === "bge-m3") {
-    onProgress?.("加载本地 bge-m3 模型（首次需下载约 2.2GB，请耐心等待）");
+    onProgress?.(
+      modelDir
+        ? `从本地目录加载 bge-m3 模型：${modelDir}`
+        : "加载本地 bge-m3 模型（首次需下载约 2.2GB，请耐心等待）",
+    );
   }
 
   onProgress?.("索引 chapters");
@@ -90,6 +97,7 @@ export async function indexAll(
     await collectFiles(novelDir, path.join(novelDir, "chapters"), /^ch\d+\.md$/),
     provider,
     apiKey,
+    modelDir,
   );
 
   onProgress?.("索引 design");
@@ -107,7 +115,7 @@ export async function indexAll(
   designChunks.push(
     ...(await collectFiles(novelDir, path.join(novelDir, "characters"), /\.md$/)),
   );
-  indexed.design = await indexChunks(novelId, "design", designChunks, provider, apiKey);
+  indexed.design = await indexChunks(novelId, "design", designChunks, provider, apiKey, modelDir);
 
   onProgress?.("索引 world");
   indexed.world = await indexChunks(
@@ -116,6 +124,7 @@ export async function indexAll(
     await collectFiles(novelDir, path.join(novelDir, "world"), /\.md$/),
     provider,
     apiKey,
+    modelDir,
   );
 
   onProgress?.("索引 outlines");
@@ -125,6 +134,7 @@ export async function indexAll(
     await collectFiles(novelDir, path.join(novelDir, "outline"), /\.md$/),
     provider,
     apiKey,
+    modelDir,
   );
 
   setIndexProvider(novelId, provider);

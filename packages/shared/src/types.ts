@@ -155,6 +155,10 @@ export interface Settings {
   chatModel: AgentModelAssignment;
   systemModel: AgentModelAssignment;
   embeddingProvider: EmbeddingProvider;
+  /** bge-m3 本地模型目录（空则远程下载 Xenova/bge-m3）。 */
+  embeddingModelDir: string;
+  /** GLM embedding 专用 API key（空则回退 providers 表的 GLM key）。 */
+  embeddingApiKey: string;
 }
 
 export interface ChatMessage {

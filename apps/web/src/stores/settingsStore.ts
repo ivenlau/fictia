@@ -9,6 +9,8 @@ interface SettingsState {
   chatModel: AgentModelAssignment;
   systemModel: AgentModelAssignment;
   embeddingProvider: "glm" | "bge-m3";
+  embeddingModelDir: string;
+  embeddingApiKey: string;
   setProviders: (providers: ProviderInfo[]) => void;
   upsertProvider: (provider: ProviderInfo) => void;
   removeProvider: (id: string) => void;
@@ -17,12 +19,16 @@ interface SettingsState {
   setChatModel: (providerId: string, modelId: string) => void;
   setSystemModel: (providerId: string, modelId: string) => void;
   setEmbeddingProvider: (p: "glm" | "bge-m3") => void;
+  setEmbeddingModelDir: (dir: string) => void;
+  setEmbeddingApiKey: (key: string) => void;
   loadSettings: (settings: {
     agentModels: Record<AgentType, AgentModelAssignment>;
     chatPersona: string;
     chatModel: AgentModelAssignment;
     systemModel: AgentModelAssignment;
     embeddingProvider: "glm" | "bge-m3";
+    embeddingModelDir: string;
+    embeddingApiKey: string;
   }) => void;
 }
 
@@ -33,6 +39,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   chatModel: { ...DEFAULT_CHAT_MODEL },
   systemModel: { ...DEFAULT_SYSTEM_MODEL },
   embeddingProvider: "glm",
+  embeddingModelDir: "",
+  embeddingApiKey: "",
 
   setProviders: (providers) => set({ providers }),
 
@@ -59,6 +67,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setChatModel: (providerId, modelId) => set({ chatModel: { providerId, modelId } }),
   setSystemModel: (providerId, modelId) => set({ systemModel: { providerId, modelId } }),
   setEmbeddingProvider: (p) => set({ embeddingProvider: p }),
+  setEmbeddingModelDir: (dir) => set({ embeddingModelDir: dir }),
+  setEmbeddingApiKey: (key) => set({ embeddingApiKey: key }),
 
   loadSettings: (settings) => set(settings),
 }));

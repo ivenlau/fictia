@@ -12,7 +12,6 @@ import {
 } from "../services/vector-store.js";
 import { embedOne } from "../utils/embedding.js";
 import { settingsService } from "../services/settings.service.js";
-import { providerService } from "../services/provider.service.js";
 import type { FictiaTool, ToolContext } from "./types.js";
 
 /** 参与语义检索的集合（notes/sources 暂不索引，见 vector-index.service）。 */
@@ -47,9 +46,10 @@ export function createSemanticSearchTool(ctx: ToolContext): FictiaTool[] {
             `索引(provider=${indexedProvider})与当前 embedding 配置(${provider})不一致，请重新建立索引。`,
           );
         }
-        const glmKey = providerService.getGlmKey();
+        const glmKey = settingsService.getEmbeddingGlmKey();
+        const modelDir = settingsService.getEmbeddingModelDir();
         const k = (top_k as number) ?? 3;
-        const queryVec = await embedOne(query as string, provider, glmKey);
+        const queryVec = await embedOne(query as string, provider, glmKey, modelDir);
 
         const cols: VectorCollection[] = collection
           ? ([collection as string] as VectorCollection[]).filter((c) => SEARCHABLE_COLLECTIONS.includes(c))
