@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Settings,
   Loader2,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -18,6 +19,8 @@ import { useUIStore } from "../../stores/uiStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useChatStream } from "../../hooks/useChatStream";
 import { chatApi } from "../../api/chat";
+import { novelsApi } from "../../api/novels";
+import { MemoryButton } from "../chat/MemoryButton";
 import type { ChatMessage } from "@fictia/shared";
 
 export function ChatPanel() {
@@ -26,6 +29,7 @@ export function ChatPanel() {
   const toolCalls = useChatStore((s) => s.toolCalls);
   const loadHistory = useChatStore((s) => s.loadHistory);
   const clearMessages = useChatStore((s) => s.clearMessages);
+  const addMessage = useChatStore((s) => s.addMessage);
 
   const providers = useSettingsStore((s) => s.providers);
   const chatModel = useSettingsStore((s) => s.chatModel);
@@ -98,8 +102,30 @@ export function ChatPanel() {
       return;
     }
 
+    // Handle /memory command: 显示 AI 记忆文件内容
+    if (text === "/memory") {
+      if (!activeNovelId) return;
+      novelsApi
+        .getFiles(activeNovelId)
+        .then((files) => {
+          const mem = files.find((f) => f.path === "AI助手/记忆.md");
+          addMessage({
+            id: `temp-memory-${Date.now()}`,
+            novelId: activeNovelId,
+            role: "assistant",
+            content: `📋 **AI 记忆**\n\n${mem?.content ?? "(暂无记忆)"}`,
+            toolCalls: null,
+            modelUsed: null,
+            providerUsed: null,
+            createdAt: new Date().toISOString(),
+          });
+        })
+        .catch(() => {});
+      return;
+    }
+
     streamChat(text, activeNovelId);
-  }, [streamChat, activeNovelId, input, clearMessages]);
+  }, [streamChat, activeNovelId, input, clearMessages, addMessage]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -181,6 +207,20 @@ export function ChatPanel() {
             disabled={isStreaming}
             onInsert={(c) => setInput((prev) => (prev ? `${prev}\n\n${c}` : c))}
           />
+          <MemoryButton novelId={activeNovelId} disabled={isStreaming} />
+          <button
+            type="button"
+            onClick={() => {
+              if (!window.confirm("清空对话历史？")) return;
+              chatApi.clearHistory(activeNovelId).catch(() => {});
+              clearMessages();
+            }}
+            disabled={isStreaming || messages.length === 0}
+            title="清空对话 (/clear)"
+            className="p-1.5 rounded-md text-fg-muted hover:text-fg-primary hover:bg-surface-secondary disabled:opacity-30 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
         <div className="relative">
           <textarea
