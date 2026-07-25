@@ -1,20 +1,52 @@
 /**
  * 章节工具。
  *
- * 注意：章节有两种来源，读取逻辑保持与原实现一致（行为等价）：
- * - get_chapter_context / count_words：来自 BaseAgent，直接读文件系统（覆盖 writing-loop 产的、无 DB 行的章节）。
- * - read_chapter / edit_chapter / list_chapters：来自 chat 助手，经 chapterService（DB 章节行 + filename）。
+ * 全部走文件系统（chapters/ 目录扫描），不依赖 chapters DB 表。
+ * 原因：writing-loop 写章节只落文件、不建 DB 行，DB 与文件不一致；
+ * 文件是真相。兼容两种命名：
+ * - writing-loop: chapters/act-X/chXX.md（2 位）
+ * - chapterService.create: chapters/001-标题.md（3 位 + 标题）
  *
- * 不强行统一两种读取逻辑（那属于后续改进）；本阶段统一的是工具协议——都成 AgentTool 进 registry。
- * 参数统一为 snake_case（number / old_text / new_text / replace_all）。
+ * get_chapter_context / count_words 来自 BaseAgent（本就文件系统），保留。
  */
 import { Type } from "@earendil-works/pi-ai";
 import * as path from "path";
-import { readFileSafe, listFiles } from "../utils/file.js";
+import * as fs from "fs/promises";
+import { readFileSafe, listFiles, relativePath } from "../utils/file.js";
 import { buildCharacterQuickCard } from "../utils/context-extractor.js";
 import { countWords, formatWordCount } from "../utils/word-counter.js";
-import { chapterService } from "../services/chapter.service.js";
 import type { FictiaTool, ToolContext } from "./types.js";
+
+/** 从文件名解析章节号。支持 chXX.md 和 001-标题.md 两种命名。 */
+function parseChapterNumber(basename: string): number | null {
+  let m = basename.match(/^ch(\d+)\.md$/);
+  if (m) return Number(m[1]);
+  m = basename.match(/^(\d+)-.*\.md$/);
+  if (m) return Number(m[1]);
+  return null;
+}
+
+/** 扫 chapters/ 找指定章节号对应的文件。优先 writing-loop 命名，回退 chapterService 命名。 */
+async function findChapterFile(novelDir: string, number: number): Promise<string | null> {
+  const num2 = String(number).padStart(2, "0");
+  const chaptersDir = path.join(novelDir, "chapters");
+  const files = await listFiles(chaptersDir, { recursive: true, extensions: [".md"] });
+  const byCh = files.find((f) => path.basename(f) === `ch${num2}.md`);
+  if (byCh) return byCh;
+  const num3 = String(number).padStart(3, "0");
+  const byNum = files.find((f) => {
+    const base = path.basename(f);
+    return base.startsWith(`${num3}-`) && base.endsWith(".md");
+  });
+  return byNum ?? null;
+}
+
+/** 从正文首行 H1 解析标题；无则返回 null。 */
+function parseTitle(content: string | null): string | null {
+  if (!content) return null;
+  const m = content.match(/^#\s+(.+?)\s*$/m);
+  return m?.[1] ?? null;
+}
 
 export function createChapterTools(ctx: ToolContext): FictiaTool[] {
   return [
@@ -66,14 +98,9 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
           }
         }
 
-        // 前一章正文
+        // 前一章正文（走文件系统，兼容两种命名）
         if ((chapter_number as number) > 1) {
-          const prevNum = String((chapter_number as number) - 1).padStart(2, "0");
-          const chapterFiles = await listFiles(path.join(ctx.novelDir, "chapters"), {
-            recursive: true,
-            extensions: [".md"],
-          });
-          const prevFile = chapterFiles.find((f) => f.includes(`ch${prevNum}.md`));
+          const prevFile = await findChapterFile(ctx.novelDir, (chapter_number as number) - 1);
           if (prevFile) context.previousChapter = await readFileSafe(prevFile);
         }
 
@@ -91,29 +118,30 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
       name: "read_chapter",
       label: "读取章节正文",
       tier: "readonly",
-      description: "读取指定章节正文（经 chapters 数据库行定位文件，返回正文内容）。",
+      description: "读取指定章节正文（扫 chapters/ 目录定位文件，不依赖 DB）。返回正文 + 字数 + 标题。",
       parameters: Type.Object({
         number: Type.Number({ description: "章节编号" }),
       }),
       async execute(_toolCallId, { number }) {
-        const chapters = await chapterService.listByNovel(ctx.novelId);
-        const chapter = chapters.find((c) => c.number === (number as number));
-        if (!chapter) throw new Error(`第${number}章不存在`);
-        if (!chapter.content) {
-          return {
-            content: [{ type: "text", text: `第${number}章 "${chapter.title ?? "无标题"}" 暂无内容（状态：${chapter.status}）` }],
-            details: { number, status: chapter.status },
-          };
+        const file = await findChapterFile(ctx.novelDir, number as number);
+        if (!file) {
+          throw new Error(`第${number}章不存在（未找到 chapters/**/ch${String(number).padStart(2, "0")}.md）`);
         }
-        const text = `第${number}章 "${chapter.title ?? "无标题"}" (${chapter.wordCount}字):\n\`\`\`\n${chapter.content}\n\`\`\``;
-        return { content: [{ type: "text", text }], details: { number, wordCount: chapter.wordCount } };
+        const content = await readFileSafe(file);
+        if (!content) {
+          return { content: [{ type: "text", text: `第${number}章暂无内容` }], details: { number } };
+        }
+        const wordCount = countWords(content);
+        const title = parseTitle(content) ?? "无标题";
+        const text = `第${number}章 "${title}" (${wordCount}字) [${relativePath(ctx.novelDir, file)}]:\n\`\`\`\n${content}\n\`\`\``;
+        return { content: [{ type: "text", text }], details: { number, wordCount } };
       },
     },
     {
       name: "edit_chapter",
       label: "编辑章节正文",
       tier: "write",
-      description: "精确编辑指定章节正文（替换指定文本片段）。适用于局部修改。",
+      description: "精确编辑指定章节正文（替换指定文本片段，直接写回文件，不依赖 DB）。适用于局部修改。",
       parameters: Type.Object({
         number: Type.Number({ description: "章节编号" }),
         old_text: Type.String({ description: "要替换的原文（必须与章节内容完全匹配）" }),
@@ -121,20 +149,24 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
         replace_all: Type.Optional(Type.Boolean({ description: "是否替换所有匹配（默认 false）" })),
       }),
       async execute(_toolCallId, { number, old_text, new_text, replace_all }) {
-        const chapters = await chapterService.listByNovel(ctx.novelId);
-        const chapter = chapters.find((c) => c.number === (number as number));
-        if (!chapter) throw new Error(`第${number}章不存在`);
-        if (!chapter.content) throw new Error(`第${number}章暂无内容，无法编辑`);
-        if (!chapter.content.includes(old_text as string)) {
+        const file = await findChapterFile(ctx.novelDir, number as number);
+        if (!file) throw new Error(`第${number}章不存在，无法编辑`);
+        const content = await readFileSafe(file);
+        if (!content) throw new Error(`第${number}章暂无内容，无法编辑`);
+        if (!content.includes(old_text as string)) {
           throw new Error(`在第${number}章中未找到匹配的文本: "${(old_text as string).slice(0, 50)}..."`);
         }
-        const count = chapter.content.split(old_text as string).length - 1;
+        const count = content.split(old_text as string).length - 1;
+        let warning = "";
+        if (!replace_all && count > 1) {
+          warning = `警告：找到 ${count} 处匹配，仅替换第一处。如需全替换设 replace_all=true。 `;
+        }
         const newContent = replace_all
-          ? chapter.content.split(old_text as string).join(new_text as string)
-          : chapter.content.replace(old_text as string, new_text as string);
-        await chapterService.update(chapter.id, { content: newContent });
+          ? content.split(old_text as string).join(new_text as string)
+          : content.replace(old_text as string, new_text as string);
+        await fs.writeFile(file, newContent, "utf-8");
         return {
-          content: [{ type: "text", text: `已编辑第${number}章（${replace_all ? count : 1} 处替换）` }],
+          content: [{ type: "text", text: `${warning}已编辑第${number}章（${replace_all ? count : 1} 处替换）` }],
           details: { number, replacements: replace_all ? count : 1 },
         };
       },
@@ -143,20 +175,35 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
       name: "list_chapters",
       label: "列出章节",
       tier: "readonly",
-      description: "列出当前小说所有章节（含标题、状态、字数、摘要）。",
+      description: "列出当前小说所有章节（扫 chapters/ 目录，返回章节号/标题/字数/路径，不依赖 DB）。",
       parameters: Type.Object({}),
       async execute() {
-        const chapters = await chapterService.listByNovel(ctx.novelId);
-        if (chapters.length === 0) {
-          return { content: [{ type: "text", text: "当前小说暂无章节" }], details: { count: 0 } };
+        const chaptersDir = path.join(ctx.novelDir, "chapters");
+        const files = await listFiles(chaptersDir, { recursive: true, extensions: [".md"] });
+        const items: { number: number; title: string; wordCount: number; path: string }[] = [];
+        for (const f of files) {
+          const num = parseChapterNumber(path.basename(f));
+          if (num === null) continue;
+          const content = await readFileSafe(f);
+          const wordCount = content ? countWords(content) : 0;
+          items.push({
+            number: num,
+            title: parseTitle(content) ?? "无标题",
+            wordCount,
+            path: relativePath(ctx.novelDir, f),
+          });
         }
-        const text = chapters
-          .map(
-            (c) =>
-              `- 第${c.number}章: ${c.title ?? "无标题"} [${c.status}] ${c.wordCount}字${c.summary ? `\n  摘要: ${c.summary}` : ""}`,
-          )
+        items.sort((a, b) => a.number - b.number);
+        if (items.length === 0) {
+          return {
+            content: [{ type: "text", text: "当前小说暂无章节（chapters/ 目录无 ch*.md 文件）" }],
+            details: { count: 0 },
+          };
+        }
+        const text = items
+          .map((c) => `- 第${c.number}章: ${c.title} (${c.wordCount}字) [${c.path}]`)
           .join("\n");
-        return { content: [{ type: "text", text }], details: { count: chapters.length } };
+        return { content: [{ type: "text", text }], details: { count: items.length } };
       },
     },
     {
