@@ -24,6 +24,7 @@ import {
   updateEntitiesFromChapterNotes,
 } from "./entity.service.js";
 import { generateChapterSummary } from "./summary-chain.service.js";
+import { runConsistencyCheck, checkMilestone, countChapters } from "./milestone.service.js";
 
 export type LoopPhase =
   | "writing"
@@ -57,6 +58,34 @@ export interface LoopResult {
 }
 
 export type ProgressCb = (p: LoopProgress) => void;
+
+/** 自动驾驶停止原因。 */
+export type AutopilotStopReason = "completed" | "quality" | "milestone" | "range" | "aborted";
+
+export interface AutopilotOptions {
+  startChapter?: number;
+  endChapter?: number;
+  maxRounds?: number;
+  /** 里程碑一致性校验失败时暂停（默认 true）。 */
+  stopOnMilestoneFail?: boolean;
+  /** 连续未通过章数上限，达此暂停（默认 2）。 */
+  maxConsecutiveFails?: number;
+}
+
+export interface AutopilotEvent {
+  type: "chapter_start" | "chapter_done" | "chapter_failed" | "milestone_start" | "milestone_done" | "autopilot_done";
+  chapter?: number;
+  result?: LoopResult;
+  consistencyPassed?: boolean;
+  chaptersWritten?: number;
+  message?: string;
+}
+
+export interface AutopilotResult {
+  chaptersWritten: number;
+  lastChapter: number | null;
+  stopped: AutopilotStopReason;
+}
 
 export class WritingLoopService {
   constructor(
@@ -222,6 +251,64 @@ export class WritingLoopService {
       proseAdvisory,
       entitiesUpdated: 0,
     };
+  }
+
+  /**
+   * 自动驾驶：连续写多章，直到完成/质量不达标/里程碑校验失败/达到 endChapter。
+   * 每章走 runChapterLoop（含实体更新 + 摘要生成）；每 5 章触发 runConsistencyCheck。
+   */
+  async runAutopilot(
+    options: AutopilotOptions = {},
+    onProgress?: (e: AutopilotEvent) => void,
+  ): Promise<AutopilotResult> {
+    const maxRounds = options.maxRounds ?? 3;
+    const maxFails = options.maxConsecutiveFails ?? 2;
+    let chaptersWritten = 0;
+    let lastChapter: number | null = null;
+    let consecutiveFails = 0;
+    let next = options.startChapter ?? await this.findNextChapter();
+
+    while (next !== null) {
+      if (options.endChapter && next > options.endChapter) {
+        return { chaptersWritten, lastChapter, stopped: "range" };
+      }
+      onProgress?.({ type: "chapter_start", chapter: next });
+      try {
+        const result = await this.runChapterLoop(next, maxRounds);
+        if (result.passed) {
+          onProgress?.({ type: "chapter_done", chapter: next, result });
+          chaptersWritten++;
+          lastChapter = next;
+          consecutiveFails = 0;
+          // 里程碑一致性校验（每 5 章）
+          const cnt = await countChapters(this.novelDir);
+          const ms = checkMilestone(cnt);
+          if (ms?.reached) {
+            onProgress?.({ type: "milestone_start", chapter: next, message: `第${next}章里程碑，运行一致性校验` });
+            const cr = await runConsistencyCheck(this.novelDir, this.agentModels, () => {});
+            onProgress?.({ type: "milestone_done", chapter: next, consistencyPassed: cr.passed });
+            if (!cr.passed && options.stopOnMilestoneFail !== false) {
+              return { chaptersWritten, lastChapter, stopped: "milestone" };
+            }
+          }
+        } else {
+          consecutiveFails++;
+          onProgress?.({ type: "chapter_failed", chapter: next, result, message: "未通过审核" });
+          if (consecutiveFails >= maxFails) {
+            return { chaptersWritten, lastChapter, stopped: "quality" };
+          }
+        }
+      } catch (e: any) {
+        consecutiveFails++;
+        onProgress?.({ type: "chapter_failed", chapter: next, message: e?.message ?? "写作异常" });
+        if (consecutiveFails >= maxFails) {
+          return { chaptersWritten, lastChapter, stopped: "quality" };
+        }
+      }
+      next = await this.findNextChapter();
+    }
+    onProgress?.({ type: "autopilot_done", chaptersWritten });
+    return { chaptersWritten, lastChapter, stopped: "completed" };
   }
 
   /**

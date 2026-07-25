@@ -7,7 +7,13 @@ import {
   getEntity,
   searchEntities,
   entityStats,
+  upsertEntities,
 } from "../services/entity-store.js";
+import {
+  transitionForeshadow,
+  type ForeshadowState,
+  type ForeshadowHistoryEntry,
+} from "@fictia/shared";
 import {
   indexAllEntities,
   assembleWritingSpace,
@@ -163,6 +169,49 @@ router.get("/novels/:novelId/foreshadowing/stats", (req, res) => {
   }
   void fileService.getNovelDir(novelId);
   res.json(foreshadowStats(novelId));
+});
+
+/**
+ * POST /novels/:novelId/foreshadowing/:foreshadowId/state
+ * 手动推进伏笔状态机。body: { op, chapter, note? }
+ * op: 埋设/推进/强化/回收/悬置。走状态机校验，禁止回退。
+ */
+router.post("/novels/:novelId/foreshadowing/:foreshadowId/state", (req, res) => {
+  const { novelId, foreshadowId } = req.params;
+  const { op, chapter, note } = req.body as { op: string; chapter: number; note?: string };
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+  const e = getEntity(novelId, "foreshadowing", foreshadowId);
+  if (!e) {
+    res.status(404).json({ error: "伏笔不存在" });
+    return;
+  }
+  const cur = (e.state as ForeshadowState) || "planted";
+  const next = transitionForeshadow(cur, op);
+  if (!next) {
+    res.status(400).json({ error: `状态机拒绝: 当前 ${cur},操作 ${op}` });
+    return;
+  }
+  const chTag = `ch${String(chapter).padStart(2, "0")}`;
+  const history = Array.isArray(e.fields.history)
+    ? [...(e.fields.history as ForeshadowHistoryEntry[])]
+    : [];
+  const entry: ForeshadowHistoryEntry = { ch: chTag, op, state: next };
+  if (note) entry.note = note;
+  history.push(entry);
+  const fields: Record<string, unknown> = { ...e.fields, history };
+  if (next === "planted" && !fields.plantedCh) fields.plantedCh = chTag;
+  if (next === "strengthened") {
+    const arr = Array.isArray(fields.strengthenChs) ? [...(fields.strengthenChs as string[])] : [];
+    if (!arr.includes(chTag)) arr.push(chTag);
+    fields.strengthenChs = arr;
+  }
+  if (next === "resolved") fields.resolvedCh = chTag;
+  upsertEntities(novelId, [{ ...e, state: next, fields }]);
+  res.json({ ...e, state: next, fields, from: cur, to: next });
 });
 
 /**

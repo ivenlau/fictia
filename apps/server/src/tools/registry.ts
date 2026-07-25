@@ -1,11 +1,10 @@
 /**
  * 工具注册表。
  *
- * 集中注册所有工具工厂 + 每个 agent 的工具清单，按需生成 AgentTool[]。
+ * 集中注册所有工具工厂 + 每个 agent 的工具清单，按需生成 FictiaTool[]。
  * 替代 BaseAgent.getToolTier()/getTools() 的二分硬编码：agent 显式声明所需工具名，
  * registry 过滤返回。新增能力只需注册工厂 + 配置 agent 清单，两套 agent（pipeline/chat）共用。
  */
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { AgentType } from "@fictia/shared";
 import type { FictiaTool, ToolContext, ToolFactory, ToolTier } from "./types.js";
 
@@ -38,9 +37,9 @@ class ToolRegistry {
   }
 
   /** 按名字取工具（顺序保持 names 顺序，缺失的跳过并告警）。 */
-  getTools(ctx: ToolContext, names: string[]): AgentTool[] {
+  getTools(ctx: ToolContext, names: string[]): FictiaTool[] {
     const all = this.buildAll(ctx);
-    const out: AgentTool[] = [];
+    const out: FictiaTool[] = [];
     for (const n of names) {
       const t = all.get(n);
       if (t) out.push(t);
@@ -50,13 +49,13 @@ class ToolRegistry {
   }
 
   /** 取某 agent 的工具集。 */
-  getToolsForAgent(ctx: ToolContext, agentType: AgentType): AgentTool[] {
+  getToolsForAgent(ctx: ToolContext, agentType: AgentType): FictiaTool[] {
     const names = this.agentToolNames.get(agentType) ?? [];
     return this.getTools(ctx, names);
   }
 
   /** 按 tier 过滤（chat 助手取全量 readonly 等）。 */
-  getToolsByTier(ctx: ToolContext, tier: ToolTier): AgentTool[] {
+  getToolsByTier(ctx: ToolContext, tier: ToolTier): FictiaTool[] {
     return [...this.buildAll(ctx).values()].filter((t) => t.tier === tier);
   }
 

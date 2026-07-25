@@ -7,14 +7,23 @@ interface ToolCallEntry {
   result: string;
 }
 
+/** 工具确认请求（manualConfirm 开启时，write/orchestrate 工具执行前等用户确认）。 */
+interface PendingConfirmation {
+  callId: string;
+  tool: string;
+  input: string;
+}
+
 interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
   toolCalls: ToolCallEntry[];
+  pendingConfirmation: PendingConfirmation | null;
   addMessage: (msg: ChatMessage) => void;
   appendToLast: (delta: string) => void;
   addToolCall: (tc: ToolCallEntry) => void;
   setStreaming: (v: boolean) => void;
+  setPendingConfirmation: (p: PendingConfirmation | null) => void;
   loadHistory: (messages: ChatMessage[]) => void;
   clearMessages: () => void;
 }
@@ -23,6 +32,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   isStreaming: false,
   toolCalls: [],
+  pendingConfirmation: null,
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
 
@@ -46,7 +56,9 @@ export const useChatStore = create<ChatState>((set) => ({
     }
   },
 
+  setPendingConfirmation: (p) => set({ pendingConfirmation: p }),
+
   loadHistory: (messages) => set({ messages }),
 
-  clearMessages: () => set({ messages: [], toolCalls: [] }),
+  clearMessages: () => set({ messages: [], toolCalls: [], pendingConfirmation: null }),
 }));

@@ -161,6 +161,8 @@ export function ChatPanel() {
           <ToolCallsDisplay toolCalls={toolCalls} />
         )}
 
+        <PendingConfirmation />
+
         {isStreaming && messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].content === "" && (
           <div className="flex items-center gap-2 text-fg-muted">
             <Loader2 size={14} className="animate-spin" />
@@ -303,6 +305,52 @@ function ToolCallsDisplay({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PendingConfirmation() {
+  const pending = useChatStore((s) => s.pendingConfirmation);
+  const setPending = useChatStore((s) => s.setPendingConfirmation);
+  if (!pending) return null;
+
+  const confirm = async (approved: boolean) => {
+    try {
+      await fetch("/api/chat/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ callId: pending.callId, approved }),
+      });
+    } catch {
+      // 忽略网络错误，后端超时会自行拒绝
+    }
+    setPending(null);
+  };
+
+  return (
+    <div className="ml-8 rounded border border-yellow-500/40 bg-yellow-500/5 px-2 py-1.5">
+      <p className="font-caption text-[10px] font-semibold text-yellow-700 flex items-center gap-1">
+        <Wrench size={10} /> 需确认工具调用: {pending.tool}
+      </p>
+      <p className="font-caption text-[10px] text-fg-muted truncate mt-0.5">
+        {pending.input.slice(0, 120)}
+        {pending.input.length > 120 ? "..." : ""}
+      </p>
+      <div className="flex gap-1.5 mt-1">
+        <button
+          onClick={() => confirm(true)}
+          className="px-2 py-0.5 rounded bg-accent text-white text-[10px] hover:bg-accent/90 transition-colors"
+        >
+          批准
+        </button>
+        <button
+          onClick={() => confirm(false)}
+          className="px-2 py-0.5 rounded border border-subtle text-fg-secondary text-[10px] hover:bg-surface-muted transition-colors"
+        >
+          拒绝
+        </button>
+      </div>
+      <p className="font-caption text-[9px] text-fg-muted/60 mt-0.5">60 秒未确认将自动拒绝</p>
     </div>
   );
 }

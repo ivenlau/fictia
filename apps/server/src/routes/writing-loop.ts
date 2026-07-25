@@ -145,4 +145,50 @@ router.post("/novels/:novelId/consistency-check", async (req, res) => {
   }
 });
 
+/**
+ * POST /novels/:novelId/autopilot
+ *   body: { startChapter?, endChapter?, maxRounds?, stopOnMilestoneFail?, maxConsecutiveFails? }
+ *
+ * 自动驾驶：连续写多章。SSE 推 chapter_start/done/failed + milestone + done。
+ * 停止条件：全部完成 / 连续质量不达标 / 里程碑校验失败 / 达 endChapter。
+ */
+router.post("/novels/:novelId/autopilot", async (req, res) => {
+  const { novelId } = req.params;
+  const { startChapter, endChapter, maxRounds, stopOnMilestoneFail, maxConsecutiveFails } = req.body ?? {};
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+  const novelDir = fileService.getNovelDir(novelId);
+  const agentModels = getAgentModels();
+  const svc = new WritingLoopService(novelId, novelDir, agentModels);
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const send = (obj: Record<string, unknown>) =>
+    res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+  try {
+    send({ type: "start" });
+    const result = await svc.runAutopilot(
+      { startChapter, endChapter, maxRounds, stopOnMilestoneFail, maxConsecutiveFails },
+      (e) => send({ ...e }),
+    );
+    send({ type: "done", ...result });
+  } catch (err: any) {
+    send({ type: "error", error: err?.message ?? "自动驾驶失败" });
+  } finally {
+    res.end();
+  }
+
+  req.on("close", () => {
+    // v1 不支持中途取消；连接关闭后循环仍跑完，结果丢弃
+  });
+});
+
 export const writingLoopRoutes = router;

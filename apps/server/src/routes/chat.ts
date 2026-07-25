@@ -13,6 +13,27 @@ const router = Router();
 
 const now = () => new Date().toISOString();
 
+// 工具确认：manualConfirm 开启时，write/orchestrate 工具执行前等用户确认。
+// callId -> { resolve, timer }；POST /confirm resolve，超时默认拒绝。
+const pendingConfirmations = new Map<
+  string,
+  { resolve: (approved: boolean) => void; timer: ReturnType<typeof setTimeout> }
+>();
+
+// POST /confirm - 用户对 tool_call_pending 的批准/拒绝
+router.post("/confirm", (req, res) => {
+  const { callId, approved } = req.body as { callId: string; approved: boolean };
+  const pending = pendingConfirmations.get(callId);
+  if (!pending) {
+    res.status(404).json({ error: "无此确认请求（可能已超时）" });
+    return;
+  }
+  clearTimeout(pending.timer);
+  pendingConfirmations.delete(callId);
+  pending.resolve(!!approved);
+  res.json({ ok: true });
+});
+
 // GET /history — get chat history
 router.get("/history", (req, res) => {
   const novelId = req.query.novelId as string | undefined;
@@ -100,6 +121,20 @@ router.post("/", async (req, res) => {
   };
 
   try {
+    const manualConfirm = settingsService.get().manualConfirm;
+    const onConfirmTool = manualConfirm
+      ? (tool: string, input: string) => {
+          const callId = uuid();
+          return new Promise<boolean>((resolve) => {
+            const timer = setTimeout(() => {
+              pendingConfirmations.delete(callId);
+              resolve(false); // 超时拒绝
+            }, 60_000);
+            pendingConfirmations.set(callId, { resolve, timer });
+            sendEvent({ type: "tool_call_pending", callId, tool, input });
+          });
+        }
+      : undefined;
     const fullResponse = await runChatAgent(
       llmModel,
       apiKey,
@@ -113,6 +148,7 @@ router.post("/", async (req, res) => {
         },
         onToolCall: (tool, input) => sendEvent({ type: "tool_call", tool, input }),
         onToolResult: (tool, input, result) => sendEvent({ type: "tool_result", tool, input, result }),
+        onConfirmTool,
       },
     );
 

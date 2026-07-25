@@ -15,6 +15,8 @@ export interface ChatAgentCallbacks {
   onDelta: (text: string) => void;
   onToolCall: (tool: string, input: string) => void;
   onToolResult: (tool: string, input: string, result: string) => void;
+  /** 工具确认（manualConfirm 开启时由 route 提供）。返回 true 批准、false 拒绝。 */
+  onConfirmTool?: (tool: string, input: string) => Promise<boolean>;
 }
 
 /**
@@ -132,6 +134,9 @@ export async function runChatAgent(
     onToolCall: (name, input) => callbacks.onToolCall(name, stringifyInput(input)),
     onToolResult: (name, input, result) =>
       callbacks.onToolResult(name, stringifyInput(input), result),
+    confirmTool: callbacks.onConfirmTool
+      ? (name, input) => callbacks.onConfirmTool!(name, stringifyInput(input))
+      : undefined,
   });
 
   return text;

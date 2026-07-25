@@ -21,10 +21,10 @@ import type {
   AgentEvent,
   AgentLoopConfig,
   AgentMessage,
-  AgentTool,
   AfterToolCallContext,
 } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, Message, Model, TextContent } from "@earendil-works/pi-ai";
+import type { FictiaTool } from "../tools/types.js";
 
 export interface AgentRunnerOptions {
   model: Model<"openai-completions">;
@@ -32,9 +32,11 @@ export interface AgentRunnerOptions {
   systemPrompt: string;
   /** 初始消息（通常一条 user；chat 场景含 history + 当前 user）。 */
   messages: Message[];
-  tools: AgentTool[] | undefined;
+  tools: FictiaTool[] | undefined;
   /** 最大工具迭代轮数（assistant turn 数）。默认 20。0 表示不限制。 */
   maxIterations?: number;
+  /** 工具确认回调（manualConfirm 开启时由 chat route 提供）。返回 true 批准、false 拒绝。仅对 write/orchestrate tier 工具调用。 */
+  confirmTool?: (name: string, input: unknown) => Promise<boolean>;
   signal?: AbortSignal;
   /** 流式 token 回调（chat SSE text_delta）。 */
   onDelta?: (text: string) => void;
@@ -135,6 +137,15 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
       toolCalls.push({ name, input, result: resultText, isError });
       opts.onToolResult?.(name, input, resultText, isError);
       return undefined;
+    },
+    beforeToolCall: async (btCtx) => {
+      if (!opts.confirmTool) return undefined;
+      const tool = opts.tools?.find((t) => t.name === btCtx.toolCall.name);
+      const tier = tool?.tier;
+      // 只读工具不需确认；write/orchestrate 需用户确认
+      if (tier !== "write" && tier !== "orchestrate") return undefined;
+      const approved = await opts.confirmTool(btCtx.toolCall.name, btCtx.args);
+      return approved ? undefined : { block: true, reason: `用户拒绝执行工具 ${btCtx.toolCall.name}` };
     },
   };
 

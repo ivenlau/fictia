@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Save, Loader2, PenLine, RefreshCw, Eye, Edit3, Wand2, AlertTriangle, AlertCircle, Info, ChevronUp, ChevronDown } from "lucide-react";
+import { Save, Loader2, PenLine, RefreshCw, Eye, Edit3, Wand2, AlertTriangle, AlertCircle, Info, ChevronUp, ChevronDown, FastForward } from "lucide-react";
 import { useChapter, useChapterFeedback } from "@/hooks/useNovel";
 import { useTriggerChapterAgent } from "@/hooks/useAgent";
 import { useAgentStore } from "@/stores/agentStore";
@@ -17,6 +17,7 @@ import { ReviewActions } from "./ReviewActions";
 import { ProblemsPanel } from "./ProblemsPanel";
 import { RewriteDialog } from "./RewriteDialog";
 import { WritingLoopDialog } from "./WritingLoopDialog";
+import { AutopilotDialog } from "./AutopilotDialog";
 import { countWords } from "@/lib/markdown";
 import type { WorkspaceFile } from "@fictia/shared";
 
@@ -125,6 +126,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
   const [selectedText, setSelectedText] = useState<string | null>(null);
   const [showRewriteDialog, setShowRewriteDialog] = useState(false);
   const [showWritingLoop, setShowWritingLoop] = useState(false);
+  const [showAutopilot, setShowAutopilot] = useState(false);
   const [selectionPos, setSelectionPos] = useState<{ x: number; y: number } | null>(null);
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -532,6 +534,15 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             <Wand2 size={13} />
             写作循环
           </button>
+          <button
+            onClick={() => setShowAutopilot(true)}
+            disabled={isAnyWriting}
+            title="自动驾驶：连续写多章，每 5 章自动一致性校验"
+            className="flex items-center gap-1.5 rounded-md border border-accent/40 bg-accent-bg/30 px-3 py-1.5 font-body text-xs font-medium text-accent transition-colors hover:bg-accent-bg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FastForward size={13} />
+            自动驾驶
+          </button>
           {!isFileMode && (
             <button
               onClick={handleRevise}
@@ -683,6 +694,16 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
           selectedText={selectedText ?? undefined}
           onClose={() => { setShowRewriteDialog(false); setSelectedText(null); }}
           onRewritten={handleRewritten}
+        />
+      )}
+      {showAutopilot && novelId && (
+        <AutopilotDialog
+          novelId={novelId}
+          onClose={() => setShowAutopilot(false)}
+          onDone={() => {
+            // 刷新章节列表
+            novelsApi.getFiles(novelId).then(() => {}).catch(() => {});
+          }}
         />
       )}
       {showWritingLoop && novelId && (

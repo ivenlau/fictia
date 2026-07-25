@@ -8,6 +8,7 @@ export function useChatStream() {
   const appendToLast = useChatStore((s) => s.appendToLast);
   const addToolCall = useChatStore((s) => s.addToolCall);
   const setStreaming = useChatStore((s) => s.setStreaming);
+  const setPendingConfirmation = useChatStore((s) => s.setPendingConfirmation);
 
   const streamChat = useCallback(
     async (userMessage: string, novelId?: string) => {
@@ -92,6 +93,13 @@ export function useChatStream() {
               switch (data.type) {
                 case "text_delta":
                   appendToLast(data.delta);
+                  break;
+                case "tool_call_pending":
+                  setPendingConfirmation({
+                    callId: data.callId,
+                    tool: data.tool,
+                    input: data.input,
+                  });
                   break;
                 case "tool_call":
                   addToolCall({ tool: data.tool, input: data.input, result: "" });

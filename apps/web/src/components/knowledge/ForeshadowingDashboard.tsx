@@ -151,6 +151,38 @@ export function ForeshadowingDashboard({ novelId }: { novelId: string }) {
                           {f.desc}
                         </p>
                       )}
+                      <div className="mt-1">
+                        <button
+                          onClick={async () => {
+                            const op = window.prompt("操作（埋设/推进/强化/回收/悬置）");
+                            if (!op) return;
+                            const ch = window.prompt("章节号");
+                            const chapter = Number(ch);
+                            if (!chapter) return;
+                            try {
+                              const res = await fetch(
+                                `/api/novels/${novelId}/foreshadowing/${f.id}/state`,
+                                {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ op, chapter }),
+                                },
+                              );
+                              if (!res.ok) {
+                                const e = await res.json().catch(() => ({}));
+                                alert((e as { error?: string }).error ?? "推进失败");
+                                return;
+                              }
+                              void load();
+                            } catch (e: any) {
+                              alert(e?.message ?? "推进失败");
+                            }
+                          }}
+                          className="font-caption text-[10px] px-1.5 py-0.5 rounded border border-subtle text-fg-secondary hover:bg-surface-muted transition-colors"
+                        >
+                          推进状态
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

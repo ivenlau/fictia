@@ -6,7 +6,19 @@
 const BASE_URL = "/api";
 
 export interface WritingLoopEvent {
-  type: "start" | "progress" | "result" | "milestone" | "done" | "error";
+  type:
+    | "start"
+    | "progress"
+    | "result"
+    | "milestone"
+    | "done"
+    | "error"
+    | "chapter_start"
+    | "chapter_done"
+    | "chapter_failed"
+    | "milestone_start"
+    | "milestone_done"
+    | "autopilot_done";
   [key: string]: unknown;
 }
 
@@ -66,6 +78,34 @@ export async function runConsistencyCheck(
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({}),
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  await consumeSse(res, onEvent);
+}
+
+export interface AutopilotOptions {
+  startChapter?: number;
+  endChapter?: number;
+  maxRounds?: number;
+  stopOnMilestoneFail?: boolean;
+  maxConsecutiveFails?: number;
+}
+
+/** 自动驾驶：连续写多章。SSE 推 chapter_start/done/failed + milestone + done。 */
+export async function runAutopilot(
+  novelId: string,
+  body: AutopilotOptions,
+  onEvent: (e: WritingLoopEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/novels/${novelId}/autopilot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify(body),
     signal,
   });
   if (!res.ok) {
