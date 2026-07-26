@@ -1,12 +1,15 @@
 /**
- * 向量索引：扫描 novel 文件，分块嵌入，写入向量库。
+ * 向量索引：扫描 novel 文件，滑窗切块后嵌入，写入向量库。
  *
- * 分块策略（P2-1 最小版）：一个文件 = 一个 chunk（id = 相对路径）。
+ * 分块策略：每个文件按字符滑窗切成多块（句子边界对齐、带 overlap），每块独立
+ * 嵌入为一条向量（id = 相对路径#块号）。召回粒度从「整章」细化到「段落级」，
+ * 同时避免单条过长撑爆 attention。切块参数见 utils/chunker.ts。
  * chapters / design / world / outlines 四个 collection。
  * notes / sources 暂不索引（无 notes 子系统；source 工作流在 P3）。
  */
 
 import { embed, type EmbeddingProvider } from "../utils/embedding.js";
+import { chunkText } from "../utils/chunker.js";
 import {
   upsertVectors,
   clearCollection,
@@ -18,9 +21,32 @@ import { fileService } from "./file.service.js";
 import { listFiles, readFileSafe } from "../utils/file.js";
 import * as path from "path";
 
+/** 文件级条目：一个文件 = 一条（待切块）。id = 相对路径。 */
 interface FileChunk {
   id: string;
   text: string;
+}
+
+/** 切块后的条目：一个文件 = 多条。id = 相对路径#块号。 */
+interface ExpandedChunk {
+  id: string;
+  text: string;
+  path: string;
+  chunkIndex: number;
+  charStart: number;
+  charEnd: number;
+}
+
+/** 把一个文件切成多块，每块打上 path#index 的 id 与定位元数据。 */
+function expandFile(fc: FileChunk): ExpandedChunk[] {
+  return chunkText(fc.text).map((c) => ({
+    id: `${fc.id}#${c.index}`,
+    text: c.text,
+    path: fc.id,
+    chunkIndex: c.index,
+    charStart: c.charStart,
+    charEnd: c.charEnd,
+  }));
 }
 
 async function collectFiles(
@@ -49,27 +75,34 @@ async function collectFiles(
 async function indexChunks(
   novelId: string,
   collection: VectorCollection,
-  chunks: FileChunk[],
+  files: FileChunk[],
   provider: EmbeddingProvider,
   apiKey: string,
   modelDir?: string,
 ): Promise<number> {
-  if (chunks.length === 0) return 0;
+  if (files.length === 0) return 0;
   clearCollection(novelId, collection);
+  const expanded = files.flatMap(expandFile);
+  if (expanded.length === 0) return 0;
   const vectors = await embed(
-    chunks.map((c) => c.text.slice(0, 8000)),
+    expanded.map((c) => c.text),
     provider,
     apiKey,
     modelDir,
   );
-  const items: VectorItem[] = chunks.map((c, i) => ({
+  const items: VectorItem[] = expanded.map((c, i) => ({
     id: c.id,
     text: c.text,
-    metadata: { path: c.id },
+    metadata: {
+      path: c.path,
+      chunkIndex: c.chunkIndex,
+      charStart: c.charStart,
+      charEnd: c.charEnd,
+    },
     vector: vectors[i],
   }));
   upsertVectors(novelId, collection, items);
-  return chunks.length;
+  return expanded.length;
 }
 
 export async function indexAll(
@@ -91,14 +124,13 @@ export async function indexAll(
   }
 
   onProgress?.("索引 chapters");
-  indexed.chapters = await indexChunks(
-    novelId,
-    "chapters",
-    await collectFiles(novelDir, path.join(novelDir, "chapters"), /^ch\d+\.md$/),
-    provider,
-    apiKey,
-    modelDir,
+  const chapterFiles = await collectFiles(
+    novelDir,
+    path.join(novelDir, "chapters"),
+    /^ch\d+\.md$/,
   );
+  indexed.chapters = await indexChunks(novelId, "chapters", chapterFiles, provider, apiKey, modelDir);
+  onProgress?.(`  chapters：${chapterFiles.length} 文件 → ${indexed.chapters} 块`);
 
   onProgress?.("索引 design");
   const designChunks: FileChunk[] = [];
@@ -116,26 +148,17 @@ export async function indexAll(
     ...(await collectFiles(novelDir, path.join(novelDir, "characters"), /\.md$/)),
   );
   indexed.design = await indexChunks(novelId, "design", designChunks, provider, apiKey, modelDir);
+  onProgress?.(`  design：${designChunks.length} 文件 → ${indexed.design} 块`);
 
   onProgress?.("索引 world");
-  indexed.world = await indexChunks(
-    novelId,
-    "world",
-    await collectFiles(novelDir, path.join(novelDir, "world"), /\.md$/),
-    provider,
-    apiKey,
-    modelDir,
-  );
+  const worldFiles = await collectFiles(novelDir, path.join(novelDir, "world"), /\.md$/);
+  indexed.world = await indexChunks(novelId, "world", worldFiles, provider, apiKey, modelDir);
+  onProgress?.(`  world：${worldFiles.length} 文件 → ${indexed.world} 块`);
 
   onProgress?.("索引 outlines");
-  indexed.outlines = await indexChunks(
-    novelId,
-    "outlines",
-    await collectFiles(novelDir, path.join(novelDir, "outline"), /\.md$/),
-    provider,
-    apiKey,
-    modelDir,
-  );
+  const outlineFiles = await collectFiles(novelDir, path.join(novelDir, "outline"), /\.md$/);
+  indexed.outlines = await indexChunks(novelId, "outlines", outlineFiles, provider, apiKey, modelDir);
+  onProgress?.(`  outlines：${outlineFiles.length} 文件 → ${indexed.outlines} 块`);
 
   setIndexProvider(novelId, provider);
   return { indexed };

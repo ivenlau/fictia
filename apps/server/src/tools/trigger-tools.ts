@@ -62,7 +62,7 @@ export function createTriggerTools(ctx: ToolContext): FictiaTool[] {
         const modelDir = settingsService.getEmbeddingModelDir();
         const result = await indexAll(ctx.novelId, provider, glmKey, modelDir);
         const text = `向量索引重建完成:\n${Object.entries(result.indexed)
-          .map(([k, v]) => `- ${k}: ${v}`)
+          .map(([k, v]) => `- ${k}: ${v} 块`)
           .join("\n")}`;
         return { content: [{ type: "text", text }], details: result };
       },

@@ -55,12 +55,25 @@ export function createSemanticSearchTool(ctx: ToolContext): FictiaTool[] {
           ? ([collection as string] as VectorCollection[]).filter((c) => SEARCHABLE_COLLECTIONS.includes(c))
           : SEARCHABLE_COLLECTIONS;
 
-        const hits: { collection: string; id: string; score: number; text: string }[] = [];
+        // 不按 path 去重：同一文件不同段落都相关时各自命中是 RAG 的价值，去重会丢上下文。
+        const hits: {
+          collection: string;
+          id: string;
+          score: number;
+          text: string;
+          metadata: Record<string, unknown>;
+        }[] = [];
         for (const col of cols) {
           if ((stats[col] ?? 0) === 0) continue; // 该集合未索引
           const result = queryVectors(ctx.novelId, col, queryVec, k);
           for (const h of result) {
-            hits.push({ collection: col, id: h.id, score: h.score, text: h.text });
+            hits.push({
+              collection: col,
+              id: h.id,
+              score: h.score,
+              text: h.text,
+              metadata: h.metadata,
+            });
           }
         }
         if (hits.length === 0) {
@@ -69,10 +82,16 @@ export function createSemanticSearchTool(ctx: ToolContext): FictiaTool[] {
         hits.sort((a, b) => b.score - a.score);
         const top = hits.slice(0, k * cols.length);
         const text = `语义检索 "${query}" 命中 ${top.length} 条:\n\n${top
-          .map(
-            (h) =>
-              `## [${h.collection}] ${h.id} (score: ${h.score.toFixed(3)})\n${h.text.slice(0, 500)}${h.text.length > 500 ? "..." : ""}`,
-          )
+          .map((h) => {
+            // id 形如 path#chunkIndex，从 metadata 取更稳；片段号转 1 基便于阅读
+            const m = h.metadata as { path?: string; chunkIndex?: number };
+            const displayId = m.path
+              ? m.chunkIndex != null
+                ? `${m.path} · 片段 ${m.chunkIndex + 1}`
+                : m.path
+              : h.id;
+            return `## [${h.collection}] ${displayId} (score: ${h.score.toFixed(3)})\n${h.text.slice(0, 500)}${h.text.length > 500 ? "..." : ""}`;
+          })
           .join("\n\n")}`;
         return { content: [{ type: "text", text }], details: { count: top.length } };
       },
