@@ -102,7 +102,24 @@ export class Orchestrator extends EventEmitter {
         this.agentModels,
       );
 
-      const result = await agent.run(options);
+      // 注入小说元信息（targetChapters 等）到 extraContext，供 architect 据长度规划幕数。
+      // 动态 import 规避 orchestrator ↔ novel.service 的静态循环依赖。
+      let runOptions = options;
+      try {
+        const { novelService } = await import("../services/novel.service.js");
+        const novel = novelService.getById(this.novelId);
+        if (novel) {
+          const meta = novelService.buildMetaContext(novel);
+          runOptions = {
+            ...options,
+            extraContext: options?.extraContext ? `${options.extraContext}\n\n---\n\n${meta}` : meta,
+          };
+        }
+      } catch {
+        // 元信息注入失败不阻塞 stage 执行
+      }
+
+      const result = await agent.run(runOptions);
 
       this.emit("stage:output", stageName, result);
 

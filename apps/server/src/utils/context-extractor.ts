@@ -237,79 +237,53 @@ export function extractChapterArtDesign(fullText: string, chapterNum: number): s
 }
 
 /**
- * Map act number to story stage name for style-guide extraction.
+ * 在「## 章节风格锚点」段中定位本 act 的风格块。
+ * 优先新约定 `### Act {n}`；fallback 旧格式 `### 第X-Y章（…）`（按 blueprint 的 act chapters 范围匹配）。
  */
-function actToStage(actNum: number): { name: string; chapterRange: string } {
-  const stages: Record<number, { name: string; chapterRange: string }> = {
-    0: { name: "序篇", chapterRange: "1-3" },
-    1: { name: "第一幕", chapterRange: "4-15" },
-    2: { name: "第二幕", chapterRange: "16-30" },
-    3: { name: "第三幕", chapterRange: "31-45" },
-    4: { name: "终篇", chapterRange: "46-50" },
-  };
-  return stages[actNum] ?? stages[1];
+function matchActAnchor(anchorSection: string, actNum: number, blueprint?: string): string | null {
+  const blocks = anchorSection.split(/(?=^###\s)/m).filter((b) => b.trim());
+  // 优先：新约定 ### Act {n}
+  for (const b of blocks) {
+    const m = b.match(/^###\s*Act\s*(\d+)/);
+    if (m && Number(m[1]) === actNum) return b.replace(/^###\s*[^\n]*\n/, "").trim();
+  }
+  // Fallback：旧格式 ### 第X-Y章，按本 act 的 chapters 范围匹配
+  const acts = parseActDefinitions(blueprint);
+  const act = acts?.find((a) => a.act === actNum);
+  if (!act || act.chapters.length === 0) return null;
+  const min = Math.min(...act.chapters);
+  const max = Math.max(...act.chapters);
+  for (const b of blocks) {
+    const m = b.match(/^###\s*第(\d+)\s*(?:[-–—]\s*(\d+))?\s*章/);
+    if (m) {
+      const s = Number(m[1]);
+      const e = m[2] ? Number(m[2]) : s;
+      if (s >= min && e <= max) return b.replace(/^###\s*[^\n]*\n/, "").trim();
+    }
+  }
+  return null;
 }
 
 /**
- * Extract stage-specific notes from style-guide.md.
- * Includes: core rules (sections 一-二), stage row from section 12, and relevant scene type guidelines.
+ * Extract act-specific notes from style-guide.md（适配任意 act 数）。
+ * 抽真实存在的段：总体调性 / 语言规范 / 禁忌清单 / 本 act 的章节风格锚点。
  */
-export function extractStyleStageNotes(fullText: string, actNum: number): string {
+export function extractStyleStageNotes(fullText: string, actNum: number, blueprint?: string): string {
   const parts: string[] = [];
-  const stage = actToStage(actNum);
 
-  // --- Section 一: 总体调性 (always include, ~500 chars) ---
-  const s1Match = fullText.match(/## 一、总体调性\n([\s\S]*?)(?=\n## [二]|\n---\n\n## [二])/);
-  if (s1Match) {
-    parts.push(`### 总体调性\n\n${s1Match[1].trim()}`);
-  }
+  const toneMatch = fullText.match(/## 总体调性\s*\n([\s\S]*?)(?=\n## |\n---|$)/);
+  if (toneMatch) parts.push(`### 总体调性\n\n${toneMatch[1].trim()}`);
 
-  // --- Section 二 key rules: 文风特征 + 句式禁令 + 词汇禁令 ---
-  const styleRulesMatch = fullText.match(/### 2\.1 文风特征\n([\s\S]*?)(?=\n### 2\.2)/);
-  if (styleRulesMatch) {
-    parts.push(`### 文风铁律\n\n${styleRulesMatch[1].trim()}`);
-  }
+  const langMatch = fullText.match(/## 语言规范\s*\n([\s\S]*?)(?=\n## )/);
+  if (langMatch) parts.push(`### 语言规范\n\n${langMatch[1].trim()}`);
 
-  // Sentence norms table (2.2) — include as reference
-  const sentenceMatch = fullText.match(/### 2\.2 句式规范\n([\s\S]*?)(?=\n### 2\.3)/);
-  if (sentenceMatch) {
-    parts.push(`### 句式规范\n\n${sentenceMatch[1].trim()}`);
-  }
+  const prohibMatch = fullText.match(/## 禁忌清单\s*\n([\s\S]*?)(?=\n## )/);
+  if (prohibMatch) parts.push(`### 禁忌清单\n\n${prohibMatch[1].trim()}`);
 
-  // Prohibitions from 2.2 句式禁令 and 2.3 词汇禁令
-  const prohibitions: string[] = [];
-  const sentProhibMatch = fullText.match(/\*\*句式禁令\*\*：\n([\s\S]*?)(?=\n###)/);
-  if (sentProhibMatch) prohibitions.push(sentProhibMatch[1].trim());
-  const wordProhibMatch = fullText.match(/\*\*词汇禁令\*\*：\n([\s\S]*?)(?=\n###)/);
-  if (wordProhibMatch) prohibitions.push(wordProhibMatch[1].trim());
-  if (prohibitions.length > 0) {
-    parts.push(`### 禁忌清单\n\n${prohibitions.join("\n\n")}`);
-  }
-
-  // --- Section 6: 双时间线风格区分 ---
-  const s6Match = fullText.match(/## 六、双时间线风格区分\n([\s\S]*?)(?=\n## 七)/);
-  if (s6Match) {
-    parts.push(`### 双时间线风格\n\n${s6Match[1].trim()}`);
-  }
-
-  // --- Section 12: 全书风格演变轨迹 — extract this stage's row ---
-  const s12Match = fullText.match(/## 十二、全书风格演变轨迹\n([\s\S]*?)(?=\n##|$)/);
-  if (s12Match) {
-    const { header, separator, rows } = parseMarkdownTable(s12Match[1]);
-    // Match by stage name
-    const matched = rows.filter(row => {
-      const clean = row.replace(/\*\*/g, "");
-      return clean.includes(stage.name);
-    });
-    if (matched.length > 0) {
-      parts.push(`### 本阶段风格演变（${stage.name}：第${stage.chapterRange}章）\n\n${header}\n${separator}\n${matched.join("\n")}`);
-    }
-  }
-
-  // --- Section 9: 章节结构风格 (short, always include) ---
-  const s9Match = fullText.match(/## 九、章节结构风格\n([\s\S]*?)(?=\n## 十)/);
-  if (s9Match) {
-    parts.push(`### 章节结构规范\n\n${s9Match[1].trim()}`);
+  const anchorMatch = fullText.match(/## 章节风格锚点\s*\n([\s\S]*?)(?=\n## |$)/);
+  if (anchorMatch) {
+    const anchor = matchActAnchor(anchorMatch[1], actNum, blueprint);
+    if (anchor) parts.push(`### 本幕风格锚点（act ${actNum}）\n\n${anchor}`);
   }
 
   return parts.join("\n\n---\n\n");
@@ -599,7 +573,22 @@ export function buildNarrativeWeaveSummary(fullText: string): string {
  * Keeps structural sections (imagery definitions, prose overviews) intact.
  * Compresses per-chapter tables (逐章情感规划, 各章叙事技巧应用) to per-act summaries.
  */
-export function buildArtDesignSummary(fullText: string): string {
+
+/** 无 acts 时从逐章表章号推断动态 act 分组（均分，避免硬编码绝对章号）。 */
+function inferActRanges(rows: string[], segmentCount = 5): ActDefinition[] {
+  const nums = rows
+    .map((r) => Number(r.split("|").filter((c) => c.trim())[0]?.match(/\d+/)?.[0]))
+    .filter((n) => Number.isInteger(n));
+  const max = nums.length ? Math.max(...nums) : 50;
+  const perAct = Math.max(1, Math.ceil(max / segmentCount));
+  const names = ["序篇", "第一幕", "第二幕", "第三幕", "终篇"];
+  return Array.from({ length: segmentCount }, (_, i) => {
+    const chapters = Array.from({ length: perAct }, (_, j) => i * perAct + j + 1).filter((c) => c <= max);
+    return { act: i + 1, name: names[i] ?? `Act ${i + 1}`, chapters };
+  }).filter((a) => a.chapters.length > 0);
+}
+
+export function buildArtDesignSummary(fullText: string, acts?: ActDefinition[] | null): string {
   const parts: string[] = [];
 
   // Section 1: 意象体系 — keep in full (structural definitions)
@@ -624,26 +613,20 @@ export function buildArtDesignSummary(fullText: string): string {
     if (beatTableMatch) {
       const { header, separator, rows } = parseMarkdownTable(beatTableMatch[1]);
       if (rows.length > 0) {
-        // Group by act: chapters 1-3=序篇, 4-15=第一幕, 16-30=第二幕, 31-45=第三幕, 46-50=终篇
-        const actRanges = [
-          { name: "序篇", start: 1, end: 3 },
-          { name: "第一幕", start: 4, end: 15 },
-          { name: "第二幕", start: 16, end: 30 },
-          { name: "第三幕", start: 31, end: 45 },
-          { name: "终篇", start: 46, end: 50 },
-        ];
+        const actDefs = acts && acts.length > 0 ? acts : inferActRanges(rows);
         const summaryRows: string[] = [];
-        for (const act of actRanges) {
+        for (const act of actDefs) {
+          const chs = act.chapters;
           const actRows = rows.filter(r => {
             const cells = r.split("|").filter(c => c.trim());
             if (cells.length === 0) return false;
             const chMatch = cells[0].match(/\d+/);
             if (!chMatch) return false;
-            const ch = Number(chMatch[0]);
-            return ch >= act.start && ch <= act.end;
+            return chs.includes(Number(chMatch[0]));
           });
           if (actRows.length > 0) {
-            // Extract intensity values for this act
+            const min = Math.min(...chs);
+            const max = Math.max(...chs);
             const intensities = actRows.map(r => {
               const cells = r.split("|").filter(c => c.trim());
               return cells.length >= 3 ? cells[2].trim() : "?";
@@ -651,7 +634,8 @@ export function buildArtDesignSummary(fullText: string): string {
             const avgIntensity = intensities.length > 0
               ? (intensities.reduce((s, v) => s + Number(v), 0) / intensities.length).toFixed(1)
               : "—";
-            summaryRows.push(`| ${act.name}（第${act.start}-${act.end}章） | ${actRows.length}章 | 平均强度 ${avgIntensity} | — |`);
+            const name = act.name || `Act ${act.act}`;
+            summaryRows.push(`| ${name}（第${min}-${max}章） | ${actRows.length}章 | 平均强度 ${avgIntensity} | — |`);
           }
         }
         if (summaryRows.length > 0) {
@@ -692,31 +676,27 @@ export function buildArtDesignSummary(fullText: string): string {
     if (appTableMatch) {
       const { header, separator, rows } = parseMarkdownTable(appTableMatch[1]);
       if (rows.length > 0) {
-        const actRanges = [
-          { name: "序篇", start: 1, end: 3 },
-          { name: "第一幕", start: 4, end: 15 },
-          { name: "第二幕", start: 16, end: 30 },
-          { name: "第三幕", start: 31, end: 45 },
-          { name: "终篇", start: 46, end: 50 },
-        ];
+        const actDefs = acts && acts.length > 0 ? acts : inferActRanges(rows);
         const summaryRows: string[] = [];
-        for (const act of actRanges) {
+        for (const act of actDefs) {
+          const chs = act.chapters;
           const actRows = rows.filter(r => {
             const cells = r.split("|").filter(c => c.trim());
             if (cells.length === 0) return false;
             const chMatch = cells[0].match(/\d+/);
             if (!chMatch) return false;
-            const ch = Number(chMatch[0]);
-            return ch >= act.start && ch <= act.end;
+            return chs.includes(Number(chMatch[0]));
           });
           if (actRows.length > 0) {
-            // Collect unique techniques used in this act
+            const min = Math.min(...chs);
+            const max = Math.max(...chs);
             const techniques = new Set<string>();
             for (const r of actRows) {
               const cells = r.split("|").filter(c => c.trim());
               if (cells.length >= 2) techniques.add(cells[1].trim());
             }
-            summaryRows.push(`| ${act.name}（第${act.start}-${act.end}章） | ${actRows.length}章 | ${[...techniques].join("、")} |`);
+            const name = act.name || `Act ${act.act}`;
+            summaryRows.push(`| ${name}（第${min}-${max}章） | ${actRows.length}章 | ${[...techniques].join("、")} |`);
           }
         }
         if (summaryRows.length > 0) {
@@ -773,44 +753,82 @@ export function parseChapterNumber(outlinePath: string): number {
   return match ? Number(match[1]) : 1;
 }
 
+export interface ActDefinition {
+  act: number;
+  name?: string;
+  chapters: number[];
+}
+
+/**
+ * 解析 blueprint 的 `## 幕定义` 块，返回结构化 act 列表（act 解析的单一真相源）。
+ * 支持当前 architect 输出的 JSON 围栏块（``` / ~~~），兼容旧 YAML 格式
+ * （name:"幕名" chapters:[...]）。解析失败或无幕定义时返回 null。
+ */
+export function parseActDefinitions(blueprint?: string): ActDefinition[] | null {
+  if (!blueprint) return null;
+  const section = blueprint.split(/## 幕定义/)[1] ?? "";
+  // 优先：JSON 围栏块
+  const fence =
+    section.match(/```(?:json)?\s*([\s\S]*?)```/) ?? section.match(/~~~(?:json)?\s*([\s\S]*?)~~~/);
+  if (fence) {
+    try {
+      const acts = JSON.parse(fence[1].trim()) as Array<{ act: number; name?: string; chapters?: number[] }>;
+      const parsed = acts
+        .filter((a) => Array.isArray(a.chapters) && a.chapters.length > 0)
+        .map((a) => ({
+          act: Number(a.act),
+          name: a.name,
+          chapters: a.chapters!.map((c) => Number(c)),
+        }));
+      if (parsed.length > 0) return parsed;
+    } catch {
+      // JSON 解析失败，回退旧格式
+    }
+  }
+  // 兼容旧格式：name:"幕名" chapters:[...]
+  const actMatches = section.match(/name:\s*"[^"]+"\s*\n\s*chapters:\s*\[([^\]]+)\]/g);
+  if (actMatches) {
+    const result: ActDefinition[] = [];
+    let actNum = 1;
+    for (const m of actMatches) {
+      const nameMatch = m.match(/name:\s*"([^"]+)"/);
+      const nums = m.match(/\d+/g);
+      if (nums) {
+        result.push({
+          act: actNum,
+          name: nameMatch?.[1],
+          chapters: nums.map((n) => Number(n)),
+        });
+      }
+      actNum++;
+    }
+    if (result.length > 0) return result;
+  }
+  return null;
+}
+
+/**
+ * 无 blueprint 幕定义时的兜底：基于总章数做相对分段，不再写死绝对章号。
+ * 返回 1-based act 编号（与 blueprint 的 act 编号对齐），避免长篇失效；
+ * totalChapters 缺失时按 50 章估算。
+ */
+export function defaultActForChapter(chapterNumber: number, totalChapters?: number): number {
+  const total = totalChapters && totalChapters > 0 ? totalChapters : 50;
+  const segments = 5;
+  const perAct = Math.max(1, Math.ceil(total / segments));
+  const act = Math.floor((chapterNumber - 1) / perAct) + 1;
+  return Math.min(act, segments);
+}
+
 /**
  * Determine act number from chapter number using blueprint or default mapping.
  */
 export function chapterToAct(chapterNumber: number, blueprint?: string): number {
-  if (blueprint) {
-    // 优先：解析 ## 幕定义 后的 JSON 幕块（architect 输出的结构化「幕→章节」映射）
-    const section = blueprint.split(/## 幕定义/)[1] ?? "";
-    const fence =
-      section.match(/```(?:json)?\s*([\s\S]*?)```/) ?? section.match(/~~~(?:json)?\s*([\s\S]*?)~~~/);
-    if (fence) {
-      try {
-        const acts = JSON.parse(fence[1].trim()) as Array<{ act: number; chapters?: number[] }>;
-        for (const a of acts) {
-          if (Array.isArray(a.chapters) && a.chapters.includes(chapterNumber)) {
-            return Number(a.act);
-          }
-        }
-      } catch {
-        // JSON 解析失败，回退到旧格式 / 兜底
-      }
-    }
-    // 兼容旧格式：name:"幕名" chapters:[...]
-    const actMatches = blueprint.match(/name:\s*"[^"]+"\s*\n\s*chapters:\s*\[([^\]]+)\]/g);
-    if (actMatches) {
-      let actNum = 1;
-      for (const match of actMatches) {
-        const nums = match.match(/\d+/g);
-        if (nums && nums.some((n) => Number(n) === chapterNumber)) {
-          return actNum;
-        }
-        actNum++;
-      }
+  const acts = parseActDefinitions(blueprint);
+  if (acts) {
+    for (const a of acts) {
+      if (a.chapters.includes(chapterNumber)) return a.act;
     }
   }
-  // 兜底（blueprint 无幕定义时）：序篇 / 三幕 / 终篇
-  if (chapterNumber <= 3) return 0;
-  if (chapterNumber <= 15) return 1;
-  if (chapterNumber <= 30) return 2;
-  if (chapterNumber <= 45) return 3;
-  return 4;
+  return defaultActForChapter(chapterNumber);
 }

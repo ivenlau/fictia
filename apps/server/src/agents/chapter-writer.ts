@@ -114,7 +114,7 @@ ${options.userDirective}
 
       const narrativeWeaveExcerpt = extractChapterNarrativeWeave(narrativeWeave, chapterNumber);
       const artDesignExcerpt = extractChapterArtDesign(artDesign, chapterNumber);
-      const styleStageNotes = extractStyleStageNotes(styleGuide, actNumber);
+      const styleStageNotes = extractStyleStageNotes(styleGuide, actNumber, blueprint || undefined);
 
       const characterRegistry = await this.loadCharacterRegistry();
 

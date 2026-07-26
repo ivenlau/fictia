@@ -20,7 +20,7 @@ import type {
   ForeshadowStats,
 } from "@fictia/shared";
 import { fileService } from "./file.service.js";
-import { readSummariesBefore } from "./chapter-summary-store.js";
+import { readSummariesBefore, readAllSummaries } from "./chapter-summary-store.js";
 import { listFiles, readFileSafe } from "../utils/file.js";
 import {
   buildCharacterRegistry,
@@ -316,9 +316,10 @@ export async function assembleWritingSpace(
   if (outline) parts.push(`## 章节大纲（ch${num}）\n\n${outline}`);
 
   const styleGuide = await readFileSafe(path.join(novelDir, "design/style-guide.md"));
+  const blueprint = await readFileSafe(path.join(novelDir, "design/blueprint.md"));
   if (styleGuide) {
-    const act = chapterToAct(chapterNumber);
-    const notes = extractStyleStageNotes(styleGuide, act);
+    const act = chapterToAct(chapterNumber, blueprint ?? undefined);
+    const notes = extractStyleStageNotes(styleGuide, act, blueprint ?? undefined);
     if (notes) parts.push(`## 风格要点（act ${act}）\n\n${notes}`);
   }
 
@@ -497,7 +498,7 @@ export function assembleDynamicContext(
   if (summaries.length) {
     parts.push(
       `## 前文摘要链（每章压缩，跨章骨架）\n${summaries
-        .map((s) => `[${s.number}] ${s.summary}`)
+        .map((s) => (s.omitted ? s.summary : `[${s.number}] ${s.summary}`))
         .join("\n")}`,
     );
   }
@@ -528,6 +529,44 @@ export function assembleDynamicContext(
         )
         .join("\n")}`,
     );
+  }
+
+  return parts.join("\n\n");
+}
+
+/**
+ * 组装"实际写作进度"（已写章节摘要 + 角色当前状态 + 伏笔全局进度），供 story-designer 重设计/增量时注入。
+ * 书级视角（区别于 assembleDynamicContext 的章级）：摘要走滑窗、伏笔用全局统计。
+ * 无已写章节时返回空串（首次设计不注入）。
+ */
+export function assembleDesignProgressContext(novelId: string): string {
+  const parts: string[] = [];
+
+  const all = readAllSummaries(novelId);
+  const nums = Object.keys(all).map(Number).filter((n) => Number.isInteger(n) && n >= 1);
+  if (nums.length === 0) return "";
+  const lastWritten = Math.max(...nums);
+  parts.push(`已写 ${nums.length} 章（截至第 ${lastWritten} 章）`);
+
+  const summaries = readSummariesBefore(novelId, lastWritten + 1);
+  if (summaries.length) {
+    parts.push(`## 已写章节摘要链（实际进度，长篇自动滑窗）\n${summaries
+      .map((s) => (s.omitted ? s.summary : `[${s.number}] ${s.summary}`))
+      .join("\n")}`);
+  }
+
+  const charEntities = listEntities(novelId, "characters");
+  const withState = charEntities.filter((e) => e.state && e.state !== "active");
+  if (withState.length) {
+    parts.push(`## 角色当前状态（动态）\n${withState
+      .map((e) => `- **${e.name}**：${e.state}`).join("\n")}`);
+  }
+
+  const stats = foreshadowStats(novelId);
+  if (stats.total > 0) {
+    parts.push(`## 伏笔全局进度\n闭合率 ${(stats.closureRate * 100).toFixed(0)}%（${stats.resolved}/${stats.total}）；planted ${stats.planted} / strengthened ${stats.strengthened} / resolved ${stats.resolved} / suspended ${stats.suspended}\n\n**未决伏笔**：\n${stats.open
+      .map((f) => `- [${f.id}] ${f.name}（${f.state}）${f.desc ? "：" + f.desc : ""}`)
+      .join("\n") || "（无）"}`);
   }
 
   return parts.join("\n\n");

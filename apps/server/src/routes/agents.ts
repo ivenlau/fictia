@@ -12,22 +12,7 @@ const router = Router();
 const now = () => new Date().toISOString();
 
 function buildNovelContext(novel: any): string {
-  const tags = Array.isArray(novel.tags)
-    ? novel.tags.join("、")
-    : typeof novel.tags === "string"
-      ? (() => {
-          try {
-            return JSON.parse(novel.tags).join("、");
-          } catch {
-            return novel.tags;
-          }
-        })()
-      : "";
-  return `小说标题：${novel.title}
-题材类型：${novel.genre}
-小说简介：${novel.description || "暂无"}
-目标章节数：${novel.targetChapters}
-标签：${tags || "无"}`;
+  return novelService.buildMetaContext(novel);
 }
 
 async function executeAgent(
@@ -61,7 +46,7 @@ async function executeAgent(
 
     const novelDir = fileService.getNovelDir(novelId);
 
-    const result = await runAgent(agentType, novelDir, undefined, agentModelsRaw);
+    const result = await runAgent(agentType, novelDir, { extraContext: buildNovelContext(novel) }, agentModelsRaw);
 
     // Save result to workspace file
     const workspacePath = AGENT_FILE_MAP[agentType];

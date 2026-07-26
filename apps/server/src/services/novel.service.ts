@@ -25,6 +25,32 @@ export const novelService = {
     return parseNovel(row);
   },
 
+  /** 构造注入 agent prompt 的小说元信息上下文（标题/题材/简介/目标章节数/标签）。 */
+  buildMetaContext(novel: {
+    title: string;
+    genre: string;
+    description?: string;
+    targetChapters: number;
+    tags?: string[] | string;
+  }): string {
+    const tags = Array.isArray(novel.tags)
+      ? novel.tags.join("、")
+      : typeof novel.tags === "string"
+        ? (() => {
+            try {
+              return JSON.parse(novel.tags as string).join("、");
+            } catch {
+              return novel.tags as string;
+            }
+          })()
+        : "";
+    return `小说标题：${novel.title}
+题材类型：${novel.genre}
+小说简介：${novel.description || "暂无"}
+目标章节数：${novel.targetChapters}
+标签：${tags || "无"}`;
+  },
+
   /** 读取 meta.json（体裁卡选择 genreCard 等运行时配置的真相源；DB 不存这些）。 */
   async getMeta(id: string): Promise<Record<string, any> | null> {
     if (!this.getById(id)) return null;

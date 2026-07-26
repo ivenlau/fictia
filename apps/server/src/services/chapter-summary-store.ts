@@ -33,16 +33,72 @@ export function readAllSummaries(novelId: string): Record<string, string> {
   return {};
 }
 
-/** number < chapterNumber 的摘要，按章序返回（供摘要链注入）。 */
+export interface SummaryEntry {
+  number: number;
+  summary: string;
+  /** 滑窗省略标记（非真实章摘要，仅作占位提示）。 */
+  omitted?: boolean;
+}
+
+/** 字符上限兜底：总字符超 maxChars 时从最早开始丢，至少保留最后一条。 */
+function capSummaryChars(entries: SummaryEntry[], maxChars: number): SummaryEntry[] {
+  let total = entries.reduce((s, e) => s + e.summary.length, 0);
+  if (total <= maxChars) return entries;
+  const result = [...entries];
+  while (result.length > 1 && total > maxChars) {
+    total -= result[0].summary.length;
+    result.shift();
+  }
+  return result;
+}
+
+/** 相邻条目章号跳跃 > 1 处插入省略标记（供滑窗后补全中间省略提示）。 */
+function withOmissionMarkers(entries: SummaryEntry[]): SummaryEntry[] {
+  const result: SummaryEntry[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    result.push(entries[i]);
+    const next = entries[i + 1];
+    if (next && !next.omitted && next.number - entries[i].number > 1) {
+      const from = entries[i].number + 1;
+      const to = next.number - 1;
+      const count = to - from + 1;
+      result.push({
+        number: -1,
+        summary: `—— 中间省略第 ${from}-${to} 章（共 ${count} 章）；可用 get_chapter_summary 查单章详情 ——`,
+        omitted: true,
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * number < chapterNumber 的摘要，按章序返回（供摘要链注入）。
+ * 长篇滑窗：超 maxRecent 章时保留第 1 章 + 最近 maxRecent 章，中间用 omitted 标记占位；
+ * 并对总字符做 maxChars 兜底（超限从最早丢，保最近）。短篇（≤maxRecent 章）全量返回，行为不变。
+ */
 export function readSummariesBefore(
   novelId: string,
   chapterNumber: number,
-): { number: number; summary: string }[] {
+  opts?: { maxRecent?: number; maxChars?: number },
+): SummaryEntry[] {
+  const maxRecent = opts?.maxRecent ?? 20;
+  const maxChars = opts?.maxChars ?? 15000;
   const all = readAllSummaries(novelId);
-  return Object.entries(all)
+  const full = Object.entries(all)
     .map(([k, summary]) => ({ number: Number(k), summary }))
     .filter((s) => Number.isInteger(s.number) && s.number < chapterNumber && s.number >= 1)
     .sort((a, b) => a.number - b.number);
+
+  if (full.length === 0) return [];
+  // 短篇或未超阈值：全量（仅做字符上限兜底）
+  if (full.length <= maxRecent) return capSummaryChars(full, maxChars);
+
+  // 长篇滑窗：第 1 章 + 最近 maxRecent 章，字符兜底后补省略标记
+  const recent = full.slice(-maxRecent);
+  const first = full[0];
+  const kept = capSummaryChars([first, ...recent], maxChars);
+  return withOmissionMarkers(kept);
 }
 
 /** 读取单章摘要；不存在则 null。 */

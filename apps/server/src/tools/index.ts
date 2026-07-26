@@ -74,7 +74,7 @@ const ORCHESTRATION_TOOLS = ["find_next_chapter", "run_writing_loop", "run_pipel
 // 设计类（genre/architect/style/art）: 文件 + 素材库（查体裁卡/技法）
 // narrative-weaver: + 叙事状态（伏笔规划时查现有伏笔）
 // world/character-designer: + 语义检索 + 实体（设计时召回相关已有设定）
-// story-designer: full + 语义 + 实体
+// story-designer: full + 语义 + 实体 + 叙事状态（重设计时查实际进度）
 // chapter-writer: full + 叙事状态 + 实体（写章时主动查伏笔/前文/角色态）
 // editor: + 状态手动推进（修正伏笔/角色状态）
 // consistency-checker: 文件 + 叙事状态 + 实体 + 语义 + 伏笔修正 + 实体重建
@@ -86,7 +86,7 @@ const AGENT_TOOL_MAP: Record<AgentType, string[]> = {
   "narrative-weaver": [...FILE_TOOLS, ...MATERIAL_TOOLS, ...NARRATIVE_TOOLS],
   "world-builder": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "character-designer": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
-  "story-designer": [...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
+  "story-designer": [...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],
   "chapter-writer": [...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS],
   editor: [...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS, ...STATE_WRITE_TOOLS],
   "consistency-checker": [

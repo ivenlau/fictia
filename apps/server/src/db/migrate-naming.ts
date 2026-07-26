@@ -23,6 +23,7 @@ import fs from "fs/promises";
 import path from "path";
 import yaml from "js-yaml";
 import { chapterPath, characterPath } from "@fictia/shared";
+import { parseActDefinitions, defaultActForChapter } from "../utils/context-extractor.js";
 
 const DATA_ROOT = path.join(process.cwd(), "fictia-data", "novels");
 const APPLY = process.argv.includes("--apply");
@@ -75,27 +76,20 @@ function outlineTitle(content: string): string | undefined {
   return h1Title(content) ?? undefined;
 }
 
-/** blueprint 幕定义 → 章节号到 act 映射。 */
+/** blueprint 幕定义 → 章节号到 act 映射（复用 parseActDefinitions，识别 JSON 与旧 YAML）。 */
 function blueprintActMap(blueprint: string): Map<number, number> {
   const map = new Map<number, number>();
-  const actMatches = blueprint.match(/name:\s*"[^"]+"\s*\n\s*chapters:\s*\[([^\]]+)\]/g);
-  if (actMatches) {
-    let act = 1;
-    for (const m of actMatches) {
-      const nums = m.match(/\d+/g);
-      if (nums) for (const n of nums) map.set(Number(n), act);
-      act++;
+  const acts = parseActDefinitions(blueprint);
+  if (acts) {
+    for (const a of acts) {
+      for (const c of a.chapters) map.set(c, a.act);
     }
   }
   return map;
 }
 
 function defaultAct(num: number): number {
-  if (num <= 3) return 0;
-  if (num <= 15) return 1;
-  if (num <= 30) return 2;
-  if (num <= 45) return 3;
-  return 4;
+  return defaultActForChapter(num);
 }
 
 function actFor(actMap: Map<number, number>, num: number): number {

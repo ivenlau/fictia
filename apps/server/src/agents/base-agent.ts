@@ -16,6 +16,7 @@ export interface AgentRunResult {
   filesWritten: string[];
   success: boolean;
   error?: string;
+  warnings?: string[];
 }
 
 export interface AgentRunOptions {

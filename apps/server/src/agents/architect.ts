@@ -58,16 +58,17 @@ ${options.userDirective}
 ### 题材分析
 ${genreAnalysis}
 
-请读取 project.yaml 了解目标字数和卷数，然后设计完整的小说架构：
+请根据上方「小说元信息」中的目标章节数，参考系统提示里的「幕数规划建议」决定 act 数量与每幕章节分配，然后设计完整的小说架构：
 1. 选择叙事结构（三幕式/英雄之旅/起承转合等）
-2. 设计各幕的章节分配和目标字数
+2. 设计各幕的章节分配和目标字数（act 数随目标章节数动态决定）
 3. 规划关键情节点
 4. 设计节奏策略（高潮、低谷、喘息）
 
 请输出完整的架构蓝图（Markdown 格式），必须包含 \`## 幕定义\` JSON 块（每幕的 act 编号 + chapters 章节号列表，所有章节须覆盖且不重叠）。`;
     }
 
-    const output = await this.runLLM(input, systemPrompt);
+    const fullInput = options?.extraContext ? `${options.extraContext}\n\n---\n\n${input}` : input;
+    const output = await this.runLLM(fullInput, systemPrompt);
 
     return {
       output,

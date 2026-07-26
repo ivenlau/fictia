@@ -62,7 +62,7 @@ ${history.map((h) => `- 第${h.ch}章 ${h.op} -> ${h.state}${h.note ? " | " + h.
       label: "前文摘要链",
       tier: "readonly",
       description:
-        "获取指定章节之前的所有章级压缩摘要（跨章骨架）。写章/审核时治长篇失忆，避免只看前一章正文。",
+        "获取指定章节之前的章级压缩摘要（跨章骨架，长篇自动滑窗：保留最近20章+第1章，中间省略）。写章/审核时治长篇失忆，避免只看前一章正文。",
       parameters: Type.Object({
         chapter_number: Type.Number({ description: "目标章节号；返回该章之前（不含）的所有摘要" }),
       }),
@@ -71,10 +71,11 @@ ${history.map((h) => `- 第${h.ch}章 ${h.op} -> ${h.state}${h.note ? " | " + h.
         if (summaries.length === 0) {
           return { content: [{ type: "text", text: `第${chapter_number}章之前暂无摘要` }], details: { count: 0 } };
         }
-        const text = `前文摘要链（第${chapter_number}章之前，共${summaries.length}章）:\n\n${summaries
-          .map((s) => `## 第${s.number}章\n${s.summary}`)
+        const realCount = summaries.filter((s) => !s.omitted).length;
+        const text = `前文摘要链（第${chapter_number}章之前，共${realCount}章摘要）:\n\n${summaries
+          .map((s) => (s.omitted ? s.summary : `## 第${s.number}章\n${s.summary}`))
           .join("\n\n")}`;
-        return { content: [{ type: "text", text }], details: { count: summaries.length } };
+        return { content: [{ type: "text", text }], details: { count: realCount } };
       },
     },
     {
