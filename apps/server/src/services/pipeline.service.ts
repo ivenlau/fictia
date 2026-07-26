@@ -66,10 +66,19 @@ export async function writeAgentOutput(
     return;
   }
 
-  if (result.filesWritten.length === 1) {
-    const fullPath = path.join(novelDir, result.filesWritten[0]);
+  // 单文件直写：仅当唯一声明是具体文件（非 glob）时。
+  // glob 模式（如 characters/*.md、outline/*.md）表示「写了一类文件」，具体文件
+  // 应由上面的 ===FILE: 分隔符或 write_project_file 工具落地；把整段 output 写到
+  // 字面含 * 的文件名是非法的（Windows 上 fs.writeFile 直接 ENOENT）。
+  const single = result.filesWritten[0];
+  if (single && !single.includes("*")) {
+    const fullPath = path.join(novelDir, single);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, result.output, "utf-8");
+  } else if (result.output.trim()) {
+    console.warn(
+      `[Pipeline] 阶段产物未落盘：filesWritten=${JSON.stringify(result.filesWritten)} 且 output 未使用 ===FILE: 分隔符（可能 LLM 输出格式不符，建议重跑该阶段）`,
+    );
   }
 }
 
