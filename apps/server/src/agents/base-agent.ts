@@ -278,32 +278,45 @@ export abstract class BaseAgent {
     });
     const startTime = Date.now();
     const novelId = path.basename(this.novelDir);
+    const traceFile = this.traceFilename;
 
-    const { text, trace } = await runAgentSession({
-      model: this.model,
-      apiKey: this.apiKey,
-      systemPrompt: resolvedSystemPrompt,
-      messages: [{ role: "user", content: userMessage, timestamp: Date.now() }],
-      tools,
-      agentType: this.agentType,
-      modelLabel: this.modelId,
-      providerLabel: this.providerId,
-      maxIterations: this.maxToolIterations,
-      onToolCall: (name, input) => console.log(`[${this.agentName}] Tool call: ${name}`, input),
-      onToolResult: (name, _input, result) =>
-        console.log(`[${this.agentName}] Tool result: ${result.substring(0, 100)}...`),
-      // agent 自行把 trace 增量写入文件（若调用方提供了 traceFilename），供调试视图实时读取
-      onTraceUpdate: this.traceFilename
-        ? (t) => {
-            this.lastTrace = t;
-            fileService.writeAgentTrace(novelId, this.traceFilename!, t).catch((e) =>
+    // 串行化 trace 落盘：onTraceUpdate 在每个工具/轮次结束时高频触发，若并发
+    // fs.writeFile 同一文件会导致 JSON 损坏（多次 truncate+写交错）。用 promise
+    // 链保证一次只写一个；finally 里 await 确保返回前（含抛错路径）写盘全部落定。
+    let writeChain: Promise<void> = Promise.resolve();
+    const onTraceUpdate = traceFile
+      ? (t: AgentRunTrace) => {
+          this.lastTrace = t;
+          writeChain = writeChain.then(() =>
+            fileService.writeAgentTrace(novelId, traceFile, t).catch((e) =>
               console.error(`[${this.agentName}] trace write failed`, e),
-            );
-          }
-        : undefined,
-    });
+            ),
+          );
+        }
+      : undefined;
 
-    this.lastTrace = trace;
+    let text = "";
+    try {
+      const res = await runAgentSession({
+        model: this.model,
+        apiKey: this.apiKey,
+        systemPrompt: resolvedSystemPrompt,
+        messages: [{ role: "user", content: userMessage, timestamp: Date.now() }],
+        tools,
+        agentType: this.agentType,
+        modelLabel: this.modelId,
+        providerLabel: this.providerId,
+        maxIterations: this.maxToolIterations,
+        onToolCall: (name, input) => console.log(`[${this.agentName}] Tool call: ${name}`, input),
+        onToolResult: (name, _input, result) =>
+          console.log(`[${this.agentName}] Tool result: ${result.substring(0, 100)}...`),
+        onTraceUpdate,
+      });
+      text = res.text;
+      this.lastTrace = res.trace;
+    } finally {
+      await writeChain;
+    }
 
     console.log(`[${this.agentName}] LLM completed`, {
       elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
