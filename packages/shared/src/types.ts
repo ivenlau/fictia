@@ -88,6 +88,62 @@ export interface AgentOutput {
   cost: number;
   createdAt: string;
   completedAt: string | null;
+  /** 调试 trace 文件名（<type>-<ts>.trace.json）；存量/无 trace 时为空串。 */
+  traceFilename: string;
+  /** 总轮次（assistant turn 数）。 */
+  turnCount: number;
+  /** 总工具调用次数。 */
+  toolCallCount: number;
+}
+
+// ===== Agent 运行调试 Trace =====
+// 一次 agent 运行的结构化诊断记录：提示词 + 分轮 + 工具调用 + 汇总。
+// 由 agent-runner 在循环中增量构建，executeAgent 增量写入 <type>-<ts>.trace.json。
+
+/** 单次工具调用的诊断信息。 */
+export interface AgentToolCallTrace {
+  name: string;
+  /** 工具入参（原始对象）。 */
+  input: unknown;
+  /** 提取后的工具结果文本。 */
+  result: string;
+  isError: boolean;
+  /** 执行耗时（ms），无法计量时为 null。 */
+  durationMs: number | null;
+}
+
+/** 一个 assistant 轮次的诊断信息。 */
+export interface AgentRoundTrace {
+  /** 0-based 轮次序号。 */
+  index: number;
+  /** 该轮累计的 assistant 文本（text delta 拼接）。 */
+  assistantText: string;
+  /** 该轮发起的工具调用（按完成顺序）。 */
+  toolCalls: AgentToolCallTrace[];
+}
+
+/** 一次完整 agent 运行的诊断 trace。 */
+export interface AgentRunTrace {
+  version: 1;
+  /** agent 类型（AgentType 之一；聊天助手为 "chat"）。 */
+  agentType: string;
+  modelUsed: string;
+  providerUsed: string;
+  /** 系统提示词（含注入段：偏好/知识/对标/风格锚定）。 */
+  systemPrompt: string;
+  /** 初始 user message 文本。 */
+  userPrompt: string;
+  /** 运行开始时间（ISO）。 */
+  startedAt: string;
+  /** 运行结束时间（ISO），进行中为 null。 */
+  completedAt: string | null;
+  /** 总轮次 = rounds.length。 */
+  totalRounds: number;
+  rounds: AgentRoundTrace[];
+  /** 写类工具触及的文件/章节标识。 */
+  filesWritten: string[];
+  /** 失败原因（仅失败时有）。 */
+  errorMessage?: string;
 }
 
 export interface ReviewFeedback {

@@ -24,6 +24,12 @@ import type {
   AfterToolCallContext,
 } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, Message, Model, TextContent } from "@earendil-works/pi-ai";
+import type {
+  AgentType,
+  AgentRunTrace,
+  AgentRoundTrace,
+  AgentToolCallTrace,
+} from "@fictia/shared";
 import type { FictiaTool } from "../tools/types.js";
 
 export interface AgentRunnerOptions {
@@ -33,6 +39,12 @@ export interface AgentRunnerOptions {
   /** 初始消息（通常一条 user；chat 场景含 history + 当前 user）。 */
   messages: Message[];
   tools: FictiaTool[] | undefined;
+  /** agent 类型（写入 trace）。 */
+  agentType: AgentType | string;
+  /** 模型 id（写入 trace modelUsed）。 */
+  modelLabel?: string;
+  /** provider id（写入 trace providerUsed）。 */
+  providerLabel?: string;
   /** 最大工具迭代轮数（assistant turn 数）。默认 20。0 表示不限制。 */
   maxIterations?: number;
   /** 工具确认回调（manualConfirm 开启时由 chat route 提供）。返回 true 批准、false 拒绝。仅对 write/orchestrate tier 工具调用。 */
@@ -44,6 +56,8 @@ export interface AgentRunnerOptions {
   onToolCall?: (name: string, input: unknown) => void;
   /** 工具执行结束回调。result 为提取后的文本。 */
   onToolResult?: (name: string, input: unknown, result: string, isError: boolean) => void;
+  /** 调试 trace 增量回调：循环开始、每次工具结束、每轮结束、运行结束时触发。 */
+  onTraceUpdate?: (trace: AgentRunTrace) => void;
 }
 
 export interface AgentRunnerToolCall {
@@ -59,6 +73,8 @@ export interface AgentRunnerResult {
   /** 写类工具触及的文件/章节标识（path 或章节号字符串）。 */
   filesWritten: string[];
   toolCalls: AgentRunnerToolCall[];
+  /** 本次运行的调试 trace（完整）。 */
+  trace: AgentRunTrace;
 }
 
 /** 会产生文件副作用的工具。filesWritten 收集它们的入参标识。 */
@@ -88,6 +104,32 @@ function collectAssistantText(
   return { text, errorMessage };
 }
 
+/** 提取初始 user 消息文本（拼接到 trace.userPrompt）。 */
+function extractInitialUserText(messages: Message[]): string {
+  const parts: string[] = [];
+  for (const m of messages) {
+    if (m.role !== "user") continue;
+    const c = (m as { content: unknown }).content;
+    if (typeof c === "string") parts.push(c);
+    else if (Array.isArray(c)) parts.push(extractText(c as { type: string; text?: string }[]));
+  }
+  return parts.join("\n\n");
+}
+
+/** 从工具执行结果（任意形状）提取可读文本。 */
+function extractToolResultText(result: unknown): string {
+  if (result == null) return "";
+  if (typeof result === "string") return result;
+  const r = result as { content?: unknown; text?: unknown };
+  if (Array.isArray(r.content)) return extractText(r.content as { type: string; text?: string }[]);
+  if (typeof r.text === "string") return r.text;
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
+}
+
 /**
  * 运行一个 agent 会话：跑到模型不再调用工具（或触达 maxIterations）为止。
  * 抛出异常表示 LLM 错误或空输出（与原 runLLM 行为一致）。
@@ -97,6 +139,34 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
   const filesWritten: string[] = [];
   const toolCalls: AgentRunnerToolCall[] = [];
   let turnCount = 0;
+
+  // ===== 调试 trace 增量状态 =====
+  const startedAt = new Date().toISOString();
+  const rounds: AgentRoundTrace[] = [];
+  let currentRound: AgentRoundTrace = { index: 0, assistantText: "", toolCalls: [] };
+  /** toolCallId → { entry, startedAtMs }：配对 start/end 计算耗时。顺序执行至多一个在途。 */
+  const pendingTools = new Map<string, { entry: AgentToolCallTrace; startedAtMs: number }>();
+  const userPrompt = extractInitialUserText(opts.messages);
+
+  const buildTrace = (completedAt: string | null, errorMessage?: string): AgentRunTrace => {
+    const openRound =
+      currentRound.assistantText || currentRound.toolCalls.length ? [currentRound] : [];
+    return {
+      version: 1,
+      agentType: opts.agentType,
+      modelUsed: opts.modelLabel ?? "",
+      providerUsed: opts.providerLabel ?? "",
+      systemPrompt: opts.systemPrompt,
+      userPrompt,
+      startedAt,
+      completedAt,
+      totalRounds: rounds.length + openRound.length,
+      rounds: [...rounds, ...openRound],
+      filesWritten: [...filesWritten],
+      errorMessage,
+    };
+  };
+  const emitTrace = () => opts.onTraceUpdate?.(buildTrace(null));
 
   const convertToLlm = (msgs: AgentMessage[]): Message[] =>
     msgs.filter(
@@ -153,14 +223,51 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
     switch (event.type) {
       case "message_update": {
         const e = event.assistantMessageEvent;
-        if (e.type === "text_delta" && e.delta) opts.onDelta?.(e.delta);
+        if (e.type === "text_delta" && e.delta) {
+          opts.onDelta?.(e.delta);
+          currentRound.assistantText += e.delta;
+        }
         break;
       }
-      case "tool_execution_start":
+      case "tool_execution_start": {
         opts.onToolCall?.(event.toolName, event.args);
+        const entry: AgentToolCallTrace = {
+          name: event.toolName,
+          input: event.args,
+          result: "",
+          isError: false,
+          durationMs: null,
+        };
+        currentRound.toolCalls.push(entry);
+        pendingTools.set(event.toolCallId, { entry, startedAtMs: Date.now() });
+        emitTrace();
         break;
+      }
+      case "tool_execution_end": {
+        const pending = pendingTools.get(event.toolCallId);
+        if (pending) {
+          pending.entry.result = extractToolResultText(event.result);
+          pending.entry.isError = !!event.isError;
+          pending.entry.durationMs = Date.now() - pending.startedAtMs;
+          pendingTools.delete(event.toolCallId);
+        }
+        emitTrace();
+        break;
+      }
+      case "turn_end": {
+        // 关闭当前轮（有内容才入栈），开启新轮
+        if (currentRound.assistantText || currentRound.toolCalls.length) {
+          rounds.push(currentRound);
+        }
+        currentRound = { index: rounds.length, assistantText: "", toolCalls: [] };
+        emitTrace();
+        break;
+      }
     }
   };
+
+  // 运行开始即下发一次（UI 可立即看到提示词/概览）
+  emitTrace();
 
   const finalMessages = await runAgentLoop(
     opts.messages as AgentMessage[],
@@ -170,11 +277,17 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
     opts.signal,
   );
 
+  const completedAt = new Date().toISOString();
   const { text, errorMessage } = collectAssistantText(finalMessages);
+  const finalTrace = buildTrace(completedAt, errorMessage);
+
   if (!text) {
+    // 仍下发最终 trace（含 errorMessage），便于诊断空输出/失败
+    opts.onTraceUpdate?.(finalTrace);
     if (errorMessage) throw new Error(`LLM error: ${errorMessage}`);
     throw new Error("Agent returned empty content");
   }
 
-  return { text, filesWritten, toolCalls };
+  opts.onTraceUpdate?.(finalTrace);
+  return { text, filesWritten, toolCalls, trace: finalTrace };
 }

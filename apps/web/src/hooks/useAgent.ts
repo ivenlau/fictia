@@ -50,3 +50,25 @@ export function useAgentStatus(outputId: string | undefined) {
     },
   });
 }
+
+/** 删除单条任务记录（DB row + 输出/trace 文件）。 */
+export function useDeleteAgentOutput(novelId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (outputId: string) => agentsApi.deleteOutput(outputId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-outputs", novelId] });
+    },
+  });
+}
+
+/** 清空当前小说全部任务记录。 */
+export function useClearAgentOutputs(novelId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => agentsApi.clearOutputs(novelId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-outputs", novelId] });
+    },
+  });
+}

@@ -131,5 +131,17 @@ sqlite.exec(`
   );
 `);
 
+// 轻量增量迁移：为 agent_outputs 追加调试 trace 相关列。
+// SQLite 对已存在列 ADD COLUMN 会抛错，逐条 try/catch 守卫，保证存量库平滑升级。
+const addColumnIfMissing = (table: string, column: string, def: string) => {
+  const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def};`);
+  }
+};
+addColumnIfMissing("agent_outputs", "trace_filename", "TEXT DEFAULT ''");
+addColumnIfMissing("agent_outputs", "turn_count", "INTEGER DEFAULT 0");
+addColumnIfMissing("agent_outputs", "tool_call_count", "INTEGER DEFAULT 0");
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

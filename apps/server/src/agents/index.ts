@@ -55,9 +55,11 @@ export function createAgent(
     throw new Error(`Unknown agent type: ${agentType}`);
   }
 
-  const { model, apiKey } = getModelForAgent(agentType, agentModels);
-
-  return new AgentClass(novelDir, model, apiKey);
+  const { model, apiKey, modelId, providerId } = getModelForAgent(agentType, agentModels);
+  const agent = new AgentClass(novelDir, model, apiKey);
+  agent.modelId = modelId;
+  agent.providerId = providerId;
+  return agent;
 }
 
 /**
@@ -70,6 +72,8 @@ export async function runAgent(
   agentModels?: AgentModels,
 ): Promise<AgentRunResult> {
   const agent = createAgent(agentType, novelDir, agentModels);
+  // 注入调试 trace sink（由 executeAgent 提供；rewrite 等不传则为空，不写 trace）
+  if (options?.traceSink) agent.traceSink = options.traceSink;
   return agent.run(options);
 }
 

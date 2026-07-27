@@ -11,7 +11,7 @@ interface UIState {
   showSettings: boolean;
   settingsInitialTab: SettingsTab;
   showNewNovel: boolean;
-  activePanel: "explorer" | "search" | "graph" | "agent" | "knowledge" | "material";
+  activePanel: "explorer" | "search" | "debug" | "agent" | "knowledge" | "material";
   explorerVisible: boolean;
   explorerWidth: number;
   setShowSettings: (v: boolean) => void;

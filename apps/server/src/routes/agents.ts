@@ -6,7 +6,7 @@ import { novelService } from "../services/novel.service.js";
 import { fileService } from "../services/file.service.js";
 import { runAgent } from "../agents/index.js";
 import { AGENT_FILE_MAP } from "@fictia/shared";
-import type { AgentType } from "@fictia/shared";
+import type { AgentType, AgentRunTrace } from "@fictia/shared";
 
 const router = Router();
 const now = () => new Date().toISOString();
@@ -22,11 +22,29 @@ async function executeAgent(
   chapterId: string | null,
   persona?: string,
 ) {
-  // Mark as running when actually starting
+  // 单一时间戳：content(.md) 与 trace(.trace.json) 共用前缀，便于配对与清理
+  const ts = Date.now();
+  const traceFilename = `${agentType}-${ts}.trace.json`;
+  const contentFilename = `${agentType}-${ts}.md`;
+
+  // 立即置 running 并记录 traceFilename，让 SSE 能尽早下发 trace
   db.update(schema.agentOutputs)
-    .set({ status: "running" })
+    .set({ status: "running", traceFilename })
     .where(eq(schema.agentOutputs.id, outputId))
     .run();
+
+  // trace 增量收集：sink 每次被调用都覆写 trace 文件；holder.trace 保留最新（含结束态）。
+  // 用 holder 对象而非裸 let：避免 TS 控制流把闭包赋值的变量窄化为 never。
+  const traceHolder: { trace: AgentRunTrace | null } = { trace: null };
+  const traceSink = (trace: AgentRunTrace) => {
+    traceHolder.trace = trace;
+    fileService.writeAgentTrace(novelId, traceFilename, trace).catch((e) =>
+      console.error(`[trace:${outputId}] write failed`, e),
+    );
+  };
+
+  const sumToolCalls = (t: AgentRunTrace | null) =>
+    t?.rounds.reduce((n, r) => n + r.toolCalls.length, 0) ?? 0;
 
   try {
     const novel = novelService.getById(novelId);
@@ -46,7 +64,12 @@ async function executeAgent(
 
     const novelDir = fileService.getNovelDir(novelId);
 
-    const result = await runAgent(agentType, novelDir, { extraContext: buildNovelContext(novel) }, agentModelsRaw);
+    const result = await runAgent(
+      agentType,
+      novelDir,
+      { extraContext: buildNovelContext(novel), traceSink },
+      agentModelsRaw,
+    );
 
     // Save result to workspace file
     const workspacePath = AGENT_FILE_MAP[agentType];
@@ -55,27 +78,41 @@ async function executeAgent(
     }
 
     // Save agent output to file
-    const timestamp = Date.now();
-    const outputFilename = `${agentType}-${timestamp}.md`;
-    await fileService.writeAgentOutput(novelId, outputFilename, result.output);
+    await fileService.writeAgentOutput(novelId, contentFilename, result.output);
 
-    // Update agent output record
+    // Update agent output record（修复原先被清空的 modelUsed/providerUsed，回填调试汇总）
     db.update(schema.agentOutputs)
       .set({
-        filename: outputFilename,
-        modelUsed: "",
-        providerUsed: "",
+        filename: contentFilename,
+        traceFilename,
+        modelUsed: traceHolder.trace?.modelUsed ?? "",
+        providerUsed: traceHolder.trace?.providerUsed ?? "",
         status: result.success ? "completed" : "failed",
         tokensOutput: result.output?.length ?? 0,
+        turnCount: traceHolder.trace?.totalRounds ?? 0,
+        toolCallCount: sumToolCalls(traceHolder.trace),
         completedAt: now(),
       })
       .where(eq(schema.agentOutputs.id, outputId))
       .run();
   } catch (err: any) {
+    // 失败也落 trace（附 errorMessage）便于诊断
+    const failedTrace: AgentRunTrace | null = traceHolder.trace
+      ? { ...traceHolder.trace, completedAt: now(), errorMessage: err?.message ?? "Unknown error" }
+      : null;
+    if (failedTrace) {
+      await fileService.writeAgentTrace(novelId, traceFilename, failedTrace).catch(() => {});
+    }
+    const errFile = `error-${Date.now()}.md`;
     db.update(schema.agentOutputs)
       .set({
         status: "failed",
-        filename: `error-${Date.now()}.md`,
+        filename: errFile,
+        traceFilename: failedTrace ? traceFilename : "",
+        modelUsed: failedTrace?.modelUsed ?? "",
+        providerUsed: failedTrace?.providerUsed ?? "",
+        turnCount: failedTrace?.totalRounds ?? 0,
+        toolCallCount: sumToolCalls(failedTrace),
         completedAt: now(),
       })
       .where(eq(schema.agentOutputs.id, outputId))
@@ -84,7 +121,7 @@ async function executeAgent(
     // Write error to file
     await fileService.writeAgentOutput(
       novelId,
-      `error-${Date.now()}.md`,
+      errFile,
       `Error: ${err?.message ?? "Unknown error"}`,
     );
   }
@@ -195,7 +232,7 @@ router.get("/agents/:outputId/status", async (req, res) => {
   res.json({ ...output, content });
 });
 
-// GET /agents/:outputId/stream - SSE endpoint for streaming agent output
+// GET /agents/:outputId/stream - SSE endpoint for streaming agent output + debug trace
 router.get("/agents/:outputId/stream", (req, res) => {
   const output = db
     .select()
@@ -213,19 +250,25 @@ router.get("/agents/:outputId/stream", (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
-  // Initial state
-  const sendStatus = async () => {
+  const isTerminal = (s: string | null | undefined) =>
+    s === "completed" || s === "failed" || s === "cancelled";
+
+  // 每个 tick 同时下发 status + content + trace（trace 可能为 null）
+  const sendState = async (row: typeof output) => {
     let content = "";
-    if (output.filename) {
-      content = await fileService.readAgentOutput(output.novelId, output.filename);
+    if (row.filename) {
+      content = await fileService.readAgentOutput(row.novelId, row.filename);
     }
-    return { type: "status", status: output.status, content };
+    const trace = row.traceFilename
+      ? await fileService.readAgentTrace(row.novelId, row.traceFilename)
+      : null;
+    return { type: "status", status: row.status, content, trace };
   };
 
-  sendStatus().then((data) => {
+  sendState(output).then((data) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
 
-    if (output.status === "completed" || output.status === "failed" || output.status === "cancelled") {
+    if (isTerminal(output.status)) {
       res.write(`data: ${JSON.stringify({ type: "done", status: output.status })}\n\n`);
       res.end();
       return;
@@ -244,14 +287,10 @@ router.get("/agents/:outputId/stream", (req, res) => {
         return;
       }
 
-      let content = "";
-      if (current.filename) {
-        content = await fileService.readAgentOutput(current.novelId, current.filename);
-      }
+      const state = await sendState(current);
+      res.write(`data: ${JSON.stringify(state)}\n\n`);
 
-      res.write(`data: ${JSON.stringify({ type: "status", status: current.status, content })}\n\n`);
-
-      if (current.status === "completed" || current.status === "failed" || current.status === "cancelled") {
+      if (isTerminal(current.status)) {
         res.write(`data: ${JSON.stringify({ type: "done", status: current.status })}\n\n`);
         clearInterval(interval);
         res.end();
@@ -262,6 +301,49 @@ router.get("/agents/:outputId/stream", (req, res) => {
       clearInterval(interval);
     });
   });
+});
+
+// GET /agents/:outputId/trace - 读取一次完整调试 trace
+router.get("/agents/:outputId/trace", async (req, res) => {
+  const output = db
+    .select()
+    .from(schema.agentOutputs)
+    .where(eq(schema.agentOutputs.id, req.params.outputId))
+    .get();
+
+  if (!output) {
+    res.status(404).json({ error: "Agent output not found" });
+    return;
+  }
+
+  const trace = output.traceFilename
+    ? await fileService.readAgentTrace(output.novelId, output.traceFilename)
+    : null;
+  if (!trace) {
+    res.status(404).json({ error: "No trace available" });
+    return;
+  }
+  res.json(trace);
+});
+
+// DELETE /agents/:outputId - 删除单条任务记录（DB row + .md + .trace.json；级联删 review_feedback）
+router.delete("/agents/:outputId", (req, res) => {
+  const output = db
+    .select()
+    .from(schema.agentOutputs)
+    .where(eq(schema.agentOutputs.id, req.params.outputId))
+    .get();
+
+  if (!output) {
+    res.status(404).json({ error: "Agent output not found" });
+    return;
+  }
+
+  fileService
+    .deleteAgentOutputFiles(output.novelId, output.filename, output.traceFilename)
+    .catch((e) => console.error(`[agent-outputs] delete files failed for ${output.id}`, e));
+  db.delete(schema.agentOutputs).where(eq(schema.agentOutputs.id, req.params.outputId)).run();
+  res.json({ ok: true });
 });
 
 // POST /agents/:outputId/cancel - cancel an agent
@@ -315,6 +397,32 @@ router.get("/novels/:novelId/agent-outputs", async (req, res) => {
   }
 
   res.json(results);
+});
+
+// DELETE /novels/:novelId/agent-outputs - 清空该小说全部任务记录（DB rows + 文件）
+router.delete("/novels/:novelId/agent-outputs", async (req, res) => {
+  const novel = novelService.getById(req.params.novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+
+  const outputs = db
+    .select()
+    .from(schema.agentOutputs)
+    .where(eq(schema.agentOutputs.novelId, req.params.novelId))
+    .all();
+
+  await Promise.all(
+    outputs.map((o) =>
+      fileService.deleteAgentOutputFiles(o.novelId, o.filename, o.traceFilename),
+    ),
+  );
+  db.delete(schema.agentOutputs)
+    .where(eq(schema.agentOutputs.novelId, req.params.novelId))
+    .run();
+
+  res.json({ ok: true, deleted: outputs.length });
 });
 
 // POST /chapters/:chapterId/rewrite - local rewrite using edit tools

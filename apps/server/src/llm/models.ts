@@ -7,6 +7,10 @@ import type { Model } from "@earendil-works/pi-ai";
 export interface AgentModelConfig {
   model: Model<"openai-completions">;
   apiKey: string;
+  /** 解析得到的模型 id（写入调试 trace modelUsed）。 */
+  modelId: string;
+  /** 解析得到的 provider id（写入调试 trace providerUsed）。 */
+  providerId: string;
 }
 
 /**
@@ -32,5 +36,7 @@ export function getModelForAgent(
   return {
     model: buildModel(resolved.provider, resolved.model),
     apiKey,
+    modelId: config.modelId,
+    providerId: config.providerId,
   };
 }

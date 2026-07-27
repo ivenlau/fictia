@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import type { AgentRunTrace } from "@fictia/shared";
 
 const DATA_ROOT = path.join(process.cwd(), "fictia-data");
 
@@ -135,6 +136,46 @@ export const fileService = {
     } catch {
       return [];
     }
+  },
+
+  // ==================== Agent trace (debug) operations ====================
+
+  /**
+   * Read agent debug trace JSON. Returns null if missing or invalid.
+   */
+  async readAgentTrace(novelId: string, filename: string): Promise<AgentRunTrace | null> {
+    if (!filename) return null;
+    const filePath = path.join(this.getNovelDir(novelId), "agent-outputs", filename);
+    try {
+      const raw = await fs.readFile(filePath, "utf-8");
+      return JSON.parse(raw) as AgentRunTrace;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Write agent debug trace JSON (incremental during a run).
+   */
+  async writeAgentTrace(novelId: string, filename: string, trace: AgentRunTrace): Promise<void> {
+    if (!filename) return;
+    const dir = path.join(this.getNovelDir(novelId), "agent-outputs");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, filename), JSON.stringify(trace, null, 2), "utf-8");
+  },
+
+  /**
+   * Delete an agent output's content (.md) and trace (.trace.json) files.
+   * Best-effort: missing files are ignored.
+   */
+  async deleteAgentOutputFiles(
+    novelId: string,
+    filename: string | null,
+    traceFilename: string | null,
+  ): Promise<void> {
+    const dir = path.join(this.getNovelDir(novelId), "agent-outputs");
+    const targets = [filename, traceFilename].filter(Boolean) as string[];
+    await Promise.all(targets.map((f) => fs.unlink(path.join(dir, f)).catch(() => {})));
   },
 
   // ==================== Workspace file operations ====================

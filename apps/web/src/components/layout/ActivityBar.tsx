@@ -2,7 +2,7 @@ import {
   SquarePen,
   FolderTree,
   Search,
-  GitBranch,
+  Bug,
   Bot,
   Library,
   Boxes,
@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 
-type Panel = "explorer" | "search" | "graph" | "agent" | "knowledge" | "material";
+type Panel = "explorer" | "search" | "debug" | "agent" | "knowledge" | "material";
 
 interface ActivityItem {
   icon: React.ElementType;
@@ -21,7 +21,7 @@ interface ActivityItem {
 const items: ActivityItem[] = [
   { icon: FolderTree, panel: "explorer", label: "Explorer" },
   { icon: Search, panel: "search", label: "Search" },
-  { icon: GitBranch, panel: "graph", label: "Graph" },
+  { icon: Bug, panel: "debug", label: "调试" },
   { icon: Bot, panel: "agent", label: "Agent" },
   { icon: Library, panel: "knowledge", label: "知识库" },
   { icon: Boxes, panel: "material", label: "素材库" },

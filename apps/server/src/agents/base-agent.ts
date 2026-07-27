@@ -1,5 +1,5 @@
 import { stream, type Model, type Context, type Message } from "@earendil-works/pi-ai";
-import { DESIGN_DIR, type StageName, type AgentType } from "@fictia/shared";
+import { DESIGN_DIR, type StageName, type AgentType, type AgentRunTrace } from "@fictia/shared";
 import { loadPromptTemplate, loadCraftKnowledge } from "../utils/prompt-loader.js";
 import { readFileSafe } from "../utils/file.js";
 import { listCharacterFiles } from "../utils/chapter-files.js";
@@ -32,6 +32,11 @@ export interface AgentRunOptions {
    * 额外上下文块（如动态写作空间的实体状态），拼到 agent 输入前。
    */
   extraContext?: string;
+  /**
+   * 调试 trace 增量回调：由 executeAgent 注入，把 trace 写文件供调试视图实时读取。
+   * 未提供时（如 rewrite 路由）不写 trace，行为与原先一致。
+   */
+  traceSink?: (trace: AgentRunTrace) => void;
 }
 
 export abstract class BaseAgent {
@@ -43,6 +48,16 @@ export abstract class BaseAgent {
   protected apiKey: string;
   /** 最大工具迭代次数，0 表示不限制 */
   protected maxToolIterations = 20;
+
+  // ===== 调试 trace 接线（由 createAgent / runAgent 注入）=====
+  /** 模型 id（写入 trace modelUsed）。 */
+  modelId = "";
+  /** provider id（写入 trace providerUsed）。 */
+  providerId = "";
+  /** trace 增量回调；为空则不写 trace。 */
+  traceSink?: (trace: AgentRunTrace) => void;
+  /** 最近一次 runLLM 的完整 trace（失败诊断用）。 */
+  lastTrace?: AgentRunTrace;
 
   constructor(
     novelDir: string,
@@ -258,17 +273,23 @@ export abstract class BaseAgent {
     });
     const startTime = Date.now();
 
-    const { text } = await runAgentSession({
+    const { text, trace } = await runAgentSession({
       model: this.model,
       apiKey: this.apiKey,
       systemPrompt: resolvedSystemPrompt,
       messages: [{ role: "user", content: userMessage, timestamp: Date.now() }],
       tools,
+      agentType: this.agentType,
+      modelLabel: this.modelId,
+      providerLabel: this.providerId,
       maxIterations: this.maxToolIterations,
       onToolCall: (name, input) => console.log(`[${this.agentName}] Tool call: ${name}`, input),
       onToolResult: (name, _input, result) =>
         console.log(`[${this.agentName}] Tool result: ${result.substring(0, 100)}...`),
+      onTraceUpdate: this.traceSink,
     });
+
+    this.lastTrace = trace;
 
     console.log(`[${this.agentName}] LLM completed`, {
       elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,

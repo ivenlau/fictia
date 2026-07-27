@@ -130,6 +130,7 @@ export async function runChatAgent(
     systemPrompt,
     messages,
     tools,
+    agentType: "chat",
     maxIterations: 5,
     onDelta: (delta) => callbacks.onDelta(delta),
     onToolCall: (name, input) => callbacks.onToolCall(name, stringifyInput(input)),

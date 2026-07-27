@@ -44,6 +44,10 @@ export const agentOutputs = sqliteTable("agent_outputs", {
   cost: real("cost").default(0),
   createdAt: text("created_at").notNull(),
   completedAt: text("completed_at"),
+  // 调试 trace：文件名 + 汇总计数（列表页免读文件即可展示）
+  traceFilename: text("trace_filename").default(""),
+  turnCount: integer("turn_count").default(0),
+  toolCallCount: integer("tool_call_count").default(0),
 });
 
 export const reviewFeedback = sqliteTable("review_feedback", {
