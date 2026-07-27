@@ -9,6 +9,7 @@ import { injectSectionsBefore, type PromptSection } from "../utils/prompt-sectio
 import { buildCharacterRegistry } from "../utils/context-extractor.js";
 import { runAgentSession } from "./agent-runner.js";
 import { toolRegistry, type ToolContext } from "../tools/index.js";
+import { fileService } from "../services/file.service.js";
 import * as path from "path";
 
 export interface AgentRunResult {
@@ -17,6 +18,10 @@ export interface AgentRunResult {
   success: boolean;
   error?: string;
   warnings?: string[];
+  /** 本次运行的调试 trace（若调用方传入 traceFilename 则有值）。 */
+  trace?: AgentRunTrace;
+  /** trace 落盘文件名（agent-outputs 下）。 */
+  traceFilename?: string;
 }
 
 export interface AgentRunOptions {
@@ -33,10 +38,10 @@ export interface AgentRunOptions {
    */
   extraContext?: string;
   /**
-   * 调试 trace 增量回调：由 executeAgent 注入，把 trace 写文件供调试视图实时读取。
-   * 未提供时（如 rewrite 路由）不写 trace，行为与原先一致。
+   * 调试 trace 文件名（agent-outputs 下）。提供则 agent 自行把 trace 增量写入该文件，
+   * 供调试视图实时读取；并在结果里回传 trace。未提供（如 rewrite 路由）则不落盘。
    */
-  traceSink?: (trace: AgentRunTrace) => void;
+  traceFilename?: string;
 }
 
 export abstract class BaseAgent {
@@ -49,13 +54,13 @@ export abstract class BaseAgent {
   /** 最大工具迭代次数，0 表示不限制 */
   protected maxToolIterations = 20;
 
-  // ===== 调试 trace 接线（由 createAgent / runAgent 注入）=====
+  // ===== 调试 trace 接线（由 createAgent / runAgent / runStage 注入）=====
   /** 模型 id（写入 trace modelUsed）。 */
   modelId = "";
   /** provider id（写入 trace providerUsed）。 */
   providerId = "";
-  /** trace 增量回调；为空则不写 trace。 */
-  traceSink?: (trace: AgentRunTrace) => void;
+  /** trace 落盘文件名；由调用方经 options 注入，为空则不写 trace 文件。 */
+  traceFilename?: string;
   /** 最近一次 runLLM 的完整 trace（失败诊断用）。 */
   lastTrace?: AgentRunTrace;
 
@@ -272,6 +277,7 @@ export abstract class BaseAgent {
       toolCount: tools.length,
     });
     const startTime = Date.now();
+    const novelId = path.basename(this.novelDir);
 
     const { text, trace } = await runAgentSession({
       model: this.model,
@@ -286,7 +292,15 @@ export abstract class BaseAgent {
       onToolCall: (name, input) => console.log(`[${this.agentName}] Tool call: ${name}`, input),
       onToolResult: (name, _input, result) =>
         console.log(`[${this.agentName}] Tool result: ${result.substring(0, 100)}...`),
-      onTraceUpdate: this.traceSink,
+      // agent 自行把 trace 增量写入文件（若调用方提供了 traceFilename），供调试视图实时读取
+      onTraceUpdate: this.traceFilename
+        ? (t) => {
+            this.lastTrace = t;
+            fileService.writeAgentTrace(novelId, this.traceFilename!, t).catch((e) =>
+              console.error(`[${this.agentName}] trace write failed`, e),
+            );
+          }
+        : undefined,
     });
 
     this.lastTrace = trace;

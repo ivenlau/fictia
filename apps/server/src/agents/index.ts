@@ -72,9 +72,13 @@ export async function runAgent(
   agentModels?: AgentModels,
 ): Promise<AgentRunResult> {
   const agent = createAgent(agentType, novelDir, agentModels);
-  // 注入调试 trace sink（由 executeAgent 提供；rewrite 等不传则为空，不写 trace）
-  if (options?.traceSink) agent.traceSink = options.traceSink;
-  return agent.run(options);
+  // 注入调试 trace 文件名（由调用方提供；agent 自行增量写文件）
+  if (options?.traceFilename) agent.traceFilename = options.traceFilename;
+  const result = await agent.run(options);
+  // 回传 trace 与文件名，供调用方回填 agent_outputs 行
+  if (agent.lastTrace) result.trace = agent.lastTrace;
+  if (agent.traceFilename) result.traceFilename = agent.traceFilename;
+  return result;
 }
 
 /**

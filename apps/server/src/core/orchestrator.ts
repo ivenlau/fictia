@@ -101,6 +101,8 @@ export class Orchestrator extends EventEmitter {
         this.novelDir,
         this.agentModels,
       );
+      // 注入调试 trace 文件名（由调用方经 options 提供）；agent 自行增量写文件
+      if (options?.traceFilename) agent.traceFilename = options.traceFilename;
 
       // 注入小说元信息（targetChapters 等）到 extraContext，供 architect 据长度规划幕数。
       // 动态 import 规避 orchestrator ↔ novel.service 的静态循环依赖。
@@ -120,6 +122,9 @@ export class Orchestrator extends EventEmitter {
       }
 
       const result = await agent.run(runOptions);
+      // 回传 trace 与文件名，供调用方回填 agent_outputs 行
+      if (agent.lastTrace) result.trace = agent.lastTrace;
+      if (agent.traceFilename) result.traceFilename = agent.traceFilename;
 
       this.emit("stage:output", stageName, result);
 

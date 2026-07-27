@@ -280,3 +280,21 @@ export const fileService = {
     await this.writeWorkspaceFile(novelId, "project.yaml", content);
   },
 };
+
+/**
+ * 从 trace 提取 agent_outputs 行的汇总字段（model/轮次/工具数）。
+ * 供各运行入口（trigger / pipeline / 手动 stage）统一回填，避免重复实现。
+ */
+export function summarizeTrace(trace: AgentRunTrace | null | undefined): {
+  modelUsed: string;
+  providerUsed: string;
+  turnCount: number;
+  toolCallCount: number;
+} {
+  return {
+    modelUsed: trace?.modelUsed ?? "",
+    providerUsed: trace?.providerUsed ?? "",
+    turnCount: trace?.totalRounds ?? 0,
+    toolCallCount: trace?.rounds.reduce((n, r) => n + r.toolCalls.length, 0) ?? 0,
+  };
+}

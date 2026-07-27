@@ -7,6 +7,7 @@ import type { AgentRunResult } from "../agents/index.js";
 import { readFileSafe } from "../utils/file.js";
 import { db, schema } from "../db/index.js";
 import { getStageDefinition } from "../core/pipeline.js";
+import { fileService, summarizeTrace } from "./file.service.js";
 import * as path from "path";
 import * as fs from "fs/promises";
 
@@ -142,6 +143,7 @@ export class PipelineRunner {
 
         // Create agent_outputs record
         const outputId = uuid();
+        const traceFilename = `${def.agentType}-${Date.now()}.trace.json`;
         db.insert(schema.agentOutputs)
           .values({
             id: outputId,
@@ -154,6 +156,7 @@ export class PipelineRunner {
             modelUsed: "",
             providerUsed: "",
             status: "running",
+            traceFilename,
             tokensInput: 0,
             tokensOutput: 0,
             cost: 0,
@@ -163,17 +166,18 @@ export class PipelineRunner {
           .run();
 
         try {
-          const result = await this.orch.runStage(nextStageName as StageName);
+          const result = await this.orch.runStage(nextStageName as StageName, { traceFilename });
 
           if (result.success) {
             await writeAgentOutput(this.novelDir, result);
           }
 
-          // Update agent_outputs record
+          // Update agent_outputs record（用 trace 汇总回填 model/轮次/工具数）
           db.update(schema.agentOutputs)
             .set({
               status: result.success ? "completed" : "failed",
               tokensOutput: result.output?.length ?? 0,
+              ...summarizeTrace(result.trace),
               completedAt: now(),
             })
             .where(eq(schema.agentOutputs.id, outputId))
@@ -184,9 +188,23 @@ export class PipelineRunner {
             break;
           }
         } catch (stageErr: any) {
-          // Mark output as failed
+          // Mark output as failed（读回已增量写入的 trace 补 errorMessage 后回填汇总）
+          const partial = await fileService.readAgentTrace(this.novelId, traceFilename);
+          if (partial) {
+            await fileService
+              .writeAgentTrace(this.novelId, traceFilename, {
+                ...partial,
+                completedAt: now(),
+                errorMessage: stageErr?.message ?? "Unknown error",
+              })
+              .catch(() => {});
+          }
           db.update(schema.agentOutputs)
-            .set({ status: "failed", completedAt: now() })
+            .set({
+              status: "failed",
+              ...summarizeTrace(partial),
+              completedAt: now(),
+            })
             .where(eq(schema.agentOutputs.id, outputId))
             .run();
 

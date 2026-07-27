@@ -3,10 +3,10 @@ import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { db, schema } from "../db/index.js";
 import { novelService } from "../services/novel.service.js";
-import { fileService } from "../services/file.service.js";
+import { fileService, summarizeTrace } from "../services/file.service.js";
 import { runAgent } from "../agents/index.js";
 import { AGENT_FILE_MAP } from "@fictia/shared";
-import type { AgentType, AgentRunTrace } from "@fictia/shared";
+import type { AgentType } from "@fictia/shared";
 
 const router = Router();
 const now = () => new Date().toISOString();
@@ -27,24 +27,11 @@ async function executeAgent(
   const traceFilename = `${agentType}-${ts}.trace.json`;
   const contentFilename = `${agentType}-${ts}.md`;
 
-  // 立即置 running 并记录 traceFilename，让 SSE 能尽早下发 trace
+  // 立即置 running 并记录 traceFilename，让 SSE 能尽早下发 trace（agent 自行增量写文件）
   db.update(schema.agentOutputs)
     .set({ status: "running", traceFilename })
     .where(eq(schema.agentOutputs.id, outputId))
     .run();
-
-  // trace 增量收集：sink 每次被调用都覆写 trace 文件；holder.trace 保留最新（含结束态）。
-  // 用 holder 对象而非裸 let：避免 TS 控制流把闭包赋值的变量窄化为 never。
-  const traceHolder: { trace: AgentRunTrace | null } = { trace: null };
-  const traceSink = (trace: AgentRunTrace) => {
-    traceHolder.trace = trace;
-    fileService.writeAgentTrace(novelId, traceFilename, trace).catch((e) =>
-      console.error(`[trace:${outputId}] write failed`, e),
-    );
-  };
-
-  const sumToolCalls = (t: AgentRunTrace | null) =>
-    t?.rounds.reduce((n, r) => n + r.toolCalls.length, 0) ?? 0;
 
   try {
     const novel = novelService.getById(novelId);
@@ -67,7 +54,7 @@ async function executeAgent(
     const result = await runAgent(
       agentType,
       novelDir,
-      { extraContext: buildNovelContext(novel), traceSink },
+      { extraContext: buildNovelContext(novel), traceFilename },
       agentModelsRaw,
     );
 
@@ -80,39 +67,37 @@ async function executeAgent(
     // Save agent output to file
     await fileService.writeAgentOutput(novelId, contentFilename, result.output);
 
-    // Update agent output record（修复原先被清空的 modelUsed/providerUsed，回填调试汇总）
+    // Update agent output record（用 trace 汇总回填 model/轮次/工具数）
     db.update(schema.agentOutputs)
       .set({
         filename: contentFilename,
         traceFilename,
-        modelUsed: traceHolder.trace?.modelUsed ?? "",
-        providerUsed: traceHolder.trace?.providerUsed ?? "",
+        ...summarizeTrace(result.trace),
         status: result.success ? "completed" : "failed",
         tokensOutput: result.output?.length ?? 0,
-        turnCount: traceHolder.trace?.totalRounds ?? 0,
-        toolCallCount: sumToolCalls(traceHolder.trace),
         completedAt: now(),
       })
       .where(eq(schema.agentOutputs.id, outputId))
       .run();
   } catch (err: any) {
-    // 失败也落 trace（附 errorMessage）便于诊断
-    const failedTrace: AgentRunTrace | null = traceHolder.trace
-      ? { ...traceHolder.trace, completedAt: now(), errorMessage: err?.message ?? "Unknown error" }
-      : null;
-    if (failedTrace) {
-      await fileService.writeAgentTrace(novelId, traceFilename, failedTrace).catch(() => {});
+    // 失败：读回 agent 已增量写入的 trace（若有），补 errorMessage 后落盘，便于诊断
+    const partial = await fileService.readAgentTrace(novelId, traceFilename);
+    if (partial) {
+      await fileService
+        .writeAgentTrace(novelId, traceFilename, {
+          ...partial,
+          completedAt: now(),
+          errorMessage: err?.message ?? "Unknown error",
+        })
+        .catch(() => {});
     }
     const errFile = `error-${Date.now()}.md`;
     db.update(schema.agentOutputs)
       .set({
         status: "failed",
         filename: errFile,
-        traceFilename: failedTrace ? traceFilename : "",
-        modelUsed: failedTrace?.modelUsed ?? "",
-        providerUsed: failedTrace?.providerUsed ?? "",
-        turnCount: failedTrace?.totalRounds ?? 0,
-        toolCallCount: sumToolCalls(failedTrace),
+        traceFilename: partial ? traceFilename : "",
+        ...summarizeTrace(partial),
         completedAt: now(),
       })
       .where(eq(schema.agentOutputs.id, outputId))
