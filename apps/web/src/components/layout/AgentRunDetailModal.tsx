@@ -27,13 +27,13 @@ interface AgentRunDetailModalProps {
   onDelete?: (outputId: string) => void;
 }
 
-type Tab = "rounds" | "overview" | "output";
+type Tab = "overview" | "rounds" | "output";
 
 export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }: AgentRunDetailModalProps) {
   const [status, setStatus] = useState<string>("running");
   const [content, setContent] = useState<string>("");
   const [trace, setTrace] = useState<AgentRunTrace | null>(null);
-  const [tab, setTab] = useState<Tab>("rounds");
+  const [tab, setTab] = useState<Tab>("overview");
 
   useEffect(() => {
     const url = agentsApi.getStreamUrl(outputId);
@@ -124,11 +124,11 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-subtle px-3 py-1.5">
-          <TabButton active={tab === "rounds"} onClick={() => setTab("rounds")} icon={<Layers size={12} />}>
-            轮次{trace ? ` (${trace.totalRounds})` : ""}
-          </TabButton>
           <TabButton active={tab === "overview"} onClick={() => setTab("overview")} icon={<Info size={12} />}>
             概览
+          </TabButton>
+          <TabButton active={tab === "rounds"} onClick={() => setTab("rounds")} icon={<Layers size={12} />}>
+            轮次{trace ? ` (${trace.totalRounds})` : ""}
           </TabButton>
           <TabButton active={tab === "output"} onClick={() => setTab("output")} icon={<FileText size={12} />}>
             输出
@@ -137,9 +137,11 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
 
         {/* Body */}
         <div className="flex-1 overflow-auto p-5">
-          {tab === "rounds" && <RoundsTab trace={trace} isRunning={isRunning} />}
           {tab === "overview" && <OverviewTab trace={trace} />}
-          {tab === "output" && <OutputTab content={content} isRunning={isRunning} status={status} />}
+          {tab === "rounds" && <RoundsTab trace={trace} isRunning={isRunning} />}
+          {tab === "output" && (
+            <OutputTab trace={trace} content={content} isRunning={isRunning} status={status} />
+          )}
         </div>
       </div>
     </div>
@@ -333,13 +335,32 @@ function Collapsible({ icon, title, text }: { icon: React.ReactNode; title: stri
 
 // ==================== 输出 ====================
 
-function OutputTab({ content, isRunning, status }: { content: string; isRunning: boolean; status: string }) {
-  if (!content) {
+function OutputTab({
+  trace,
+  content,
+  isRunning,
+  status,
+}: {
+  trace: AgentRunTrace | null;
+  content: string;
+  isRunning: boolean;
+  status: string;
+}) {
+  // 优先用 trace：拼接所有轮次的 assistant 文本（= agent 完整文字输出）。
+  // 这样执行中也能看（有几轮拼几轮），且不依赖 row.filename（pipeline 路径未回填）。
+  // 无 trace（旧记录）则退回 .md 输出文件内容 content。
+  const traced =
+    trace && trace.rounds.length > 0
+      ? trace.rounds.map((r) => r.assistantText).filter(Boolean).join("\n\n")
+      : "";
+  const text = traced || content;
+
+  if (!text) {
     if (isRunning) {
       return (
         <div className="flex items-center gap-2 text-fg-muted">
           <Loader2 size={14} className="animate-spin" />
-          <span className="font-caption text-sm">运行中，输出将在完成后写入…</span>
+          <span className="font-caption text-sm">运行中，等待首轮输出…</span>
         </div>
       );
     }
@@ -349,7 +370,7 @@ function OutputTab({ content, isRunning, status }: { content: string; isRunning:
     return <p className="font-caption text-sm text-fg-muted">无输出内容。</p>;
   }
   return (
-    <pre className="font-body text-sm text-fg-secondary whitespace-pre-wrap leading-relaxed">{content}</pre>
+    <pre className="font-body text-sm text-fg-secondary whitespace-pre-wrap leading-relaxed">{text}</pre>
   );
 }
 
