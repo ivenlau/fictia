@@ -4,6 +4,7 @@
  * 命名扁平：characters/{名字}_{类型}.md，listCharacterFiles 按后缀过滤角色文件。
  */
 import { Type } from "@earendil-works/pi-ai";
+import * as path from "path";
 import { readFileSafe } from "../utils/file.js";
 import { listCharacterFiles } from "../utils/chapter-files.js";
 import { buildCharacterQuickCard } from "../utils/context-extractor.js";
@@ -27,21 +28,28 @@ export function createCharacterTools(ctx: ToolContext): FictiaTool[] {
         chapter_number: Type.Optional(Type.Number({ description: "当前章节号（可选，用于过滤成长弧线）" })),
       }),
       async execute(_toolCallId, { character_name, detail_level, chapter_number }) {
+        const name = character_name as string;
         const candidates = await listCharacterFiles(ctx.novelDir);
+        // 精确匹配文件名（{名}_{类型}.md 的名部分），避免 content.includes 误匹配到
+        // "提到该名字的其他角色文件"（如查"顾铮"误中"周凯"文件里关系描述提到顾铮）。
         for (const candidate of candidates) {
+          const base = path.basename(candidate, ".md");
+          const fileNameName = base.split("_")[0];
+          if (fileNameName !== name) continue;
           const content = await readFileSafe(candidate);
-          if (content && content.includes(character_name as string)) {
-            if (detail_level === "full") {
-              return { content: [{ type: "text", text: content }], details: { character_name, file: candidate } };
-            }
-            const card = buildCharacterQuickCard(content, character_name as string, chapter_number as number | undefined);
-            return {
-              content: [{ type: "text", text: card ?? `未生成角色卡: ${character_name}` }],
-              details: { character_name, file: candidate },
-            };
+          if (!content) continue;
+          if (detail_level === "full") {
+            return { content: [{ type: "text", text: content }], details: { character_name: name, file: candidate } };
           }
+          const card = buildCharacterQuickCard(content, name, chapter_number as number | undefined);
+          return {
+            content: [{ type: "text", text: card ?? `未生成角色卡: ${name}` }],
+            details: { character_name: name, file: candidate },
+          };
         }
-        throw new Error(`未找到角色: ${character_name}`);
+        throw new Error(
+          `未找到角色: ${name}（角色文件应为 characters/${name}_{主角|反派|配角|龙套}.md；可用 list_files 查看 characters/ 目录）`,
+        );
       },
     },
   ];

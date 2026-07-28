@@ -23,7 +23,7 @@ import {
   assembleDynamicContext,
   updateEntitiesFromChapterNotes,
 } from "./entity.service.js";
-import { generateChapterSummary } from "./summary-chain.service.js";
+import { getSummary } from "./chapter-summary-store.js";
 import { runConsistencyCheck, checkMilestone, countChapters } from "./milestone.service.js";
 
 export type LoopPhase =
@@ -201,13 +201,13 @@ export class WritingLoopService {
         } catch {
           // 状态更新失败不阻塞
         }
-        // 蒸馏本章摘要写入摘要链（LLM 主路径 + 确定性兜底），供后续章节跨章上下文
+        // 摘要现由 chapter-writer.run 统一生成（手动触发也覆盖）；此处仅探测是否成功，
+        // 不再重复调 LLM，避免与 chapter-writer.run 双重生成。
         let summarySource: "llm" | "fallback" | null = null;
         try {
-          const s = await generateChapterSummary(this.novelId, chapterNumber);
-          summarySource = s?.source ?? null;
+          if (getSummary(this.novelId, chapterNumber)) summarySource = "llm";
         } catch {
-          // 摘要生成失败不阻塞
+          // 探测失败不阻塞
         }
         emit({
           phase: "done",

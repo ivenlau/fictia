@@ -9,6 +9,7 @@ import {
 } from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
 import { countWords } from "../utils/word-counter.js";
+import { generateChapterSummary } from "../services/summary-chain.service.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
 import { findChapterFile, findOutlineFile, extractOutlineTitle } from "../utils/chapter-files.js";
 import {
@@ -185,6 +186,16 @@ ${todoGuidance}
 
     const writtenContent = await readFileSafe(path.join(this.novelDir, outputPath));
     const wordCount = writtenContent ? countWords(writtenContent) : 0;
+
+    // 章节写成功后蒸馏摘要写入摘要链——手动触发（不走 writing-loop）时也生成，
+    // 供后续章节 get_summary_chain 跨章上下文使用。失败不阻塞。
+    if (writtenContent) {
+      try {
+        await generateChapterSummary(path.basename(this.novelDir), chapterNumber);
+      } catch (e) {
+        console.warn(`[${this.agentName}] 章节摘要生成失败（不阻塞）`, e);
+      }
+    }
 
     return {
       output: `${output}\n\n---\n字数统计: ${wordCount}字`,
