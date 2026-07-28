@@ -1,12 +1,7 @@
 import { BaseAgent, type AgentRunResult, type AgentRunOptions } from "./base-agent.js";
 import type { StageName, AgentType } from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
-import {
-  buildNarrativeWeaveSummary,
-  buildArtDesignSummary,
-  buildWorldQuickRef,
-  parseActDefinitions,
-} from "../utils/context-extractor.js";
+import { parseActDefinitions } from "../utils/context-extractor.js";
 import { validateStoryDesign } from "../utils/chapter-files.js";
 import path from "path";
 import fs from "fs/promises";
@@ -44,31 +39,18 @@ export class StoryDesignerAgent extends BaseAgent {
     const actFileList = acts && acts.length > 0
       ? acts.map((a) => `outline/act-${a.act}.md`).join(", ")
       : "outline/act-1.md, outline/act-2.md, outline/act-3.md";
-    const artDesign = await this.readProjectFile("design/art-design.md");
-    const narrativeWeave = await this.readProjectFile("design/narrative-weave.md");
-    const worldSetting = await this.readProjectFile("world/setting.md");
-    const worldRules = await this.readProjectFile("world/rules.md");
-    const characterRegistry = await this.loadCharacterRegistry();
+    // L3 推→拉：user message 只保留 blueprint（幕定义强依赖）。art-design/narrative-weave
+    // 概览、世界观、角色、写作进度由 agent 按需用工具拉取，避免上下文膨胀。
+    // 参见 docs/chapter-writer-context-reform.md。
+    const todoGuidance = `**上下文需要你主动用工具按需拉取**（初始输入只含 blueprint 强依赖，其余按需获取）：
+- art-design 意象/情感节拍：read_file design/art-design.md
+- narrative-weave 伏笔/支线/彩蛋：read_file design/narrative-weave.md，或 \`get_foreshadowing_stats\` 看伏笔现状
+- 世界观：read_file world/setting.md、world/rules.md
+- 角色：\`get_character\`（按名查），或 read_file characters/*.md
+- 重设计/增量时查写作进度：\`get_summary_chain\`（前文摘要）、\`get_foreshadowing_stats\`
+- craft 技法：\`get_craft_doc\`（outline-methods/conflict/emotional-arcs/suspense/reversals/chapter-hooks）
 
-    const contextParts: string[] = [];
-    if (blueprint) contextParts.push(`## design/blueprint.md\n\n${blueprint}`);
-    if (artDesign) contextParts.push(`## design/art-design.md（概览）\n\n${buildArtDesignSummary(artDesign, acts ?? undefined)}`);
-    if (narrativeWeave) contextParts.push(`## design/narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
-    const worldRef = buildWorldQuickRef(worldSetting, worldRules);
-    if (worldRef) contextParts.push(`## 世界观速查\n\n${worldRef}`);
-    contextParts.push(`## 角色总览\n\n${characterRegistry}`);
-
-    // 重设计/增量时注入"实际写作进度"（首次设计无已写章节，返回空串不注入）。
-    // 动态 import 规避 agents → services → pipeline → orchestrator → agents 的静态循环依赖。
-    if (options?.isRedo || options?.incrementalTarget || options?.userDirective) {
-      const { assembleDesignProgressContext } = await import("../services/entity.service.js");
-      const progress = assembleDesignProgressContext(path.basename(this.novelDir));
-      if (progress) {
-        contextParts.unshift(`## 实际写作进度（已写章节的实际状态——重设计务必参考以保持连贯，不得与已写内容矛盾）\n\n${progress}`);
-      }
-    }
-
-    const context = contextParts.join("\n\n---\n\n");
+**务必先调 \`todo\` 规划步骤**（见系统提示词「工作流程」），再逐幕逐章设计。`;
 
     let input: string;
     if (options?.isRedo) {
@@ -78,13 +60,21 @@ export class StoryDesignerAgent extends BaseAgent {
 ### 当前大纲（部分）
 ${existingOutlines}
 
-### 全部前置产出
-${context}
+### design/blueprint.md（幕定义）
+${blueprint}
+
+${todoGuidance}
 
 ### 用户修改要求
 ${options.userDirective ?? "请重新审视故事大纲"}
 
-请重新设计故事大纲，输出完整内容。`;
+请重新设计故事大纲，输出完整内容（用 \`===FILE:\` 分隔符分隔各文件）。`;
+      this.lastUserBudget = [
+        { name: "当前大纲", chars: existingOutlines.length },
+        { name: "blueprint", chars: blueprint.length },
+        { name: "写作引导", chars: todoGuidance.length },
+        { name: "用户修改要求", chars: (options.userDirective ?? "").length },
+      ];
     } else if (options?.incrementalTarget || options?.userDirective) {
       const target = options?.incrementalTarget ?? firstActFile;
       const current = await this.readProjectFile(target);
@@ -95,18 +85,28 @@ ${options.userDirective ?? "请重新审视故事大纲"}
 ### 当前内容
 ${current}
 
-### 全部前置产出
-${context}
+### design/blueprint.md（幕定义）
+${blueprint}
+
+${todoGuidance}
 
 ### 用户修改要求
 ${options.userDirective}
 
 请根据要求修改故事大纲，输出完整的修改后内容。`;
+      this.lastUserBudget = [
+        { name: "目标文件当前内容", chars: current.length },
+        { name: "blueprint", chars: blueprint.length },
+        { name: "写作引导", chars: todoGuidance.length },
+        { name: "用户修改要求", chars: (options.userDirective ?? "").length },
+      ];
     } else {
       input = `## 设计故事大纲
 
-### 全部前置产出
-${context}
+### design/blueprint.md（幕定义——act 数量与划分以此为准）
+${blueprint}
+
+${todoGuidance}
 
 请设计完整的故事大纲（act 数量与划分以 blueprint 的 \`## 幕定义\` 为准，每幕产出一个 act 文件）：
 
@@ -129,6 +129,10 @@ ${context}
 产出前对照 system.md 的「章设计自检」清单自查。
 
 请用 \`===FILE: ${firstActFile}===\`、\`===FILE: outline/chapters/ch01_act1-标题.md===\` 等分隔符分隔各文件内容（每幕一个 \`outline/act-{N}.md\`，章节细纲按 \`ch{NN}_act{N}-{标题}.md\` 命名，章节号补 2 位，act 取自 blueprint 幕定义，标题用本章标题）。`;
+      this.lastUserBudget = [
+        { name: "blueprint", chars: blueprint.length },
+        { name: "写作引导", chars: todoGuidance.length },
+      ];
     }
 
     const output = await this.runLLM(input, systemPrompt);

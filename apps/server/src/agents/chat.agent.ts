@@ -25,6 +25,11 @@ export interface ChatAgentCallbacks {
  * 原生 function calling 下工具签名自动暴露给模型，无需手工拼工具描述；
  * 此处只保留对话引导（何时建书、分步询问、确认后调用）。
  */
+function buildWorkStyleGuide(): string {
+  return `## 工作方式
+处理复杂或多步骤任务时（如重写整章、跨章一致性核对、批量修改设定），可主动调用 \`todo\` 工具规划任务并逐步推进——先把任务拆解为可执行步骤，逐步执行、核验，一时刻只留一个进行中项。简单问答无需使用。`;
+}
+
 function buildCreateNovelGuide(): string {
   return `## 创建小说引导流程
 当用户想要创建新小说时，按以下步骤引导收集信息：
@@ -94,7 +99,7 @@ export async function runChatAgent(
   callbacks: ChatAgentCallbacks,
 ): Promise<string> {
   const novelContext = novelId ? await buildNovelContext(novelId) : "";
-  const systemPrompt = `${persona}\n\n${buildCreateNovelGuide()}${novelContext}`;
+  const systemPrompt = `${persona}\n\n${buildWorkStyleGuide()}\n\n${buildCreateNovelGuide()}${novelContext}`;
 
   // 构造 messages：history（assistant 需转成 AssistantMessage 格式）+ 当前 user
   const messages: Message[] = [];

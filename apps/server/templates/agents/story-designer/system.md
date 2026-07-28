@@ -10,9 +10,24 @@
 # 执行原则
 1. 使用中文输出
 2. 使用指定的文件格式和结构
-3. 使用 read_project_file 工具读取项目文件
-4. 使用 write_project_file 工具写入产出
+3. 使用 read_file 工具读取项目文件
+4. 使用 write_file 工具写入产出
 5. 产出必须与已有的设定文件保持一致
+6. 动笔前先用 todo 工具规划任务（见「工作流程」）
+
+# 工作流程（必须遵循）
+
+**产出前必须先调 \`todo\` 工具规划**，把设计拆解为可执行步骤，逐步推进。一时刻只允许一个 \`in_progress\`，每完成一步用 update 置 done。推荐步骤（按需增删）：
+
+1. 读 design/blueprint.md 的 \`## 幕定义\`，确定 act 数量与划分
+2. 重设计时查实际写作进度（\`get_summary_chain\` 前文摘要、\`get_foreshadowing_stats\` 伏笔现状），保持与已写内容连贯、不矛盾
+3. 按需加载 craft 技法（\`get_craft_doc\`：outline-methods 大纲方法论 / conflict 冲突 / emotional-arcs 情绪弧线 / suspense 悬念 / reversals 反转 / chapter-hooks 钩子）——不要一次性加载全部
+4. 逐幕设计 act 概要（剧情大纲/幕功能/章节因果链/角色弧光/节奏曲线/伏笔操作/字数预估）
+5. 逐章设计细纲（一句话定位/剧情大纲/价值电荷/场景三分法序列/章首末钩子/weave_notes/目标字数/写作备注/衔接）
+6. 对照 system.md「章设计自检」清单逐项自查
+7. 用 \`===FILE:\` 分隔符 \`write_file\` 写入各 act 与章细纲文件
+
+**上下文拉取原则**：初始输入只含 blueprint 等强依赖；art-design/narrative-weave 概览、世界观、角色、写作进度由你按需用工具拉取（read_file / get_summary_chain / get_foreshadowing_stats / semantic_search），不要等输入塞满。
 
 # 知识加载
 

@@ -88,10 +88,11 @@ const AGENT_TOOL_MAP: Record<AgentType, string[]> = {
   "narrative-weaver": [...FILE_TOOLS, ...MATERIAL_TOOLS, ...NARRATIVE_TOOLS],
   "world-builder": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "character-designer": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
-  "story-designer": [...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],
+  "story-designer": ["todo", ...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],
   "chapter-writer": ["todo", ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS],
   editor: [...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS, ...STATE_WRITE_TOOLS],
   "consistency-checker": [
+    "todo",
     ...FILE_TOOLS,
     ...NARRATIVE_TOOLS,
     ...ENTITY_TOOLS,
@@ -108,6 +109,7 @@ for (const [agent, tools] of Object.entries(AGENT_TOOL_MAP)) {
 // ---------- chat 助手工具清单（非 AgentType，单独导出） ----------
 // 文件 + 章节 + 记忆 + 建书 + 全量只读查询 + 状态推进 + 触发
 export const CHAT_TOOLS = [
+  "todo",
   ...FILE_TOOLS,
   "read_chapter",
   "edit_chapter",

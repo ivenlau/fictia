@@ -1,12 +1,6 @@
 import { BaseAgent, type AgentRunResult, type AgentRunOptions } from "./base-agent.js";
 import type { StageName, AgentType } from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
-import {
-  buildNarrativeWeaveSummary,
-  buildArtDesignSummary,
-  buildWorldQuickRef,
-  buildPreviousChapterSummary,
-} from "../utils/context-extractor.js";
 import { listFiles, readFileSafe, relativePath } from "../utils/file.js";
 import * as path from "path";
 
@@ -42,42 +36,24 @@ export class ConsistencyCheckerAgent extends BaseAgent {
       { recursive: true, extensions: [".md"] }
     );
     const sortedChapterFiles = chapterFiles.sort();
-
-    const artDesign = await this.readProjectFile("design/art-design.md");
-    const narrativeWeave = await this.readProjectFile("design/narrative-weave.md");
-    const worldSetting = await this.readProjectFile("world/setting.md");
-    const worldRules = await this.readProjectFile("world/rules.md");
-    const worldTimeline = await this.readProjectFile("world/timeline.md");
-    const characterRegistry = await this.loadCharacterRegistry();
-
-    const settingParts: string[] = [];
-    if (artDesign) settingParts.push(`## design/art-design.md（概览）\n\n${buildArtDesignSummary(artDesign)}`);
-    if (narrativeWeave) settingParts.push(`## design/narrative-weave.md（概览）\n\n${buildNarrativeWeaveSummary(narrativeWeave)}`);
-    const worldRef = buildWorldQuickRef(worldSetting, worldRules);
-    if (worldRef) settingParts.push(`## 世界观速查\n\n${worldRef}`);
-    if (worldTimeline) settingParts.push(`## world/timeline.md\n\n${worldTimeline}`);
-    settingParts.push(`## 角色总览\n\n${characterRegistry}`);
-    const settings = settingParts.join("\n\n---\n\n");
-
-    const chapterContents: string[] = [];
     const latestFile = sortedChapterFiles.length > 0 ? sortedChapterFiles[sortedChapterFiles.length - 1] : null;
-
-    for (const f of sortedChapterFiles) {
-      const content = await readFileSafe(f);
-      if (!content) continue;
-      const relPath = relativePath(this.novelDir, f).replace(/\\/g, "/");
-
-      if (f === latestFile) {
-        chapterContents.push(`### ${relPath}（最新章节 - 全文）\n\n${content}`);
-      } else {
-        const summary = buildPreviousChapterSummary(content);
-        chapterContents.push(`### ${relPath}\n\n${summary}`);
-      }
-    }
-
+    const latestContent = latestFile ? ((await readFileSafe(latestFile)) ?? "") : "";
+    const latestRel = latestFile ? relativePath(this.novelDir, latestFile).replace(/\\/g, "/") : "";
     const scope = sortedChapterFiles.length > 0
       ? `ch01-ch${String(sortedChapterFiles.length).padStart(2, "0")}`
       : "无章节";
+
+    // L3 推→拉：user message 只保留最新章正文（审核刚需）+ 扫描范围。设定概览、历史章节
+    // 由 agent 按需用工具拉取（get_summary_chain / read_file / get_character / semantic_search），
+    // 避免一次性塞满全部章节正文导致注意力稀释。参见 docs/chapter-writer-context-reform.md。
+    const todoGuidance = `**校验所需上下文请主动用工具按需拉取**（初始输入只含最新章正文 + 扫描范围）：
+- 设定文件：read_file design/art-design.md / narrative-weave.md / world/setting.md / world/rules.md / world/timeline.md
+- 历史章节摘要：\`get_summary_chain\` / \`get_chapter_summary\`（不要逐章读全文）
+- 角色：\`get_character\`（按名查）
+- 伏笔现状：\`get_foreshadow\` / \`get_foreshadowing_stats\`
+- 相关设定召回：\`semantic_search\`
+
+**务必先调 \`todo\` 规划步骤**（见系统提示词「工作流程」，按追踪表逐维度核验），再逐步执行。`;
 
     let input: string;
     if (options?.userDirective) {
@@ -91,17 +67,20 @@ ${currentReport}
 ${options.userDirective}
 
 请根据要求修改一致性报告，输出完整的修改后内容。`;
+      this.lastUserBudget = [
+        { name: "当前报告", chars: currentReport.length },
+        { name: "用户修改要求", chars: (options.userDirective ?? "").length },
+      ];
     } else {
       input = `## 全局一致性校验
 
 ### 扫描范围
 ${scope}
 
-### 设定概览
-${settings}
+### 最新章节正文（${latestRel || "无"}）
+${latestContent || "（无章节）"}
 
-### 章节内容
-${chapterContents.join("\n\n---\n\n")}
+${todoGuidance}
 
 请从以下维度进行全面一致性校验：
 1. 设定一致性：世界观规则是否被违反（力量等级、术语、尺度、文化）
@@ -155,7 +134,11 @@ ${chapterContents.join("\n\n---\n\n")}
 ## 设定漂移检查表
 [力量体系/术语/文化等是否前后一致]
 
-请输出完整的一致性报告（Markdown 格式）。`;
+请输出完整的一致性报告（Markdown 格式），并用 write_file 写入 reviews/consistency-report.md。`;
+      this.lastUserBudget = [
+        { name: "最新章正文", chars: latestContent.length },
+        { name: "写作引导", chars: todoGuidance.length },
+      ];
     }
 
     const output = await this.runLLM(input, systemPrompt);
