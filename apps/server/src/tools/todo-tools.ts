@@ -51,7 +51,7 @@ export function createTodoTools(_ctx: ToolContext): FictiaTool[] {
           Type.Array(
             Type.Object({
               id: Type.Optional(Type.Number({ description: "update 时指定目标任务 id；add 时忽略" })),
-              text: Type.String({ description: "任务描述（add 必填；update 可选覆盖）" }),
+              text: Type.Optional(Type.String({ description: "任务描述（add 必填；update 可选覆盖）" })),
               status: Type.Optional(
                 StringEnum(["pending", "in_progress", "done"] as const),
               ),

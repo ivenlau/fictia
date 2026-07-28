@@ -127,9 +127,10 @@ ${options.userDirective}
       const todoGuidance = `**本章上下文需要你主动用工具按需拉取**（初始输入只含写作直接依据，其余按需获取，避免上下文膨胀）：
 - 风格规范：已在系统提示词「风格锚定」段；详细语言/禁忌用 read_file 读 design/style-guide.md
 - 前文连续性：\`get_summary_chain\`（前文摘要链，比前章全文精简）
-- 出场角色：\`get_character\`（按名查角色卡，含本章成长弧线）
+- 出场角色：**用 \`get_character(角色名)\` 按名查，不要 read_file 猜 \`characters/\` 文件名**（命名规范 \`{名}_{主角|反派|配角|龙套}.md\`，用职业身份当后缀会猜错）
 - 世界观/设定：\`semantic_search\` 召回，或 read_file 读 world/setting.md
 - 情感节拍/意象：read_file 读 design/art-design.md（按需）
+- **任何 \`read_file\` 前，若不确定路径，先 \`list_files\` 列目录确认**（避免猜路径报「文件不存在」）
 - craft 技法：\`get_craft_doc\`（如对话场景查 dialogue、去AI查 anti-ai-writing）
 
 **务必先调 \`todo\` 规划步骤，再按步执行**（见系统提示词「工作流程」）。`;

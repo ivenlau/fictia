@@ -28,7 +28,7 @@ export function createFileTools(ctx: ToolContext): FictiaTool[] {
       label: "读取文件",
       tier: "readonly",
       description:
-        "读取当前小说项目中的文件内容。可读取任意工作区文件（设定/角色/大纲/章节等）。路径相对项目根目录。",
+        "读取当前小说项目中的文件内容。可读取任意工作区文件（设定/角色/大纲/章节等）。路径相对项目根目录。**若不确定文件名或路径，先用 list_files 列出目录确认，不要凭猜测调用（猜错会报「文件不存在」）**。查角色优先用 get_character（按角色名查，免文件名）；查 craft 技法用 get_craft_doc。",
       parameters: Type.Object({
         path: Type.String({ description: "相对项目根目录的文件路径，如 'world/setting.md', 'characters/苏蔓_主角.md', 'meta.json'" }),
       }),
