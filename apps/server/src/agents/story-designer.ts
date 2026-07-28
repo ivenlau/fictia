@@ -3,6 +3,7 @@ import type { StageName, AgentType } from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
 import { parseActDefinitions } from "../utils/context-extractor.js";
 import { validateStoryDesign } from "../utils/chapter-files.js";
+import { listFiles } from "../utils/file.js";
 import path from "path";
 import fs from "fs/promises";
 
@@ -50,7 +51,9 @@ export class StoryDesignerAgent extends BaseAgent {
 - 重设计/增量时查写作进度：\`get_summary_chain\`（前文摘要）、\`get_foreshadowing_stats\`
 - craft 技法：\`get_craft_doc\`（outline-methods/conflict/emotional-arcs/suspense/reversals/chapter-hooks）
 
-**务必先调 \`todo\` 规划步骤**（见系统提示词「工作流程」），再逐幕逐章设计。`;
+**务必先调 \`todo\` 规划步骤**（见系统提示词「工作流程」），再逐幕逐章设计。
+
+**产出方式（关键，违反则任务失败）**：每设计完一个 act 或章细纲，立即用 \`write_file\` 写入对应文件（多文件用 \`===FILE: <路径>===\` 分隔）。**严禁把设计当作回复文本输出**——不调 write_file = 产出为空 = 任务失败（会被产出校验拦截）。`;
 
     let input: string;
     if (options?.isRedo) {
@@ -136,6 +139,21 @@ ${todoGuidance}
     }
 
     const output = await this.runLLM(input, systemPrompt);
+
+    // P1: 验证 agent 是否真的产出了大纲文件——防止「把设计当文本输出却没 write_file」的假完成。
+    const outlineFiles = await listFiles(path.join(this.novelDir, "outline"), {
+      recursive: true,
+      extensions: [".md"],
+    });
+    if (outlineFiles.length === 0) {
+      return {
+        output,
+        filesWritten: [],
+        success: false,
+        error:
+          "story-designer 未产出任何大纲文件（agent 可能把设计当作文本输出而未用 write_file 落盘）。请确认模型遵循 ===FILE: + write_file 产出格式，或换更强的模型重试。",
+      };
+    }
 
     // 轻量质量门：产出后结构校验（确定性，不调 LLM、不阻塞）。
     // 报告单独落盘到 reviews/story-design-validation.md（前端文件树可见）；

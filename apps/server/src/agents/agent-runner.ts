@@ -105,6 +105,9 @@ function collectAssistantText(
     if (am.errorMessage) errorMessage = am.errorMessage;
     text += extractText(am.content as { type: string; text?: string }[]);
   }
+  // 剥离 reasoning 模型的 <think>...</think>（部分 OpenAI 兼容端点会把 reasoning 混入 text，
+  // 污染输出与落盘文件；产出内容应在 think 之外，由 write_file 写入）。
+  text = text.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<think>[\s\S]*$/g, "").trim();
   return { text, errorMessage };
 }
 
