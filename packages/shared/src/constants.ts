@@ -99,6 +99,21 @@ export const INCREMENTAL_STAGES: StageName[] = [
   "consistency",
 ];
 
+/** Pipeline 阶段的完整执行顺序（用于分阶段重置时切片「该阶段及后续」）。 */
+export const STAGE_ORDER: StageName[] = [
+  "genre_analysis",
+  "architecture",
+  "style",
+  "art_design",
+  "narrative_weave",
+  "world",
+  "characters",
+  "story",
+  "chapters",
+  "editor",
+  "consistency",
+];
+
 // ===== Update Propagation Rules =====
 export const PROPAGATION_RULES: Record<StageName, StageName[]> = {
   genre_analysis: ["architecture", "style", "art_design", "narrative_weave", "world", "characters", "story", "chapters"],

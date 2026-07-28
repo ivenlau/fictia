@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { StageName } from "@fictia/shared";
 import { novelService } from "../services/novel.service.js";
 
 const router = Router();
@@ -72,7 +73,7 @@ router.patch("/:id", async (req, res) => {
   res.json(novel);
 });
 
-// POST /:id/reset - reset novel to fresh state
+// POST /:id/reset - reset novel（可选 fromStage：只重置该阶段及后续，保留前面产出）
 router.post("/:id/reset", async (req, res) => {
   const existing = novelService.getById(req.params.id);
   if (!existing) {
@@ -80,7 +81,8 @@ router.post("/:id/reset", async (req, res) => {
     return;
   }
 
-  const novel = await novelService.reset(req.params.id);
+  const { fromStage } = (req.body ?? {}) as { fromStage?: string };
+  const novel = await novelService.reset(req.params.id, fromStage as StageName | undefined);
   res.json(novel);
 });
 

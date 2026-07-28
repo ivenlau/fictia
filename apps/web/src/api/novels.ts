@@ -20,7 +20,7 @@ export const novelsApi = {
   setGenreCard: (id: string, cardKey: string | null) =>
     api.patch<Novel>(`/novels/${id}`, { genreCard: cardKey }),
   getMeta: (id: string) => api.get<Record<string, unknown>>(`/novels/${id}/meta`),
-  reset: (id: string) => api.post<Novel>(`/novels/${id}/reset`),
+  reset: (id: string, fromStage?: string) => api.post<Novel>(`/novels/${id}/reset`, { fromStage }),
   delete: (id: string) => api.delete<void>(`/novels/${id}`),
   getFiles: (id: string) => api.get<WorkspaceFile[]>(`/novels/${id}/files`),
   updateFile: (novelId: string, filePath: string, content: string) =>

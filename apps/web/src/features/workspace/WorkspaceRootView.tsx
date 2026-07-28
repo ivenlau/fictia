@@ -34,6 +34,7 @@ import { exportMarkdown, exportEpub, exportTxt } from "@/utils/export";
 import { WorkspaceTasks } from "./WorkspaceTasks";
 import { countWords } from "@/lib/markdown";
 import type { WorkspaceFile } from "@fictia/shared";
+import { STAGE_ORDER, STAGE_LABELS } from "@fictia/shared";
 
 interface WorkspaceRootViewProps {
   novelId?: string;
@@ -83,6 +84,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetFromStage, setResetFromStage] = useState<string>("all");
   const setWritingChapter = useAgentStore((s) => s.setWritingChapter);
   const autoGenerateActive = useAgentStore((s) => s.autoGenerateActive);
   const autoGeneratePaused = useAgentStore((s) => s.autoGeneratePaused);
@@ -213,13 +215,16 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   const handleReset = useCallback(async () => {
     if (!novelId) return;
     try {
-      await resetNovel.mutateAsync(novelId);
+      await resetNovel.mutateAsync({
+        id: novelId,
+        fromStage: resetFromStage === "all" ? undefined : resetFromStage,
+      });
       setShowResetConfirm(false);
       refreshFiles();
     } catch {
       // error handled silently
     }
-  }, [novelId, resetNovel, refreshFiles]);
+  }, [novelId, resetNovel, refreshFiles, resetFromStage]);
 
   if (!novelId) {
     return <WelcomeState onCreateNovel={() => setShowNewNovel(true)} />;
@@ -515,10 +520,27 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-heading text-base font-bold text-fg-primary mb-2">
-              确认重置
+              重置小说
             </h3>
-            <p className="font-body text-sm text-fg-secondary mb-5">
-              确定要重置小说「{novel.title}」吗？所有 Agent 产出、章节内容和聊天记录将被清空，小说将恢复到新建状态。小说基本信息（标题、类型、简介）会保留。
+            <p className="font-body text-sm text-fg-secondary mb-3">
+              选择重置起点：将从该阶段起清空产出（含后续所有阶段），前面已确认的阶段保留。
+            </p>
+            <select
+              value={resetFromStage}
+              onChange={(e) => setResetFromStage(e.target.value)}
+              className="w-full rounded-md border border-subtle bg-surface-card px-3 py-2 font-body text-sm text-fg-primary mb-3 focus:outline-none focus:border-accent"
+            >
+              <option value="all">重置全部（恢复新建状态）</option>
+              {STAGE_ORDER.map((s) => (
+                <option key={s} value={s}>
+                  从「{(STAGE_LABELS as Record<string, string>)[s]}」开始重置
+                </option>
+              ))}
+            </select>
+            <p className="font-body text-xs text-fg-muted mb-5">
+              {resetFromStage === "all"
+                ? "清空所有 Agent 产出、章节、聊天记录，恢复到新建状态（保留基本信息）。"
+                : `将删除「${(STAGE_LABELS as Record<string, string>)[resetFromStage]}」及其后所有阶段的产出；前面阶段与聊天记录保留。`}
             </p>
             <div className="flex justify-end gap-2">
               <button

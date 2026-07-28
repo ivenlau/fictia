@@ -40,7 +40,8 @@ export function useUpdateNovel(id: string) {
 export function useResetNovel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => novelsApi.reset(id),
+    mutationFn: ({ id, fromStage }: { id: string; fromStage?: string }) =>
+      novelsApi.reset(id, fromStage),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["novels"] });
       qc.invalidateQueries({ queryKey: ["novel"] });

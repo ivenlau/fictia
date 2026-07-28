@@ -1,11 +1,20 @@
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { db, schema } from "../db/index.js";
 import { fileService } from "./file.service.js";
 import { removeOrchestrator } from "./pipeline.service.js";
-import { FILE_TEMPLATES } from "../../../../packages/shared/src/constants.js";
+import { FILE_TEMPLATES, STAGE_ORDER } from "../../../../packages/shared/src/constants.js";
+import type { StageName } from "@fictia/shared";
 
 const now = () => new Date().toISOString();
+
+/** 简单 glob 匹配：* → [^/]*（不跨目录），其余字面量。用于分阶段重置按 pattern 删文件。 */
+function matchGlob(path: string, pattern: string): boolean {
+  const re = new RegExp(
+    "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$",
+  );
+  return re.test(path);
+}
 
 function parseNovel(row: any) {
   if (!row) return row;
@@ -129,11 +138,17 @@ export const novelService = {
     db.delete(schema.novels).where(eq(schema.novels.id, id)).run();
   },
 
-  /** Reset novel to fresh state: clear all agent outputs, chapters, and restore workspace templates */
-  async reset(id: string) {
+  /** Reset novel to fresh state: clear all agent outputs, chapters, and restore workspace templates.
+   *  传 fromStage 则只重置该阶段及后续（保留前面产出）；不传则全量重置。 */
+  async reset(id: string, fromStage?: StageName) {
     const timestamp = now();
 
-    // 删除所有相关数据
+    // 分阶段重置：只清 fromStage 及后续，保留前面产出
+    if (fromStage) {
+      return this.resetFromStage(id, fromStage, timestamp);
+    }
+
+    // 全量重置：删除所有相关数据
     db.delete(schema.chapters).where(eq(schema.chapters.novelId, id)).run();
     db.delete(schema.agentOutputs).where(eq(schema.agentOutputs.novelId, id)).run();
     db.delete(schema.chatMessages).where(eq(schema.chatMessages.novelId, id)).run();
@@ -184,6 +199,53 @@ export const novelService = {
     // 重置小说状态
     db.update(schema.novels).set({ status: "creating", pipelineStatus: "not_started", updatedAt: timestamp }).where(eq(schema.novels.id, id)).run();
 
+    return this.getById(id);
+  },
+
+  /** 分阶段重置：清 fromStage 及后续 stage 的产出（文件+DB），保留前面产出与基本信息。 */
+  async resetFromStage(id: string, fromStage: StageName, timestamp: string) {
+    const idx = STAGE_ORDER.indexOf(fromStage);
+    if (idx < 0) return this.getById(id);
+    const stagesToReset = STAGE_ORDER.slice(idx);
+    // stage → 产出文件 glob（取自各 agent getOutputFiles）
+    const STAGE_OUTPUTS: Record<StageName, string[]> = {
+      genre_analysis: ["design/genre-analysis.md"],
+      architecture: ["design/blueprint.md"],
+      style: ["design/style-guide.md"],
+      art_design: ["design/art-design.md"],
+      narrative_weave: ["design/narrative-weave.md"],
+      world: ["world/setting.md", "world/rules.md", "world/timeline.md"],
+      characters: ["characters/*.md"],
+      story: ["outline/act-*.md", "outline/chapters/*.md"],
+      chapters: ["chapters/*.md"],
+      editor: ["reviews/ch*-review.md"],
+      consistency: ["reviews/consistency-report.md"],
+    };
+    const patterns = stagesToReset.flatMap((s) => STAGE_OUTPUTS[s] ?? []);
+    const allFiles = await fileService.listWorkspaceFiles(id);
+    for (const file of allFiles) {
+      if (patterns.some((p) => matchGlob(file.path, p))) {
+        await fileService.deleteWorkspaceFile(id, file.path);
+      }
+    }
+    // DB：pipelineState（逐 stage 删）+ agentOutputs（stageName in 范围）+ chapters（若范围含）
+    for (const s of stagesToReset) {
+      db.delete(schema.pipelineState)
+        .where(and(eq(schema.pipelineState.novelId, id), eq(schema.pipelineState.stageName, s)))
+        .run();
+    }
+    db.delete(schema.agentOutputs)
+      .where(and(eq(schema.agentOutputs.novelId, id), inArray(schema.agentOutputs.stageName, stagesToReset as string[])))
+      .run();
+    if (stagesToReset.includes("chapters")) {
+      db.delete(schema.chapters).where(eq(schema.chapters.novelId, id)).run();
+    }
+    removeOrchestrator(id);
+    // 从 fromStage 重新开始
+    db.update(schema.novels)
+      .set({ pipelineStatus: "not_started", updatedAt: timestamp })
+      .where(eq(schema.novels.id, id))
+      .run();
     return this.getById(id);
   },
 
