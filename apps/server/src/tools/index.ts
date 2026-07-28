@@ -92,11 +92,12 @@ const AGENT_TOOL_MAP: Record<AgentType, string[]> = {
   "world-builder": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "character-designer": [...CRAFT_QUERY_TOOLS, ...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "story-designer": ["todo", ...CRAFT_QUERY_TOOLS, ...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],
-  "chapter-writer": ["todo", ...CRAFT_QUERY_TOOLS, ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS],
+  "chapter-writer": ["todo", ...CRAFT_QUERY_TOOLS, ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS, ...SEMANTIC_TOOLS],
   editor: [...CRAFT_QUERY_TOOLS, ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS, ...STATE_WRITE_TOOLS],
   "consistency-checker": [
     "todo",
     ...FILE_TOOLS,
+    "get_character",
     ...NARRATIVE_TOOLS,
     ...ENTITY_TOOLS,
     ...SEMANTIC_TOOLS,
