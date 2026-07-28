@@ -64,6 +64,9 @@ const MATERIAL_TOOLS = [
   "get_reference_genre",
   "get_reference_craft",
 ];
+/** craft 查询工具：给引用 craft 但不需要全 MATERIAL_TOOLS（体裁卡/偏好/参考作品）的 agent 用。
+ *  避免这些 agent 因查 craft 而误用 read_file 读 references/writing-craft/ 路径（报错）。 */
+const CRAFT_QUERY_TOOLS = ["list_craft_docs", "get_craft_doc"];
 const SEMANTIC_TOOLS = ["semantic_search"];
 /** 状态手动推进（write）：伏笔状态机 + 角色状态。 */
 const STATE_WRITE_TOOLS = ["update_foreshadow_state", "update_character_state"];
@@ -87,10 +90,10 @@ const AGENT_TOOL_MAP: Record<AgentType, string[]> = {
   "art-director": [...FILE_TOOLS, ...MATERIAL_TOOLS],
   "narrative-weaver": ["todo", ...FILE_TOOLS, ...MATERIAL_TOOLS, ...NARRATIVE_TOOLS],
   "world-builder": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
-  "character-designer": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
-  "story-designer": ["todo", ...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],
-  "chapter-writer": ["todo", ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS],
-  editor: [...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS, ...STATE_WRITE_TOOLS],
+  "character-designer": [...CRAFT_QUERY_TOOLS, ...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
+  "story-designer": ["todo", ...CRAFT_QUERY_TOOLS, ...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],
+  "chapter-writer": ["todo", ...CRAFT_QUERY_TOOLS, ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS],
+  editor: [...CRAFT_QUERY_TOOLS, ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS, ...STATE_WRITE_TOOLS],
   "consistency-checker": [
     "todo",
     ...FILE_TOOLS,

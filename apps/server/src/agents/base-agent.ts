@@ -117,7 +117,13 @@ export abstract class BaseAgent {
     const genre = await this.readNovelGenre();
     const craft = await loadCraftKnowledge(this.agentName, genre, this.novelDir);
     if (craft) {
-      sections.push({ level: 2, title: "已加载知识", body: craft });
+      sections.push({
+        level: 2,
+        title: "已加载知识",
+        body:
+          `> 以下写作技法/体裁卡已自动注入本段，可直接参考。**不要用 read_file 读 \`references/writing-craft/\`、\`references/genre-cards/\` 等路径**——那是系统内部模板路径，不在项目目录内，read_file 会报"文件不存在"。如需某篇完整版，用 \`get_craft_doc('文件名')\` 查询。\n\n` +
+          craft,
+      });
     }
 
     // 参考作品产出（风格指纹 / 参考体裁 / 参考技法；借鉴创作规律，禁止复制原句）
