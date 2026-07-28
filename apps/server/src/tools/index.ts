@@ -85,7 +85,7 @@ const AGENT_TOOL_MAP: Record<AgentType, string[]> = {
   architect: [...FILE_TOOLS, ...MATERIAL_TOOLS],
   "style-designer": [...FILE_TOOLS, ...MATERIAL_TOOLS],
   "art-director": [...FILE_TOOLS, ...MATERIAL_TOOLS],
-  "narrative-weaver": [...FILE_TOOLS, ...MATERIAL_TOOLS, ...NARRATIVE_TOOLS],
+  "narrative-weaver": ["todo", ...FILE_TOOLS, ...MATERIAL_TOOLS, ...NARRATIVE_TOOLS],
   "world-builder": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "character-designer": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "story-designer": ["todo", ...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],

@@ -1,9 +1,6 @@
 import { BaseAgent, type AgentRunResult, type AgentRunOptions } from "./base-agent.js";
 import { CHARACTER_TYPES, type StageName, type AgentType } from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
-import { readFileSafe } from "../utils/file.js";
-import { listCharacterFiles } from "../utils/chapter-files.js";
-import * as path from "path";
 
 export class CharacterDesignerAgent extends BaseAgent {
   protected stageName: StageName = "characters";
@@ -38,11 +35,12 @@ export class CharacterDesignerAgent extends BaseAgent {
 
     let input: string;
     if (options?.isRedo) {
-      const existing = await this.readExistingCharacters();
+      // redo 用角色总览摘要表替代全量读回所有角色文件——需要某角色细节时 read_file 按需查。
+      const existing = await this.loadCharacterRegistry();
       const relationships = await this.readProjectFile("characters/relationships.md");
       input = `## 重新设计人物
 
-### 当前人物设定
+### 当前人物总览（摘要表；需要某角色细节用 read_file 查 characters/{名}_{类型}.md）
 ${existing}
 
 ### 人物关系图
@@ -55,6 +53,12 @@ ${context}
 ${options.userDirective ?? "请重新审视人物设计"}
 
 请重新设计人物体系，输出各文件内容。${namingRule}`;
+      this.lastUserBudget = [
+        { name: "当前人物总览(摘要)", chars: existing.length },
+        { name: "人物关系图", chars: relationships.length },
+        { name: "前置产出", chars: context.length },
+        { name: "用户修改要求", chars: (options.userDirective ?? "").length },
+      ];
     } else if (options?.incrementalTarget || options?.userDirective) {
       const target = options?.incrementalTarget ?? "characters/relationships.md";
       const current = await this.readProjectFile(target);
@@ -100,18 +104,5 @@ ${context}
       filesWritten: ["characters/*.md"],
       success: true,
     };
-  }
-
-  /** 读现有所有角色文件，拼成文本块供 redo 参考。 */
-  private async readExistingCharacters(): Promise<string> {
-    const files = await listCharacterFiles(this.novelDir);
-    const parts: string[] = [];
-    for (const f of files) {
-      const content = await readFileSafe(f);
-      if (content) {
-        parts.push(`--- ${path.relative(this.novelDir, f).replace(/\\/g, "/")} ---\n${content}`);
-      }
-    }
-    return parts.join("\n\n") || "（暂无角色文件）";
   }
 }

@@ -86,4 +86,13 @@ ${blueprint}
       success: true,
     };
   }
+
+  /**
+   * style-designer 自己产出 style-guide，不需 system 注入旧的 style-guide 作锚定
+   * （自指冗余：首次设计时旧的可能不存在；redo 时 current 已在 user message 提供）。
+   * override 基类返回 null，跳过 system「风格锚定」段。
+   */
+  protected async readStyleGuide(): Promise<string | null> {
+    return null;
+  }
 }

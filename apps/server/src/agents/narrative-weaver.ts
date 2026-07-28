@@ -23,6 +23,8 @@ export class NarrativeWeaverAgent extends BaseAgent {
     const systemPrompt = await this.buildSystemPrompt();
     const context = await this.buildContext(this.getInputFiles());
 
+    const todoGuidance = `**建议先用 \`todo\` 工具拆解为 4 个子系统分步产出**（见系统提示词「工作流程」）：先规划伏笔骨架（FO-XX 列表 + 三层原则）→ 设计支线（SP-XX + 交汇点）→ 设计彩蛋（EE-XX）→ 最后生成交织节奏表（按章汇总）。逐子系统完成、核验，再进入下一个。`;
+
     let input: string;
     if (options?.isRedo) {
       const current = await this.readProjectFile("design/narrative-weave.md");
@@ -38,6 +40,11 @@ ${context}
 ${options.userDirective ?? "请重新审视叙事编织设计"}
 
 请重新设计叙事编织方案，输出完整内容。`;
+      this.lastUserBudget = [
+        { name: "当前叙事编织", chars: current.length },
+        { name: "前置产出", chars: context.length },
+        { name: "用户修改要求", chars: (options.userDirective ?? "").length },
+      ];
     } else if (options?.incrementalTarget || options?.userDirective) {
       const current = await this.readProjectFile("design/narrative-weave.md");
       input = `## 修改叙事编织
@@ -52,11 +59,18 @@ ${context}
 ${options.userDirective}
 
 请根据要求修改叙事编织方案，输出完整的修改后内容。`;
+      this.lastUserBudget = [
+        { name: "当前叙事编织", chars: current.length },
+        { name: "前置产出", chars: context.length },
+        { name: "用户修改要求", chars: (options.userDirective ?? "").length },
+      ];
     } else {
       input = `## 设计叙事编织方案
 
 ### 前置产出
 ${context}
+
+${todoGuidance}
 
 请设计完整的叙事编织方案，包括：
 
@@ -94,6 +108,10 @@ ${context}
 - 彩蛋
 
 请输出完整的叙事编织方案（Markdown 格式）。`;
+      this.lastUserBudget = [
+        { name: "前置产出", chars: context.length },
+        { name: "写作引导", chars: todoGuidance.length },
+      ];
     }
 
     const output = await this.runLLM(input, systemPrompt);
