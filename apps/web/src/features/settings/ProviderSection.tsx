@@ -10,9 +10,11 @@ import {
   ChevronRight,
   ChevronDown,
   RotateCcw,
+  Settings2,
 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { providersApi } from "@/api/providers";
+import { parseTokenNumber, formatTokenNumber } from "@/lib/tokens";
 import type { ProviderInfo } from "@fictia/shared";
 
 export function ProviderSection() {
@@ -99,6 +101,12 @@ function ProviderCard({
   const [addingModel, setAddingModel] = useState(false);
   const [newModelId, setNewModelId] = useState("");
   const [newModelName, setNewModelName] = useState("");
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [editCtx, setEditCtx] = useState("");
+  const [editMax, setEditMax] = useState("");
+  const [editReasoning, setEditReasoning] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const isCustom = provider.type === "custom";
   const hasKey = !!provider.apiKey;
@@ -162,6 +170,37 @@ function ProviderCard({
     setNewModelId("");
     setNewModelName("");
     setAddingModel(false);
+  };
+
+  const startEditModel = (m: { id: string; contextWindow: number; maxTokens: number; reasoning: boolean }) => {
+    setEditingModelId(m.id);
+    setEditCtx(formatTokenNumber(m.contextWindow));
+    setEditMax(formatTokenNumber(m.maxTokens));
+    setEditReasoning(!!m.reasoning);
+    setEditError("");
+  };
+
+  const saveEditModel = async (modelId: string) => {
+    const ctx = parseTokenNumber(editCtx);
+    const max = parseTokenNumber(editMax);
+    if (ctx == null || max == null) {
+      setEditError("请填有效数字，如 200k / 20k / 1024");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const m = await providersApi.updateModel(provider.id, modelId, {
+        contextWindow: ctx,
+        maxTokens: max,
+        reasoning: editReasoning,
+      });
+      onSaved({ ...provider, models: provider.models.map((mm) => (mm.id === modelId ? m : mm)) });
+      setEditingModelId(null);
+    } catch (e: any) {
+      setEditError(e?.message ?? "保存失败");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const resetModels = async () => {
@@ -313,26 +352,82 @@ function ProviderCard({
             )}
             <div className="space-y-1">
               {provider.models.map((m) => (
-                <div key={m.id} className="flex items-center gap-2 rounded px-2 py-1 hover:bg-surface-muted/40">
-                  <button
-                    onClick={() => toggleModel(m.id, m.enabled)}
-                    className={`h-3.5 w-3.5 rounded-full border ${
-                      m.enabled ? "border-accent bg-accent" : "border-fg-muted bg-surface-card"
-                    }`}
-                    title={m.enabled ? "已启用" : "已停用"}
-                  />
-                  <span className="flex-1 font-caption text-xs text-fg-primary">{m.name}</span>
-                  <span className="font-caption text-[10px] text-fg-muted">{m.id}</span>
-                  {m.reasoning && (
-                    <span className="rounded bg-surface-muted px-1 font-caption text-[10px] text-fg-secondary">推理</span>
+                <div key={m.id}>
+                  <div className="flex items-center gap-2 rounded px-2 py-1 hover:bg-surface-muted/40">
+                    <button
+                      onClick={() => toggleModel(m.id, m.enabled)}
+                      className={`h-3.5 w-3.5 shrink-0 rounded-full border ${
+                        m.enabled ? "border-accent bg-accent" : "border-fg-muted bg-surface-card"
+                      }`}
+                      title={m.enabled ? "已启用" : "已停用"}
+                    />
+                    <span className="flex-1 truncate font-caption text-xs text-fg-primary">{m.name}</span>
+                    <span className="font-caption text-[10px] text-fg-muted">{m.id}</span>
+                    <span className="font-caption text-[10px] text-fg-muted" title="上下文窗口 / 最大输出">
+                      {formatTokenNumber(m.contextWindow)}/{formatTokenNumber(m.maxTokens)}
+                    </span>
+                    {m.reasoning && (
+                      <span className="rounded bg-surface-muted px-1 font-caption text-[10px] text-fg-secondary">推理</span>
+                    )}
+                    <button
+                      onClick={() => startEditModel(m)}
+                      className="text-fg-muted transition-colors hover:text-accent"
+                      title="编辑参数（上下文窗口/最大输出/推理）"
+                    >
+                      <Settings2 size={12} />
+                    </button>
+                    <button
+                      onClick={() => removeModel(m.id)}
+                      className="text-fg-muted transition-colors hover:text-error"
+                      title={m.type === "custom" ? "删除" : "停用"}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  {editingModelId === m.id && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-subtle bg-surface-muted/40 px-2 py-2">
+                      <label className="font-caption text-[10px] text-fg-muted">上下文窗口</label>
+                      <input
+                        value={editCtx}
+                        onChange={(e) => setEditCtx(e.target.value)}
+                        placeholder="如 200k / 1m / 128000"
+                        className="w-24 rounded border border-subtle bg-surface-card px-2 py-1 font-caption text-[11px] focus:border-accent/40 focus:outline-none"
+                      />
+                      <label className="font-caption text-[10px] text-fg-muted">最大输出</label>
+                      <input
+                        value={editMax}
+                        onChange={(e) => setEditMax(e.target.value)}
+                        placeholder="如 20k / 8192"
+                        className="w-20 rounded border border-subtle bg-surface-card px-2 py-1 font-caption text-[11px] focus:border-accent/40 focus:outline-none"
+                      />
+                      <label className="flex items-center gap-1 font-caption text-[10px] text-fg-muted">
+                        <input
+                          type="checkbox"
+                          checked={editReasoning}
+                          onChange={(e) => setEditReasoning(e.target.checked)}
+                          className="h-3 w-3"
+                        />
+                        推理
+                      </label>
+                      <button
+                        onClick={() => saveEditModel(m.id)}
+                        disabled={savingEdit}
+                        className="flex items-center gap-1 rounded bg-accent px-2 py-1 font-caption text-[11px] text-white hover:bg-accent-deep disabled:opacity-50"
+                      >
+                        {savingEdit ? <Loader2 size={11} className="animate-spin" /> : null}
+                        保存
+                      </button>
+                      <button
+                        onClick={() => setEditingModelId(null)}
+                        className="rounded border border-subtle px-2 py-1 font-caption text-[11px] text-fg-secondary hover:bg-surface-card"
+                      >
+                        取消
+                      </button>
+                      {editError && (
+                        <span className="font-caption text-[10px] text-error">{editError}</span>
+                      )}
+                    </div>
                   )}
-                  <button
-                    onClick={() => removeModel(m.id)}
-                    className="text-fg-muted transition-colors hover:text-error"
-                    title={m.type === "custom" ? "删除" : "停用"}
-                  >
-                    <Trash2 size={12} />
-                  </button>
                 </div>
               ))}
               {provider.models.length === 0 && (

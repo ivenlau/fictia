@@ -113,9 +113,9 @@ export const models = sqliteTable(
     providerId: text("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
     type: text("type").notNull(), // "preset" | "custom"
     name: text("name").notNull(),
-    contextWindow: integer("context_window").default(128000),
-    maxTokens: integer("max_tokens").default(8192),
-    reasoning: integer("reasoning").default(0),
+    contextWindow: integer("context_window").default(200000),
+    maxTokens: integer("max_tokens").default(20480),
+    reasoning: integer("reasoning").default(1),
     enabled: integer("enabled").notNull().default(1),
     sort: integer("sort").notNull().default(0),
     createdAt: text("created_at").notNull(),
