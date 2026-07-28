@@ -28,7 +28,7 @@ export function createChapterTools(ctx: ToolContext): FictiaTool[] {
       label: "获取章节写作上下文",
       tier: "readonly",
       description:
-        "获取写作指定章节所需的全部上下文：章节大纲、出场角色压缩参考卡、风格指南、前一章正文、世界观相关部分。chapter-writer 写章前调用。",
+        "[已弃用] 一站式获取章节上下文（大纲+角色+风格+前章正文+世界观全文）。新流程改用细粒度工具按需拉取（read_file/get_character/get_summary_chain/semantic_search），避免上下文膨胀。保留供过渡，稳定后删除。",
       parameters: Type.Object({
         chapter_number: Type.Number({ description: "章节编号" }),
       }),

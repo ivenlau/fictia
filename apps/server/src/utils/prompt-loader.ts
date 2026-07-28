@@ -105,8 +105,14 @@ export async function loadCraftKnowledge(
   const { craftFiles, hasGenreCard } = await loadCraftIndex(agentName);
   const parts: string[] = [];
   for (const f of craftFiles) {
-    const content = await readTemplateSafe(`${CRAFT_DIR}/${f}`);
-    if (content) parts.push(`### ${f}\n\n${content}`);
+    // 优先精要版（system 只放核心清单，避免 craft 全文撑爆上下文，参见
+    // docs/chapter-writer-context-reform.md L1）；无 brief 则回退全文（渐进迁移）。
+    // 完整内容始终可经 get_craft_doc 工具按需获取。
+    const brief = await readTemplateSafe(`${CRAFT_DIR}/${f.replace(/\.md$/, ".brief.md")}`);
+    const content = brief ?? (await readTemplateSafe(`${CRAFT_DIR}/${f}`));
+    if (content) {
+      parts.push(`### ${f}${brief ? "（精要版；完整见 get_craft_doc）" : ""}\n\n${content}`);
+    }
   }
   // 自定义写作技法（块 2）
   if (novelDir) {

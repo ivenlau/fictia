@@ -100,7 +100,7 @@ ${history.map((h) => `- 第${h.ch}章 ${h.op} -> ${h.state}${h.note ? " | " + h.
       label: "写作空间",
       tier: "readonly",
       description:
-        "一站式获取写章所需的动态写作空间（章节大纲 + 风格要点 + 世界观速查 + 角色当前状态 + 本章伏笔指令）。chapter-writer 写章前用。",
+        "[已弃用] 一站式获取写章动态写作空间（大纲+风格+世界观+角色态+伏笔）。新流程改用细粒度工具按需拉取，避免上下文膨胀。保留供过渡，稳定后删除。",
       parameters: Type.Object({
         chapter_number: Type.Number({ description: "章节号" }),
       }),

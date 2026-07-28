@@ -122,6 +122,46 @@ export interface AgentRoundTrace {
   toolCalls: AgentToolCallTrace[];
 }
 
+/** prompt 预算拆解条目（诊断用）：单个注入块的名称与字符数。 */
+export interface PromptBudgetItem {
+  name: string;
+  chars: number;
+}
+
+/**
+ * prompt 预算拆解（上下文治理用）：system 各注入段 + user 各块的字符数分布。
+ * 由 BaseAgent.buildSystemPrompt / 子类构建 user message 时收集，随 trace 下发，
+ * 供调试视图量化上下文构成、定位膨胀块、度量压缩收益。
+ */
+export interface PromptBudget {
+  /** system 各块（basePrompt 模板 + 各注入段：偏好/craft/对标/风格锚定…）。 */
+  system: PromptBudgetItem[];
+  /** user 各块（章节大纲/风格/世界观/角色/伏笔/前章正文…，因 agent 而异）。 */
+  user: PromptBudgetItem[];
+  systemTotal: number;
+  userTotal: number;
+}
+
+// ===== Todo 工具（任务规划，L2）=====
+// chapter-writer 等写章 agent 动笔前先规划任务、逐步推进。
+// 状态存工具工厂闭包，快照经 trace 下发调试视图。
+
+export type TodoStatus = "pending" | "in_progress" | "done";
+
+/** todo 工具的单个任务项。 */
+export interface TodoItem {
+  id: number;
+  text: string;
+  status: TodoStatus;
+}
+
+/** todo 工具的快照（随 trace 下发调试视图，展示 agent 规划与进度）。 */
+export interface TodoSnapshot {
+  items: TodoItem[];
+  completed: number;
+  total: number;
+}
+
 /** 一次完整 agent 运行的诊断 trace。 */
 export interface AgentRunTrace {
   version: 1;
@@ -142,6 +182,10 @@ export interface AgentRunTrace {
   rounds: AgentRoundTrace[];
   /** 写类工具触及的文件/章节标识。 */
   filesWritten: string[];
+  /** prompt 预算拆解（上下文治理诊断；旧 trace 可能缺失）。 */
+  promptBudget?: PromptBudget;
+  /** 最近一次 todo 工具调用后的任务清单快照（展示 agent 规划与进度；无则缺失）。 */
+  todoSnapshot?: TodoSnapshot;
   /** 失败原因（仅失败时有）。 */
   errorMessage?: string;
 }

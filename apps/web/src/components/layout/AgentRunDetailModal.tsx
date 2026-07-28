@@ -15,8 +15,9 @@ import {
   Send,
   Info,
   Terminal,
+  ListTodo,
 } from "lucide-react";
-import type { AgentRunTrace, AgentRoundTrace, AgentToolCallTrace } from "@fictia/shared";
+import type { AgentRunTrace, AgentRoundTrace, AgentToolCallTrace, PromptBudget, PromptBudgetItem, TodoSnapshot } from "@fictia/shared";
 import { agentsApi } from "@/api/agents";
 
 interface AgentRunDetailModalProps {
@@ -286,6 +287,7 @@ function OverviewTab({ trace }: { trace: AgentRunTrace | null }) {
         <Stat label="工具调用" value={`${trace.rounds.reduce((n, r) => n + r.toolCalls.length, 0)}`} />
         <Stat label="耗时" value={duration} />
       </div>
+      <TodoPanel snapshot={trace.todoSnapshot} />
       {trace.filesWritten.length > 0 && (
         <div>
           <p className="font-caption text-[10px] font-semibold uppercase tracking-wide text-fg-muted mb-1">写入文件</p>
@@ -298,8 +300,101 @@ function OverviewTab({ trace }: { trace: AgentRunTrace | null }) {
           </div>
         </div>
       )}
+      <BudgetBar budget={trace.promptBudget} />
       <Collapsible icon={<Terminal size={12} />} title="系统提示词" text={trace.systemPrompt} />
       <Collapsible icon={<Send size={12} />} title="用户输入" text={trace.userPrompt} />
+    </div>
+  );
+}
+
+// ==================== 任务规划（todo 工具快照）====================
+
+function TodoPanel({ snapshot }: { snapshot?: TodoSnapshot }) {
+  if (!snapshot || snapshot.items.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-subtle bg-surface-secondary/40 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-caption text-[11px] font-semibold text-fg-secondary flex items-center gap-1.5">
+          <ListTodo size={12} /> 任务规划
+        </span>
+        <span className="font-caption text-[11px] text-fg-muted">
+          {snapshot.completed}/{snapshot.total} 完成
+        </span>
+      </div>
+      <div className="space-y-1">
+        {snapshot.items.map((it) => {
+          const mark = it.status === "done" ? "✓" : it.status === "in_progress" ? "▶" : "○";
+          const color =
+            it.status === "done" ? "text-success" : it.status === "in_progress" ? "text-accent" : "text-fg-muted";
+          return (
+            <div
+              key={it.id}
+              className={`flex items-center gap-2 font-caption text-[11px] ${
+                it.status === "done" ? "text-fg-muted line-through" : "text-fg-secondary"
+              }`}
+            >
+              <span className={`${color} shrink-0`}>{mark}</span>
+              <span className="text-fg-muted">#{it.id}</span>
+              <span className="truncate">{it.text}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ==================== 上下文预算（system/user 各块字符数分布）====================
+
+/** 单块字符数超过此阈值视为膨胀嫌疑，条形标红。 */
+const HEAVY_BLOCK_THRESHOLD = 10000;
+/** 单侧总字符数超过此阈值视为整体超标，total 标红。 */
+const HEAVY_TOTAL_THRESHOLD = 20000;
+
+function BudgetBar({ budget }: { budget?: PromptBudget }) {
+  if (!budget) return null;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <BudgetColumn label="系统提示词" total={budget.systemTotal} items={budget.system} />
+      <BudgetColumn label="用户输入" total={budget.userTotal} items={budget.user} />
+    </div>
+  );
+}
+
+function BudgetColumn({ label, total, items }: { label: string; total: number; items: PromptBudgetItem[] }) {
+  if (items.length === 0) return null;
+  const sorted = [...items].sort((a, b) => b.chars - a.chars);
+  const totalHeavy = total > HEAVY_TOTAL_THRESHOLD;
+  return (
+    <div className="rounded-lg border border-subtle bg-surface-secondary/40 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-caption text-[11px] font-semibold text-fg-secondary">{label}</span>
+        <span className={`font-mono text-[11px] ${totalHeavy ? "text-error" : "text-fg-muted"}`}>
+          {total.toLocaleString()} 字符
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {sorted.map((it, i) => {
+          const pct = total > 0 ? Math.max(2, (it.chars / total) * 100) : 0;
+          const heavy = it.chars > HEAVY_BLOCK_THRESHOLD;
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <span className="font-caption text-[10px] text-fg-muted w-28 shrink-0 truncate" title={it.name}>
+                {it.name}
+              </span>
+              <div className="flex-1 h-3 rounded bg-surface-muted/60 overflow-hidden">
+                <div
+                  className={`h-full rounded ${heavy ? "bg-error/60" : "bg-accent/60"}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className={`font-mono text-[10px] w-14 text-right shrink-0 ${heavy ? "text-error" : "text-fg-muted"}`}>
+                {it.chars.toLocaleString()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

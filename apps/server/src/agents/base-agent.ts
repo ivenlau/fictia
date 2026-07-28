@@ -1,5 +1,5 @@
 import { stream, type Model, type Context, type Message } from "@earendil-works/pi-ai";
-import { DESIGN_DIR, type StageName, type AgentType, type AgentRunTrace } from "@fictia/shared";
+import { DESIGN_DIR, type StageName, type AgentType, type AgentRunTrace, type PromptBudget, type PromptBudgetItem } from "@fictia/shared";
 import { loadPromptTemplate, loadCraftKnowledge } from "../utils/prompt-loader.js";
 import { readFileSafe } from "../utils/file.js";
 import { listCharacterFiles } from "../utils/chapter-files.js";
@@ -44,6 +44,10 @@ export interface AgentRunOptions {
   traceFilename?: string;
 }
 
+/** style-guide 注入 system 的字符上限：超出截断，完整可用 read_project_file 读取。
+ *  避免全文（部分 novel 达 12-28k 字）与 user 侧本 act 提取重复、撑爆上下文。 */
+const STYLE_GUIDE_MAX_CHARS = 5000;
+
 export abstract class BaseAgent {
   protected abstract stageName: StageName;
   protected abstract agentType: AgentType;
@@ -63,6 +67,10 @@ export abstract class BaseAgent {
   traceFilename?: string;
   /** 最近一次 runLLM 的完整 trace（失败诊断用）。 */
   lastTrace?: AgentRunTrace;
+  /** 最近一次 buildSystemPrompt 收集的 system 各块字符数（预算诊断）。 */
+  protected lastSystemBudget: PromptBudgetItem[] = [];
+  /** 最近一次构建 user message 收集的各块字符数（子类填充；预算诊断）。 */
+  protected lastUserBudget: PromptBudgetItem[] = [];
 
   constructor(
     novelDir: string,
@@ -146,6 +154,12 @@ export abstract class BaseAgent {
       });
     }
 
+    // 收集 system 预算（basePrompt 模板 + 各注入段），供调试视图量化上下文构成。
+    this.lastSystemBudget = [
+      { name: "basePrompt(模板)", chars: basePrompt.length },
+      ...sections.map((s) => ({ name: s.title, chars: s.body.length })),
+    ];
+
     return injectSectionsBefore(basePrompt, sections);
   }
 
@@ -196,10 +210,21 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Read style-guide.md as an anchor for all agents.
+   * 风格锚定：读取 style-guide.md 并限长注入 system。
+   *
+   * 全文注入会与 chapter-writer user 侧的 extractStyleStageNotes（本 act 提取）重复，
+   * 且部分 novel 的 style-guide 达 12-28k 字。这里保留前 STYLE_GUIDE_MAX_CHARS 字
+   * （总体调性 + 语言规范通常在前），尾部提示完整文件可用 read_project_file 读取。
+   * act 专属风格锚点由 chapter-writer 经 extractStyleStageNotes 注入 user message。
    */
   protected async readStyleGuide(): Promise<string | null> {
-    return readFileSafe(path.join(this.novelDir, DESIGN_DIR, "style-guide.md"));
+    const full = await readFileSafe(path.join(this.novelDir, DESIGN_DIR, "style-guide.md"));
+    if (!full) return null;
+    if (full.length <= STYLE_GUIDE_MAX_CHARS) return full;
+    return (
+      full.slice(0, STYLE_GUIDE_MAX_CHARS) +
+      "\n\n…（已截断，完整风格指南见 design/style-guide.md，可用 read_project_file 读取）"
+    );
   }
 
   /**
@@ -271,10 +296,22 @@ export abstract class BaseAgent {
     };
     const tools = toolRegistry.getToolsForAgent(ctx, this.agentType);
 
+    // 组装 prompt 预算（system/user 各块字符数），下发给 trace 供调试视图量化上下文构成。
+    const systemTotal = this.lastSystemBudget.reduce((n, b) => n + b.chars, 0);
+    const userTotal = this.lastUserBudget.reduce((n, b) => n + b.chars, 0);
+    const promptBudget: PromptBudget = {
+      system: this.lastSystemBudget,
+      user: this.lastUserBudget,
+      systemTotal,
+      userTotal,
+    };
+
     console.log(`[${this.agentName}] Calling LLM with tools...`, {
       promptLength: resolvedSystemPrompt.length,
       messageLength: userMessage.length,
       toolCount: tools.length,
+      systemTotal,
+      userTotal,
     });
     const startTime = Date.now();
     const novelId = path.basename(this.novelDir);
@@ -307,6 +344,7 @@ export abstract class BaseAgent {
         modelLabel: this.modelId,
         providerLabel: this.providerId,
         maxIterations: this.maxToolIterations,
+        promptBudget,
         onToolCall: (name, input) => console.log(`[${this.agentName}] Tool call: ${name}`, input),
         onToolResult: (name, _input, result) =>
           console.log(`[${this.agentName}] Tool result: ${result.substring(0, 100)}...`),

@@ -13,9 +13,6 @@ import { readFileSafe, listFiles } from "../utils/file.js";
 import { findChapterFile, findOutlineFile, extractOutlineTitle } from "../utils/chapter-files.js";
 import {
   extractChapterNarrativeWeave,
-  extractChapterArtDesign,
-  extractStyleStageNotes,
-  buildWorldQuickRef,
   buildPreviousChapterSummary,
   chapterToAct,
 } from "../utils/context-extractor.js";
@@ -103,68 +100,63 @@ ${current}
 ${options.userDirective}
 
 请根据要求修改章节，输出完整的修改后内容。`;
+
+      this.lastUserBudget = [
+        { name: "当前章节正文", chars: current.length },
+        { name: "用户修改要求", chars: (options.userDirective ?? "").length },
+      ];
     } else {
       const outline = outlineContent;
 
-      const styleGuide = await this.readProjectFile(`${DESIGN_DIR}/style-guide.md`);
-      const artDesign = await this.readProjectFile(`${DESIGN_DIR}/art-design.md`);
+      // L3 推→拉：user message 只保留写作直接依据（大纲 + 本章伏笔指令 + 上章衔接）。
+      // 风格规范在 system prompt「风格锚定」段（截断版）；世界观/角色/情感节拍/前章全文
+      // 由 agent 按需用工具拉取（get_character / get_summary_chain / semantic_search / read_file），
+      // 避免一次性塞满 user message 导致注意力稀释。参见 docs/chapter-writer-context-reform.md L3。
       const narrativeWeave = await this.readProjectFile(`${DESIGN_DIR}/narrative-weave.md`);
-      const worldSetting = await this.readProjectFile("world/setting.md");
-      const worldRules = await this.readProjectFile("world/rules.md");
-
       const narrativeWeaveExcerpt = extractChapterNarrativeWeave(narrativeWeave, chapterNumber);
-      const artDesignExcerpt = extractChapterArtDesign(artDesign, chapterNumber);
-      const styleStageNotes = extractStyleStageNotes(styleGuide, actNumber, blueprint || undefined);
-
-      const characterRegistry = await this.loadCharacterRegistry();
-
-      const worldQuickRef = buildWorldQuickRef(worldSetting, worldRules);
 
       let previousChapterNotes = "";
-      let previousChapterText = "";
       if (chapterNumber > 1) {
         const prevFile = await findChapterFile(this.novelDir, chapterNumber - 1);
         if (prevFile) {
-          previousChapterText = (await readFileSafe(prevFile)) ?? "";
-          if (previousChapterText) {
-            previousChapterNotes = buildPreviousChapterSummary(previousChapterText);
-          }
+          const prevText = (await readFileSafe(prevFile)) ?? "";
+          if (prevText) previousChapterNotes = buildPreviousChapterSummary(prevText);
         }
       }
 
-      input = `${options?.extraContext ? options.extraContext + "\n\n---\n\n" : ""}## 写作第 ${chapterNumber} 章
+      const todoGuidance = `**本章上下文需要你主动用工具按需拉取**（初始输入只含写作直接依据，其余按需获取，避免上下文膨胀）：
+- 风格规范：已在系统提示词「风格锚定」段；详细语言/禁忌用 read_file 读 design/style-guide.md
+- 前文连续性：\`get_summary_chain\`（前文摘要链，比前章全文精简）
+- 出场角色：\`get_character\`（按名查角色卡，含本章成长弧线）
+- 世界观/设定：\`semantic_search\` 召回，或 read_file 读 world/setting.md
+- 情感节拍/意象：read_file 读 design/art-design.md（按需）
+- craft 技法：\`get_craft_doc\`（如对话场景查 dialogue、去AI查 anti-ai-writing）
+
+**务必先调 \`todo\` 规划步骤，再按步执行**（见系统提示词「工作流程」）。`;
+
+      input = `${options?.extraContext ? options.extraContext + "\n\n---\n\n" : ""}## 写作第 ${chapterNumber} 章${title ? `：${title}` : ""}
+
+**act ${actNumber}** | 写入路径：${outputPath}
 
 ### 章节大纲
 ${outline}
 
-### 风格指南（本阶段）
-${styleStageNotes}
-
-### 世界观速查
-${worldQuickRef}
-
-### 角色总览
-${characterRegistry}
-
-### 叙事技巧配置（本章）
+### 本章伏笔指令（narrative-weave）
 ${narrativeWeaveExcerpt}
 
-### 情感节拍（本章）
-${artDesignExcerpt}
+### 上章衔接
+${previousChapterNotes || "（这是第一章，无前文衔接）"}
 
-${previousChapterNotes}
+---
 
-### 前一章正文（保持连续性）
-${previousChapterText || "（这是第一章）"}
+${todoGuidance}
 
 请按照以下要求写作：
-1. 严格遵循风格指南中的所有规范
-2. 按照章节大纲展开场景
-3. 执行大纲中 weave_notes 指定的伏笔/支线/彩蛋指令
-4. 人物对话和行为必须符合角色设定
-5. 地点、势力、历史引用必须符合世界设定
-6. 章节字数以大纲中的目标字数为准，允许 ±20% 浮动
-7. 确保与前一章的连续性
+1. 严格遵循系统提示词中的风格规范与 craft 技法
+2. 按章节大纲展开场景，执行伏笔/支线指令
+3. 人物言行符合角色设定（用 \`get_character\` 查），地点/势力/历史符合世界设定（用 \`semantic_search\` 查）
+4. 保持与前一章连续性（用 \`get_summary_chain\` 查前文）
+5. 章节字数以大纲目标为准，允许 ±20% 浮动
 
 正文结束后，附上写作备注：
 - 本章字数
@@ -174,7 +166,18 @@ ${previousChapterText || "（这是第一章）"}
 - 角色状态更新：主要角色的状态变化
 - 下章衔接：为下一章留下的衔接点
 
-请输出完整的章节正文和写作备注。`;
+请先 \`todo\` 规划，按步写作与核验（\`validate_style\` / \`scan_consistency\` / \`count_words\`），最后用 \`write_file\` 写入 ${outputPath}，并输出完整的章节正文和写作备注。`;
+
+      // 收集 user 预算（推→拉后各块字符数），供调试视图度量瘦身效果。
+      this.lastUserBudget = [
+        ...(options?.extraContext
+          ? [{ name: "extraContext(注入)", chars: options?.extraContext.length }]
+          : []),
+        { name: "章节大纲", chars: outline.length },
+        { name: "本章伏笔指令", chars: narrativeWeaveExcerpt.length },
+        { name: "上章衔接备注", chars: previousChapterNotes.length },
+        { name: "写作引导", chars: todoGuidance.length },
+      ];
     }
 
     const output = await this.runLLM(input, systemPrompt);

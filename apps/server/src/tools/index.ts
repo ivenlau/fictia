@@ -19,6 +19,7 @@ import { createSemanticSearchTool } from "./semantic-search-tool.js";
 import { createStateWriteTools } from "./state-write-tools.js";
 import { createTriggerTools } from "./trigger-tools.js";
 import { createOrchestrationTools } from "./orchestration-tools.js";
+import { createTodoTools } from "./todo-tools.js";
 
 // ---------- 工具工厂注册 ----------
 toolRegistry.registerFactory(createFileTools);
@@ -33,6 +34,7 @@ toolRegistry.registerFactory(createSemanticSearchTool);
 toolRegistry.registerFactory(createStateWriteTools);
 toolRegistry.registerFactory(createTriggerTools);
 toolRegistry.registerFactory(createOrchestrationTools);
+toolRegistry.registerFactory(createTodoTools);
 
 // ---------- 工具组（按域聚合，便于组合分配） ----------
 const FILE_TOOLS = ["read_file", "write_file", "edit_file", "list_files", "count_words"];
@@ -87,7 +89,7 @@ const AGENT_TOOL_MAP: Record<AgentType, string[]> = {
   "world-builder": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "character-designer": [...FILE_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS],
   "story-designer": [...CHAPTER_FULL_TOOLS, ...SEMANTIC_TOOLS, ...ENTITY_TOOLS, ...NARRATIVE_TOOLS],
-  "chapter-writer": [...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS],
+  "chapter-writer": ["todo", ...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS],
   editor: [...CHAPTER_FULL_TOOLS, ...NARRATIVE_TOOLS, ...ENTITY_TOOLS, ...STATE_WRITE_TOOLS],
   "consistency-checker": [
     ...FILE_TOOLS,

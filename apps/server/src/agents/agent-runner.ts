@@ -29,6 +29,8 @@ import type {
   AgentRunTrace,
   AgentRoundTrace,
   AgentToolCallTrace,
+  PromptBudget,
+  TodoSnapshot,
 } from "@fictia/shared";
 import type { FictiaTool } from "../tools/types.js";
 
@@ -58,6 +60,8 @@ export interface AgentRunnerOptions {
   onToolResult?: (name: string, input: unknown, result: string, isError: boolean) => void;
   /** 调试 trace 增量回调：循环开始、每次工具结束、每轮结束、运行结束时触发。 */
   onTraceUpdate?: (trace: AgentRunTrace) => void;
+  /** prompt 预算拆解（system/user 各块字符数），写入 trace.promptBudget。 */
+  promptBudget?: PromptBudget;
 }
 
 export interface AgentRunnerToolCall {
@@ -148,6 +152,9 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
   const pendingTools = new Map<string, { entry: AgentToolCallTrace; startedAtMs: number }>();
   const userPrompt = extractInitialUserText(opts.messages);
 
+  /** 最近一次 todo 工具调用后的任务清单快照（写入 trace.todoSnapshot）。 */
+  let currentTodoSnapshot: TodoSnapshot | undefined;
+
   const buildTrace = (completedAt: string | null, errorMessage?: string): AgentRunTrace => {
     const openRound =
       currentRound.assistantText || currentRound.toolCalls.length ? [currentRound] : [];
@@ -163,6 +170,8 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
       totalRounds: rounds.length + openRound.length,
       rounds: [...rounds, ...openRound],
       filesWritten: [...filesWritten],
+      promptBudget: opts.promptBudget,
+      todoSnapshot: currentTodoSnapshot,
       errorMessage,
     };
   };
@@ -205,6 +214,12 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
       );
       const isError = !!ctx.isError;
       toolCalls.push({ name, input, result: resultText, isError });
+      // todo 工具：提取最新任务清单快照写入 trace（展示 agent 规划与进度）
+      if (name === "todo") {
+        const snap = (ctx.result as { details?: { snapshot?: TodoSnapshot } } | undefined)?.details
+          ?.snapshot;
+        if (snap) currentTodoSnapshot = snap;
+      }
       opts.onToolResult?.(name, input, resultText, isError);
       return undefined;
     },
