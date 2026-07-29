@@ -21,6 +21,7 @@ import {
   ChevronDown,
   FileText,
   BookMarked,
+  FastForward,
 } from "lucide-react";
 import { useNovelStore } from "@/stores/novelStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -30,6 +31,7 @@ import { useEditorStore } from "@/stores/editorStore";
 import { novelsApi } from "@/api/novels";
 import { pipelinesApi } from "@/api/pipelines";
 import { EditNovelModal } from "@/features/novel/EditNovelModal";
+import { AutopilotDialog } from "@/features/chapter/AutopilotDialog";
 import { exportMarkdown, exportEpub, exportTxt } from "@/utils/export";
 import { WorkspaceTasks } from "./WorkspaceTasks";
 import { countWords } from "@/lib/markdown";
@@ -85,12 +87,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetFromStage, setResetFromStage] = useState<string>("all");
-  const setWritingChapter = useAgentStore((s) => s.setWritingChapter);
-  const autoGenerateActive = useAgentStore((s) => s.autoGenerateActive);
-  const autoGeneratePaused = useAgentStore((s) => s.autoGeneratePaused);
-  const setAutoGenerateActive = useAgentStore((s) => s.setAutoGenerateActive);
-  const setAutoGeneratePaused = useAgentStore((s) => s.setAutoGeneratePaused);
-  const pausedRef = useRef(false);
+  const [showAutopilot, setShowAutopilot] = useState(false);
 
   // Load workspace files for chapter listing
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
@@ -142,64 +139,6 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
     }
     setShowExportMenu(false);
   }, [chapterFiles, novel]);
-
-  const waitForStageDone = useCallback((targetNovelId: string): Promise<void> => {
-    return new Promise((resolve) => {
-      const poll = setInterval(async () => {
-        try {
-          const status = await pipelinesApi.getStatus(targetNovelId);
-          const stage = status.stages.find((s) => s.name === "chapters");
-          if (stage && stage.status !== "in_progress") {
-            clearInterval(poll);
-            refreshFiles();
-            resolve();
-          }
-        } catch {}
-      }, 3000);
-    });
-  }, [refreshFiles]);
-
-  const handleAutoGenerate = useCallback(async () => {
-    if (!novelId) return;
-    const pending = chapterFiles.filter((ch) => !ch.hasContent);
-    if (pending.length === 0) return;
-
-    setAutoGenerateActive(true);
-    setAutoGeneratePaused(false);
-    pausedRef.current = false;
-
-    // Use pipeline runStage for each pending chapter
-    for (const ch of pending) {
-      while (pausedRef.current) {
-        await new Promise((r) => setTimeout(r, 500));
-      }
-
-      setWritingChapter(ch.path);
-      try {
-        await pipelinesApi.runStage(novelId, "chapters", {
-          incrementalTarget: ch.path,
-        });
-        await waitForStageDone(novelId);
-      } catch (err) {
-        console.error("Auto-generate failed for chapter", ch.number, err);
-      }
-    }
-
-    setWritingChapter(null);
-    setAutoGenerateActive(false);
-    setAutoGeneratePaused(false);
-    refreshFiles();
-  }, [novelId, chapterFiles, setWritingChapter, setAutoGenerateActive, setAutoGeneratePaused, waitForStageDone, refreshFiles]);
-
-  const handlePauseResume = useCallback(() => {
-    if (autoGeneratePaused) {
-      pausedRef.current = false;
-      setAutoGeneratePaused(false);
-    } else {
-      pausedRef.current = true;
-      setAutoGeneratePaused(true);
-    }
-  }, [autoGeneratePaused, setAutoGeneratePaused]);
 
   const handleDelete = useCallback(async () => {
     if (!novelId) return;
@@ -443,35 +382,13 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
           </p>
           <div className="flex items-center gap-3 mb-3">
             <button
-              onClick={handleAutoGenerate}
-              disabled={autoGenerateActive || chapterFiles.length === 0 || allChaptersWritten || autoGeneratePaused}
+              onClick={() => setShowAutopilot(true)}
+              disabled={chapterFiles.length === 0 || allChaptersWritten}
               className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {autoGenerateActive && !autoGeneratePaused ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <PenLine size={12} />
-              )}
-              {autoGenerateActive && !autoGeneratePaused ? "生成中..." : "自动生成"}
+              <FastForward size={12} />
+              自动驾驶
             </button>
-            {autoGenerateActive && (
-              <button
-                onClick={handlePauseResume}
-                className="flex items-center gap-1 rounded-md border border-subtle bg-surface-card px-2.5 py-1.5 font-body text-[11px] font-medium text-fg-secondary transition-colors hover:bg-surface-muted"
-              >
-                {autoGeneratePaused ? (
-                  <>
-                    <Play size={12} />
-                    继续
-                  </>
-                ) : (
-                  <>
-                    <Pause size={12} />
-                    暂停
-                  </>
-                )}
-              </button>
-            )}
             {allChaptersWritten && (
               <span className="flex items-center gap-1 font-caption text-xs text-success">
                 <CheckCircle2 size={13} />
@@ -507,6 +424,15 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
       {/* Edit Novel Modal */}
       {showEditModal && novel && (
         <EditNovelModal novel={novel} onClose={() => setShowEditModal(false)} />
+      )}
+
+      {/* Autopilot Dialog */}
+      {showAutopilot && novelId && (
+        <AutopilotDialog
+          novelId={novelId}
+          onClose={() => setShowAutopilot(false)}
+          onDone={() => refreshFiles()}
+        />
       )}
 
       {/* Reset Confirmation */}

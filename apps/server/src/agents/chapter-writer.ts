@@ -187,6 +187,18 @@ ${todoGuidance}
     const writtenContent = await readFileSafe(path.join(this.novelDir, outputPath));
     const wordCount = writtenContent ? countWords(writtenContent) : 0;
 
+    // 产出验证：agent 必须 write_file 落盘。没产出说明 agent 把正文当文本输出而未调
+    // write_file（假完成），直接判失败——对齐 story-designer P1。writing-loop 据此走 review-fix。
+    if (!writtenContent) {
+      return {
+        output,
+        filesWritten: [],
+        success: false,
+        error:
+          "chapter-writer 未产出章节正文（agent 可能把正文当作文本输出而未用 write_file 落盘）。请确认模型遵循 write_file 产出，或换更强的模型重试。",
+      };
+    }
+
     // 章节写成功后蒸馏摘要写入摘要链——手动触发（不走 writing-loop）时也生成，
     // 供后续章节 get_summary_chain 跨章上下文使用。失败不阻塞。
     if (writtenContent) {

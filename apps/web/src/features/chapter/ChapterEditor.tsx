@@ -16,8 +16,7 @@ import { ChapterReading } from "./ChapterReading";
 import { ReviewActions } from "./ReviewActions";
 import { ProblemsPanel } from "./ProblemsPanel";
 import { RewriteDialog } from "./RewriteDialog";
-import { WritingLoopDialog } from "./WritingLoopDialog";
-import { AutopilotDialog } from "./AutopilotDialog";
+import { runWritingLoop } from "@/api/writing-loop";
 import { countWords } from "@/lib/markdown";
 import type { WorkspaceFile } from "@fictia/shared";
 
@@ -125,8 +124,6 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
   const [viewMode, setViewMode] = useState<"preview" | "edit">("preview");
   const [selectedText, setSelectedText] = useState<string | null>(null);
   const [showRewriteDialog, setShowRewriteDialog] = useState(false);
-  const [showWritingLoop, setShowWritingLoop] = useState(false);
-  const [showAutopilot, setShowAutopilot] = useState(false);
   const [selectionPos, setSelectionPos] = useState<{ x: number; y: number } | null>(null);
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -426,12 +423,17 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
     if (!targetId || !novelId) return;
     setWritingChapter(targetId);
     try {
-      await pipelinesApi.runStage(novelId, "chapters", {
-        incrementalTarget: filePath ?? chapterId,
-      });
+      // 统一走 writing-loop（含 editor 审核 + review-fix），支持重写已有章节
+      await runWritingLoop(
+        novelId,
+        {
+          incrementalTarget: filePath ?? chapterId,
+        },
+        () => {},
+      );
       startPolling(targetId, novelId, targetId);
     } catch (err) {
-      console.error("Write pipeline failed:", err);
+      console.error("Write loop failed:", err);
       setWritingChapter(null);
     }
   }, [isFileMode, filePath, chapterId, novelId, setWritingChapter, startPolling]);
@@ -519,24 +521,6 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
               <PenLine size={13} />
             )}
             {isThisWriting ? "生成中..." : wordCount > 0 ? "重新生成" : "生成"}
-          </button>
-          <button
-            onClick={() => setShowWritingLoop(true)}
-            disabled={isAnyWriting}
-            title="写作循环：写作 -> AI味检测 -> 审核 -> 修复 -> 确认"
-            className="flex items-center gap-1.5 rounded-md border border-accent/40 bg-accent-bg/30 px-3 py-1.5 font-body text-xs font-medium text-accent transition-colors hover:bg-accent-bg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Wand2 size={13} />
-            写作循环
-          </button>
-          <button
-            onClick={() => setShowAutopilot(true)}
-            disabled={isAnyWriting}
-            title="自动驾驶：连续写多章，每 5 章自动一致性校验"
-            className="flex items-center gap-1.5 rounded-md border border-accent/40 bg-accent-bg/30 px-3 py-1.5 font-body text-xs font-medium text-accent transition-colors hover:bg-accent-bg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FastForward size={13} />
-            自动驾驶
           </button>
           {!isFileMode && (
             <button
@@ -689,39 +673,6 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
           selectedText={selectedText ?? undefined}
           onClose={() => { setShowRewriteDialog(false); setSelectedText(null); }}
           onRewritten={handleRewritten}
-        />
-      )}
-      {showAutopilot && novelId && (
-        <AutopilotDialog
-          novelId={novelId}
-          onClose={() => setShowAutopilot(false)}
-          onDone={() => {
-            // 刷新章节列表
-            novelsApi.getFiles(novelId).then(() => {}).catch(() => {});
-          }}
-        />
-      )}
-      {showWritingLoop && novelId && (
-        <WritingLoopDialog
-          novelId={novelId}
-          chapterNumber={chapterNumber || undefined}
-          onClose={() => setShowWritingLoop(false)}
-          onDone={(passed) => {
-            if (!passed) return;
-            if (isFileMode && filePath) {
-              novelsApi.getFiles(novelId).then((files: WorkspaceFile[]) => {
-                const f = files.find((x) => x.path === filePath);
-                if (f?.content) {
-                  setContent(f.content);
-                  setFileContent(f.content);
-                  setHasChanges(false);
-                }
-              });
-            } else if (chapterId) {
-              queryClient.invalidateQueries({ queryKey: ["chapter", chapterId] });
-            }
-            queryClient.invalidateQueries({ queryKey: ["workspace-files", novelId] });
-          }}
         />
       )}
     </div>

@@ -40,7 +40,7 @@ function getAgentModels(): Partial<Record<AgentType, AgentModelAssignment>> | un
  */
 router.post("/novels/:novelId/writing-loop", async (req, res) => {
   const { novelId } = req.params;
-  const { chapterNumber, maxRounds } = req.body ?? {};
+  const { chapterNumber, maxRounds, incrementalTarget, userDirective, isRedo } = req.body ?? {};
 
   const novel = novelService.getById(novelId);
   if (!novel) {
@@ -62,10 +62,13 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
   try {
-    const target =
-      typeof chapterNumber === "number"
-        ? chapterNumber
-        : await svc.findNextChapter();
+    let target: number | null = typeof chapterNumber === "number" ? chapterNumber : null;
+    if (target === null && typeof incrementalTarget === "string") {
+      // 重写已有章节：从 incrementalTarget 文件路径解析章号（chXX）
+      const m = incrementalTarget.match(/ch(\d+)/i);
+      if (m) target = Number(m[1]);
+    }
+    if (target === null) target = await svc.findNextChapter();
 
     if (target === null) {
       send({ type: "done", error: "没有待写的章节" });
@@ -75,8 +78,11 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
 
     send({ type: "start", chapterNumber: target });
 
-    const result = await svc.runChapterLoop(target, maxRounds ?? 3, (p) =>
-      send({ type: "progress", ...p }),
+    const result = await svc.runChapterLoop(
+      target,
+      maxRounds ?? 3,
+      (p) => send({ type: "progress", ...p }),
+      { incrementalTarget, userDirective, isRedo },
     );
 
     send({ type: "result", result });

@@ -52,7 +52,7 @@ export async function consumeSse(
 
 export async function runWritingLoop(
   novelId: string,
-  body: { chapterNumber?: number; maxRounds?: number },
+  body: { chapterNumber?: number; maxRounds?: number; incrementalTarget?: string; userDirective?: string; isRedo?: boolean },
   onEvent: (e: WritingLoopEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {

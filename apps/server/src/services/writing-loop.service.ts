@@ -20,11 +20,11 @@ import * as path from "path";
 import { entityStats } from "./entity-store.js";
 import {
   indexAllEntities,
-  assembleDynamicContext,
   updateEntitiesFromChapterNotes,
 } from "./entity.service.js";
 import { getSummary } from "./chapter-summary-store.js";
 import { runConsistencyCheck, checkMilestone, countChapters } from "./milestone.service.js";
+import { getOrCreateOrchestrator } from "./pipeline.service.js";
 
 export type LoopPhase =
   | "writing"
@@ -130,6 +130,7 @@ export class WritingLoopService {
     chapterNumber: number,
     maxRounds = 3,
     onProgress?: ProgressCb,
+    options?: { incrementalTarget?: string; userDirective?: string; isRedo?: boolean },
   ): Promise<LoopResult> {
     const writer = createAgent("chapter-writer", this.novelDir, this.agentModels) as ChapterWriterAgent;
     const editor = createAgent("editor", this.novelDir, this.agentModels) as EditorAgent;
@@ -138,7 +139,8 @@ export class WritingLoopService {
     const reviewPath = `reviews/ch${String(chapterNumber).padStart(2, "0")}-review.md`;
     const emit = (p: LoopProgress) => onProgress?.(p);
 
-    // 确保实体已索引（首次），组装动态上下文注入 chapter-writer
+    // 确保实体已索引（首次）。上下文改由 chapter-writer 推→拉（todoGuidance 引导
+    // get_summary_chain/get_character/get_foreshadow 自取），不再注入 extraContext。
     const stats = entityStats(this.novelId);
     if (stats.characters === 0) {
       try {
@@ -147,11 +149,10 @@ export class WritingLoopService {
         // 索引失败不阻塞写作
       }
     }
-    const dynamicContext = assembleDynamicContext(this.novelId, chapterNumber);
 
-    // 第 0 轮：写作
+    // 第 0 轮：写作（options 透传：支持重写已有章节 incrementalTarget/userDirective）
     emit({ phase: "writing", round: 0, message: `写作第 ${chapterNumber} 章` });
-    await writer.writeChapter(chapterNumber, { extraContext: dynamicContext });
+    await writer.writeChapter(chapterNumber, options);
 
     // 阶段 1a：确定性 prose 检查（blocking 必须先修，不消耗审核轮次，最多 3 次内部修复）
     let proseBlockingRemaining = 0;
@@ -214,6 +215,16 @@ export class WritingLoopService {
           round,
           message: `第 ${chapterNumber} 章通过（${round} 轮），实体状态更新 ${entitiesUpdated} 条，摘要=${summarySource ?? "无"}`,
         });
+        // 补同步：写通过后确认 chapters stage（pipelineStatus 按字段判定、不按文件推算，
+        // 故需显式 confirm，否则 chapters stage 状态不推进）。chapters 是增量 stage，每写一章
+        // confirm 一次不阻碍下一章。
+        try {
+          const orch = getOrCreateOrchestrator(this.novelId, this.novelDir);
+          await orch.init();
+          await orch.confirmStage("chapters");
+        } catch {
+          // 状态同步失败不阻塞写作
+        }
         return {
           chapterNumber,
           chapterPath,
