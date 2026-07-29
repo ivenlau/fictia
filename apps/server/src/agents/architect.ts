@@ -70,10 +70,15 @@ ${genreAnalysis}
     const fullInput = options?.extraContext ? `${options.extraContext}\n\n---\n\n${input}` : input;
     const output = await this.runLLM(fullInput, systemPrompt);
 
+    const designCheck = await this.validateDesignOutput();
+    if (designCheck.error) {
+      return { output, filesWritten: [], success: false, error: designCheck.error };
+    }
     return {
       output,
-      filesWritten: ["design/blueprint.md"],
+      filesWritten: ["design/blueprint.md", ...(designCheck.reportFile ? [designCheck.reportFile] : [])],
       success: true,
+      warnings: designCheck.warnings,
     };
   }
 }

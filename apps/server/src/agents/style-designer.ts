@@ -80,10 +80,15 @@ ${blueprint}
 
     const output = await this.runLLM(input, systemPrompt);
 
+    const designCheck = await this.validateDesignOutput();
+    if (designCheck.error) {
+      return { output, filesWritten: [], success: false, error: designCheck.error };
+    }
     return {
       output,
-      filesWritten: ["design/style-guide.md"],
+      filesWritten: ["design/style-guide.md", ...(designCheck.reportFile ? [designCheck.reportFile] : [])],
       success: true,
+      warnings: designCheck.warnings,
     };
   }
 

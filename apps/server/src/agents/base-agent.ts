@@ -7,6 +7,7 @@ import { readPreferences } from "../utils/user-materials.js";
 import { assembleReferenceForInjection, type AssembledReference } from "../utils/reference-works.js";
 import { injectSectionsBefore, type PromptSection } from "../utils/prompt-sections.js";
 import { buildCharacterRegistry } from "../utils/context-extractor.js";
+import { validateDesign, writeDesignValidationReport } from "../utils/design-validation.js";
 import { runAgentSession } from "./agent-runner.js";
 import { toolRegistry, type ToolContext } from "../tools/index.js";
 import { fileService } from "../services/file.service.js";
@@ -231,6 +232,31 @@ export abstract class BaseAgent {
       full.slice(0, STYLE_GUIDE_MAX_CHARS) +
       "\n\n…（已截断，完整风格指南见 design/style-guide.md，可用 read_project_file 读取）"
     );
+  }
+
+  /**
+   * 设计产出校验：结构校验（validateDesign）+ 假完成检测（文件不存在 -> error）。
+   * 供设计类 agent run() 在 runLLM 后调用。返回 warnings（结构问题）或 error（假完成）。
+   */
+  protected async validateDesignOutput(): Promise<{
+    warnings?: string[];
+    error?: string;
+    reportFile?: string | null;
+  }> {
+    const validation = await validateDesign(this.novelDir, this.stageName);
+    const hasMissing = validation.issues.some(
+      (i) => i.includes("不存在或为空") || i.includes("无角色文件"),
+    );
+    if (hasMissing) {
+      return {
+        error: `${this.agentName} 产出缺失（${validation.issues.join("; ")}）。请确认 agent 用 write_file 落盘后重试。`,
+      };
+    }
+    const reportFile = await writeDesignValidationReport(this.novelDir, this.agentName, validation);
+    return {
+      warnings: validation.passed ? undefined : validation.issues,
+      reportFile,
+    };
   }
 
   /**

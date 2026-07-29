@@ -68,10 +68,15 @@ ${context}
 
     const output = await this.runLLM(input, systemPrompt);
 
+    const designCheck = await this.validateDesignOutput();
+    if (designCheck.error) {
+      return { output, filesWritten: [], success: false, error: designCheck.error };
+    }
     return {
       output,
-      filesWritten: ["design/art-design.md"],
+      filesWritten: ["design/art-design.md", ...(designCheck.reportFile ? [designCheck.reportFile] : [])],
       success: true,
+      warnings: designCheck.warnings,
     };
   }
 }
