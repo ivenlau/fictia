@@ -480,7 +480,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
 
   // Extract chapter info based on mode
   const chapterNumber = isFileMode
-    ? parseInt(filePath!.match(/ch(\d+)\.md/)?.[1] ?? "0")
+    ? parseInt(filePath!.match(/ch(\d+)/)?.[1] ?? "0")
     : chapter!.number;
   const chapterTitle = isFileMode
     ? (() => {
@@ -499,7 +499,9 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
         <div className="flex items-center gap-2 min-w-0">
           <div className="min-w-0">
             <h2 className="font-heading text-sm font-semibold text-fg-primary truncate">
-              第{chapterNumber}章{chapterTitle ? ` ${chapterTitle}` : ""}
+              {chapterTitle && /^第\d+章/.test(chapterTitle)
+                ? chapterTitle
+                : `第${chapterNumber}章${chapterTitle ? ` ${chapterTitle}` : ""}`}
             </h2>
             <p className="font-caption text-[11px] text-fg-muted">
               {wordCount} 字 · v{version}
