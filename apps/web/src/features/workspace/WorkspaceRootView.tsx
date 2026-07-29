@@ -383,7 +383,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
           <div className="flex items-center gap-3 mb-3">
             <button
               onClick={() => setShowAutopilot(true)}
-              disabled={chapterFiles.length === 0 || allChaptersWritten}
+              disabled={allChaptersWritten}
               className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <FastForward size={12} />
