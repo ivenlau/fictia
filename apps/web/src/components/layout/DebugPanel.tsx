@@ -38,6 +38,7 @@ const agentIcons: Record<AgentType, React.ElementType> = {
   "chapter-writer": PenLine,
   "editor": PenLine,
   "consistency-checker": ShieldCheck,
+  "design-reviewer": ShieldCheck,
 };
 
 const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {

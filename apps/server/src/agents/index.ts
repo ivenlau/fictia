@@ -15,6 +15,7 @@ import { StoryDesignerAgent } from "./story-designer.js";
 import { ChapterWriterAgent } from "./chapter-writer.js";
 import { EditorAgent } from "./editor.js";
 import { ConsistencyCheckerAgent } from "./consistency-checker.js";
+import { DesignReviewerAgent } from "./design-reviewer.js";
 
 // 触发工具平台注册：注册所有工具工厂 + agent 工具清单（替代 BaseAgent.getToolTier）。
 import "../tools/index.js";
@@ -37,6 +38,7 @@ const AGENT_REGISTRY: Record<AgentType, AgentConstructor> = {
   "chapter-writer": ChapterWriterAgent,
   "editor": EditorAgent,
   "consistency-checker": ConsistencyCheckerAgent,
+  "design-reviewer": DesignReviewerAgent,
 };
 
 type AgentModels = Partial<Record<AgentType, AgentModelAssignment>>;

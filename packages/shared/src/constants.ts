@@ -27,6 +27,7 @@ export const AGENT_TO_STAGE: Record<AgentType, StageName> = {
   "chapter-writer": "chapters",
   "editor": "editor",
   "consistency-checker": "consistency",
+  "design-reviewer": "editor",
 };
 
 // ===== Stage Labels =====
@@ -57,6 +58,7 @@ export const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   "chapter-writer": "章节写手",
   "editor": "编辑审核员",
   "consistency-checker": "一致性校验员",
+  "design-reviewer": "设计审核员",
 };
 
 // ===== Agent Icons (lucide-react icon names) =====
@@ -72,6 +74,7 @@ export const AGENT_TYPE_ICONS: Record<AgentType, string> = {
   "chapter-writer": "pen-tool",
   "editor": "check-check",
   "consistency-checker": "shield-check",
+  "design-reviewer": "clipboard-check",
 };
 
 // ===== Pipeline Stage Dependencies =====
@@ -167,6 +170,7 @@ export const AGENT_FILE_MAP: Record<AgentType, string> = {
   "chapter-writer": "chapters/",
   "editor": "reviews/",
   "consistency-checker": "reviews/consistency-report.md",
+  "design-reviewer": "reviews/",
 };
 
 // ===== File Templates (placeholder files for new novel) =====
@@ -198,6 +202,7 @@ export const DEFAULT_AGENT_MODELS: Record<AgentType, AgentModelAssignment> = {
   "chapter-writer": { providerId: "glm-coding", modelId: "glm-5.1" },
   "editor": { providerId: "minimax", modelId: "MiniMax-M2.7" },
   "consistency-checker": { providerId: "minimax", modelId: "MiniMax-M2.7" },
+  "design-reviewer": { providerId: "minimax", modelId: "MiniMax-M2.7" },
 };
 
 // ===== Preset Providers (built-in, seeded into DB) =====

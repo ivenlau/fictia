@@ -114,3 +114,23 @@ export async function runAutopilot(
   }
   await consumeSse(res, onEvent);
 }
+
+/** 设计阶段 review-fix 循环（design 产出 -> design-reviewer 审核 -> review-fix）。SSE。 */
+export async function runDesignLoop(
+  novelId: string,
+  body: { stageName: string; maxRounds?: number },
+  onEvent: (e: WritingLoopEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/novels/${novelId}/design-loop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  await consumeSse(res, onEvent);
+}

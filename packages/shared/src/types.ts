@@ -24,7 +24,8 @@ export type AgentType =
   | "story-designer"
   | "chapter-writer"
   | "editor"
-  | "consistency-checker";
+  | "consistency-checker"
+  | "design-reviewer";
 
 // ===== Pipeline Stage Status =====
 export type StageStatus =

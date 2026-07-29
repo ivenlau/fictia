@@ -5,6 +5,7 @@ import { db, schema } from "../db/index.js";
 import { novelService } from "../services/novel.service.js";
 import { fileService } from "../services/file.service.js";
 import { WritingLoopService } from "../services/writing-loop.service.js";
+import { DesignLoopService } from "../services/design-loop.service.js";
 import {
   countChapters,
   checkMilestone,
@@ -195,6 +196,47 @@ router.post("/novels/:novelId/autopilot", async (req, res) => {
   req.on("close", () => {
     // v1 不支持中途取消；连接关闭后循环仍跑完，结果丢弃
   });
+});
+
+/**
+ * POST /novels/:novelId/design-loop
+ *   body: { stageName, maxRounds? }
+ *
+ * 设计阶段 review-fix 循环（B 层 LLM 审核）：design 产出 -> design-reviewer 审核
+ * -> 不通过则 review-fix 重做 -> 最多 maxRounds 轮。SSE 推 progress + result/done。
+ */
+router.post("/novels/:novelId/design-loop", async (req, res) => {
+  const { novelId } = req.params;
+  const { stageName, maxRounds } = req.body ?? {};
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+  const novelDir = fileService.getNovelDir(novelId);
+  const agentModels = getAgentModels();
+  const svc = new DesignLoopService(novelId, novelDir, agentModels);
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const send = (obj: Record<string, unknown>) =>
+    res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+  try {
+    send({ type: "start", stageName });
+    const result = await svc.runDesignLoop(stageName, maxRounds ?? 3, (p) =>
+      send({ type: "progress", ...p }),
+    );
+    send({ type: "result", result });
+    send({ type: "done", passed: result.passed });
+  } catch (err: any) {
+    send({ type: "error", error: err?.message ?? "设计循环失败" });
+  } finally {
+    res.end();
+  }
 });
 
 export const writingLoopRoutes = router;

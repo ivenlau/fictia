@@ -104,6 +104,7 @@ const AGENT_TOOL_MAP: Record<AgentType, string[]> = {
     "update_foreshadow_state",
     "index_entities",
   ],
+  "design-reviewer": [...FILE_TOOLS],
 };
 
 for (const [agent, tools] of Object.entries(AGENT_TOOL_MAP)) {

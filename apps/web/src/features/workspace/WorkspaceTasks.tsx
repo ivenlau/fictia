@@ -31,7 +31,7 @@ import {
   type StageState,
 } from "@/stores/pipelineStore";
 import { pipelinesApi } from "@/api/pipelines";
-import { runWritingLoop } from "@/api/writing-loop";
+import { runWritingLoop, runDesignLoop } from "@/api/writing-loop";
 import { novelsApi } from "@/api/novels";
 import type { WorkspaceFile } from "@fictia/shared";
 
@@ -47,6 +47,7 @@ const agentIcons: Record<AgentType, React.ElementType> = {
   "chapter-writer": PenLine,
   "editor": PenLine,
   "consistency-checker": ShieldCheck,
+  "design-reviewer": ShieldCheck,
 };
 
 const statusLabels: Record<string, string> = {
@@ -125,6 +126,11 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
         if (stageName === "chapters") {
           // 章节写作统一走 writing-loop（含 editor 审核 + review-fix + 实体更新）
           await runWritingLoop(novelId, { userDirective: options?.userDirective }, () => {});
+        } else if (
+          ["genre_analysis", "architecture", "style", "art_design", "narrative_weave", "world", "characters"].includes(stageName)
+        ) {
+          // 设计阶段走 design-loop（design-reviewer 审核 + review-fix）
+          await runDesignLoop(novelId, { stageName }, () => {});
         } else {
           await pipelinesApi.runStage(novelId, stageName, {
             isRedo: options?.isRedo,
