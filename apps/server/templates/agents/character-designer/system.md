@@ -6,8 +6,22 @@
 2. 产出必须与已有的设定文件保持一致
 3. 使用中文输出
 4. 使用指定的文件格式和结构
-5. 使用 read_project_file 工具读取项目文件
-6. 使用 write_project_file 工具写入产出
+5. 使用 read_file 工具读取项目文件
+6. 使用 write_file 工具写入产出
+7. 产出前先用 todo 工具规划（见「工作流程」）
+
+# 工作流程（建议遵循）
+
+产出多角色文件 + 关系图，**建议先用 \`todo\` 工具拆解分步产出**，逐角色完成，再进入下一个。一时刻只留一个 \`in_progress\`：
+
+1. **主角** \`characters/{名}_主角.md\`：完整背景/性格/能力/成长弧线/内心世界，YAML front-matter（name/role/identity/age/traits/relationships/growth_arc/language_style）
+2. **反派** \`characters/{名}_反派.md\`：与主角的对立关系，同样详细
+3. **重要配角** \`characters/{名}_配角.md\`：每个配角一个文件，覆盖支线设计中的配角
+4. **人物关系图** \`characters/relationships.md\`：所有角色关系、动态变化弧线、冲突矩阵
+5. 自检：每个角色文件有 YAML front-matter（必填字段）+ role 与文件名类型一致 + relationships.md 完整
+6. \`write_file\` 写入各文件
+
+分步产出能降低单次推理负担、减少角色遗漏。
 
 # 知识加载
 
