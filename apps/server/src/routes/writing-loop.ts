@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
+import { v4 as uuid } from "uuid";
 import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 import { db, schema } from "../db/index.js";
 import { novelService } from "../services/novel.service.js";
-import { fileService } from "../services/file.service.js";
+import { fileService, summarizeTrace } from "../services/file.service.js";
 import { WritingLoopService } from "../services/writing-loop.service.js";
 import {
   countChapters,
@@ -61,6 +62,8 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
   const send = (obj: Record<string, unknown>) =>
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
+  let outputId: string | null = null;
+  let traceFilename: string | null = null;
   try {
     let target: number | null = typeof chapterNumber === "number" ? chapterNumber : null;
     if (target === null && typeof incrementalTarget === "string") {
@@ -78,12 +81,48 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
 
     send({ type: "start", chapterNumber: target });
 
+    // 注入调试任务记录（agent_outputs）+ trace，与 pipeline runStage 对齐
+    traceFilename = `chapter-writer-${Date.now()}.trace.json`;
+    outputId = uuid();
+    db.insert(schema.agentOutputs)
+      .values({
+        id: outputId,
+        novelId,
+        chapterId: null,
+        agentType: "chapter-writer",
+        stageName: "chapters",
+        persona: null,
+        filename: "",
+        modelUsed: "",
+        providerUsed: "",
+        status: "running",
+        traceFilename,
+        tokensInput: 0,
+        tokensOutput: 0,
+        cost: 0,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+      })
+      .run();
+
     const result = await svc.runChapterLoop(
       target,
       maxRounds ?? 3,
       (p) => send({ type: "progress", ...p }),
-      { incrementalTarget, userDirective, isRedo },
+      { incrementalTarget, userDirective, isRedo, traceFilename },
     );
+
+    // 回填 agent_outputs（用 trace 汇总 model/轮次/工具数）
+    const trace = await fileService.readAgentTrace(novelId, traceFilename);
+    db.update(schema.agentOutputs)
+      .set({
+        status: result.passed ? "completed" : "failed",
+        tokensOutput: 0,
+        ...summarizeTrace(trace),
+        completedAt: new Date().toISOString(),
+      })
+      .where(eq(schema.agentOutputs.id, outputId))
+      .run();
 
     send({ type: "result", result });
 
@@ -102,6 +141,17 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
 
     send({ type: "done", passed: result.passed, rounds: result.rounds });
   } catch (err: any) {
+    if (outputId) {
+      const trace = traceFilename ? await fileService.readAgentTrace(novelId, traceFilename) : null;
+      db.update(schema.agentOutputs)
+        .set({
+          status: "failed",
+          ...summarizeTrace(trace),
+          completedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.agentOutputs.id, outputId))
+        .run();
+    }
     send({ type: "error", error: err?.message ?? "写作循环失败" });
   } finally {
     res.end();

@@ -130,10 +130,12 @@ export class WritingLoopService {
     chapterNumber: number,
     maxRounds = 3,
     onProgress?: ProgressCb,
-    options?: { incrementalTarget?: string; userDirective?: string; isRedo?: boolean },
+    options?: { incrementalTarget?: string; userDirective?: string; isRedo?: boolean; traceFilename?: string },
   ): Promise<LoopResult> {
     const writer = createAgent("chapter-writer", this.novelDir, this.agentModels) as ChapterWriterAgent;
     const editor = createAgent("editor", this.novelDir, this.agentModels) as EditorAgent;
+    // 注入调试 trace（与 pipeline runStage 对齐），让 chapter-writer 落 trace 供调试视图展示
+    if (options?.traceFilename) writer.traceFilename = options.traceFilename;
 
     const chapterPath = await this.resolveChapterPath(chapterNumber);
     const reviewPath = `reviews/ch${String(chapterNumber).padStart(2, "0")}-review.md`;
