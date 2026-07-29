@@ -25,6 +25,10 @@ import {
 import { getSummary } from "./chapter-summary-store.js";
 import { runConsistencyCheck, checkMilestone, countChapters } from "./milestone.service.js";
 import { getOrCreateOrchestrator } from "./pipeline.service.js";
+import { eq } from "drizzle-orm";
+import { v4 as uuid } from "uuid";
+import { db, schema } from "../db/index.js";
+import { summarizeTrace } from "./file.service.js";
 
 export type LoopPhase =
   | "writing"
@@ -134,8 +138,33 @@ export class WritingLoopService {
   ): Promise<LoopResult> {
     const writer = createAgent("chapter-writer", this.novelDir, this.agentModels) as ChapterWriterAgent;
     const editor = createAgent("editor", this.novelDir, this.agentModels) as EditorAgent;
-    // 注入调试 trace（与 pipeline runStage 对齐），让 chapter-writer 落 trace 供调试视图展示
-    if (options?.traceFilename) writer.traceFilename = options.traceFilename;
+    // 注入调试 trace + agent_outputs 记录（与 pipeline runStage 对齐）。下沉到 service 层，
+    // 让 runChapterLoop 的所有调用方（端点直调 / autopilot 内部）都自动落 trace + 调试任务。
+    const traceFilename = options?.traceFilename ?? `chapter-writer-${Date.now()}.trace.json`;
+    writer.traceFilename = traceFilename;
+    const outputId = uuid();
+    db.insert(schema.agentOutputs)
+      .values({
+        id: outputId,
+        novelId: this.novelId,
+        chapterId: null,
+        agentType: "chapter-writer",
+        stageName: "chapters",
+        persona: null,
+        filename: "",
+        modelUsed: "",
+        providerUsed: "",
+        status: "running",
+        traceFilename,
+        tokensInput: 0,
+        tokensOutput: 0,
+        cost: 0,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+      })
+      .run();
+    let passed = false;
+    try {
 
     const chapterPath = await this.resolveChapterPath(chapterNumber);
     const reviewPath = `reviews/ch${String(chapterNumber).padStart(2, "0")}-review.md`;
@@ -227,6 +256,7 @@ export class WritingLoopService {
         } catch {
           // 状态同步失败不阻塞写作
         }
+        passed = true;
         return {
           chapterNumber,
           chapterPath,
@@ -264,6 +294,22 @@ export class WritingLoopService {
       proseAdvisory,
       entitiesUpdated: 0,
     };
+    } finally {
+      // 回填 agent_outputs（用 chapter-writer 的 trace 汇总 model/轮次/工具数）
+      try {
+        db.update(schema.agentOutputs)
+          .set({
+            status: passed ? "completed" : "failed",
+            tokensOutput: 0,
+            ...summarizeTrace(writer.lastTrace),
+            completedAt: new Date().toISOString(),
+          })
+          .where(eq(schema.agentOutputs.id, outputId))
+          .run();
+      } catch {
+        // 回填失败不阻塞
+      }
+    }
   }
 
   /**
