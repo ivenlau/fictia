@@ -32,6 +32,7 @@ import { novelsApi } from "@/api/novels";
 import { pipelinesApi } from "@/api/pipelines";
 import { EditNovelModal } from "@/features/novel/EditNovelModal";
 import { AutopilotDialog } from "@/features/chapter/AutopilotDialog";
+import { runAutopilot } from "@/api/writing-loop";
 import { exportMarkdown, exportEpub, exportTxt } from "@/utils/export";
 import { WorkspaceTasks } from "./WorkspaceTasks";
 import { countWords } from "@/lib/markdown";
@@ -88,6 +89,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetFromStage, setResetFromStage] = useState<string>("all");
   const [showAutopilot, setShowAutopilot] = useState(false);
+  const [autopilotRunning, setAutopilotRunning] = useState(false);
 
   // Load workspace files for chapter listing
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
@@ -142,6 +144,22 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
     }
     setShowExportMenu(false);
   }, [chapterFiles, novel]);
+
+  const handleStartAutopilot = useCallback(
+    async (options: { startChapter?: number; endChapter?: number }) => {
+      setShowAutopilot(false);
+      setAutopilotRunning(true);
+      try {
+        await runAutopilot(novelId!, options, () => {});
+        refreshFiles();
+      } catch (err) {
+        console.error("Autopilot failed:", err);
+      } finally {
+        setAutopilotRunning(false);
+      }
+    },
+    [novelId, refreshFiles],
+  );
 
   const handleDelete = useCallback(async () => {
     if (!novelId) return;
@@ -386,11 +404,11 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
           <div className="flex items-center gap-3 mb-3">
             <button
               onClick={() => setShowAutopilot(true)}
-              disabled={allChaptersWritten}
+              disabled={allChaptersWritten || autopilotRunning}
               className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <FastForward size={12} />
-              自动驾驶
+              {autopilotRunning ? <Loader2 size={12} className="animate-spin" /> : <FastForward size={12} />}
+              {autopilotRunning ? "自动驾驶..." : "自动驾驶"}
             </button>
             {allChaptersWritten && (
               <span className="flex items-center gap-1 font-caption text-xs text-success">
@@ -409,6 +427,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
                   chapter={ch}
                   novelId={novelId}
                   novelTitle={novel.title}
+                  disabled={autopilotRunning}
                   onRefresh={refreshFiles}
                 />
               ))}
@@ -430,13 +449,12 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
       )}
 
       {/* Autopilot Dialog */}
-      {showAutopilot && novelId && (
+      {showAutopilot && novel && (
         <AutopilotDialog
-          novelId={novelId}
           startChapter={chapterFiles.length + 1}
           maxChapter={novel?.targetChapters ?? 20}
           onClose={() => setShowAutopilot(false)}
-          onDone={() => refreshFiles()}
+          onConfirm={handleStartAutopilot}
         />
       )}
 
@@ -545,18 +563,20 @@ function FileChapterCard({
   novelId,
   novelTitle,
   onRefresh,
+  disabled,
 }: {
   chapter: ChapterFileInfo;
   novelId: string;
   novelTitle: string;
   onRefresh: () => void;
+  disabled?: boolean;
 }) {
   const writingChapterId = useAgentStore((s) => s.writingChapterId);
   const setWritingChapter = useAgentStore((s) => s.setWritingChapter);
   const openFile = useEditorStore((s) => s.openFile);
   const [showRerunModal, setShowRerunModal] = useState(false);
   const isThisWriting = writingChapterId === chapter.path;
-  const isAnyWriting = writingChapterId !== null;
+  const isAnyWriting = writingChapterId !== null || !!disabled;
 
   const handleGenerate = useCallback(async (directive?: string) => {
     setWritingChapter(chapter.path);
