@@ -183,7 +183,17 @@ export class WritingLoopService {
 
     // 第 0 轮：写作（options 透传：支持重写已有章节 incrementalTarget/userDirective）
     emit({ phase: "writing", round: 0, message: `写作第 ${chapterNumber} 章` });
-    await writer.writeChapter(chapterNumber, options);
+    const writeResult = await writer.writeChapter(chapterNumber, options);
+    if (!writeResult.success) {
+      // 假完成（agent 未 write_file 落盘）：直接判失败，不进 editor 审核循环，
+      // 让 runAutopilot 的 consecutiveFails 累计触发停止（避免死循环重写同一章）。
+      emit({ phase: "aborted", round: 0, message: `写作未产出：${writeResult.error ?? "agent 未 write_file 落盘"}` });
+      return {
+        chapterNumber, chapterPath, reviewPath,
+        rounds: 0, passed: false, finalVerdict: null,
+        proseBlockingRemaining: 0, proseAdvisory: 0, entitiesUpdated: 0,
+      };
+    }
 
     // 阶段 1a：确定性 prose 检查（blocking 必须先修，不消耗审核轮次，最多 3 次内部修复）
     let proseBlockingRemaining = 0;
