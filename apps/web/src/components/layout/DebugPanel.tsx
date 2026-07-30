@@ -82,6 +82,21 @@ export function DebugPanel() {
   const clearAll = useClearAgentOutputs(activeNovelId);
 
   const [detail, setDetail] = useState<{ outputId: string; agentLabel: string } | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<
+    | { kind: "one"; output: AgentOutput; label: string }
+    | { kind: "all"; count: number }
+    | null
+  >(null);
+
+  const confirmDelete = useCallback(() => {
+    if (!confirmTarget) return;
+    if (confirmTarget.kind === "one") {
+      deleteOne.mutate(confirmTarget.output.id);
+    } else {
+      clearAll.mutate();
+    }
+    setConfirmTarget(null);
+  }, [confirmTarget, deleteOne, clearAll]);
 
   const chapterMap = useMemo(() => {
     const map: Record<string, Chapter> = {};
@@ -96,20 +111,15 @@ export function DebugPanel() {
     );
   }, [outputs]);
 
-  const handleDelete = useCallback(
-    (output: AgentOutput) => {
-      const label = AGENT_TYPE_LABELS[output.agentType as AgentType] ?? output.agentType;
-      if (!window.confirm(`确定删除这条「${label}」运行记录吗？相关输出与调试 trace 将一并删除。`)) return;
-      deleteOne.mutate(output.id);
-    },
-    [deleteOne],
-  );
+  const handleDelete = useCallback((output: AgentOutput) => {
+    const label = AGENT_TYPE_LABELS[output.agentType as AgentType] ?? output.agentType;
+    setConfirmTarget({ kind: "one", output, label });
+  }, []);
 
   const handleClearAll = useCallback(() => {
     if (sortedOutputs.length === 0) return;
-    if (!window.confirm(`确定清空全部 ${sortedOutputs.length} 条运行记录吗？此操作不可撤销。`)) return;
-    clearAll.mutate();
-  }, [clearAll, sortedOutputs.length]);
+    setConfirmTarget({ kind: "all", count: sortedOutputs.length });
+  }, [sortedOutputs.length]);
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -248,6 +258,40 @@ export function DebugPanel() {
             setDetail(null);
           }}
         />
+      )}
+
+      {confirmTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setConfirmTarget(null)}
+        >
+          <div
+            className="w-[400px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-heading text-base font-bold text-fg-primary mb-2">确认删除</h3>
+            <p className="font-body text-sm text-fg-secondary mb-5">
+              {confirmTarget.kind === "one"
+                ? `确定删除这条「${confirmTarget.label}」运行记录吗？相关输出与调试 trace 将一并删除。`
+                : `确定清空全部 ${confirmTarget.count} 条运行记录吗？此操作不可撤销。`}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmTarget(null)}
+                className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex items-center gap-1.5 rounded-md bg-error px-4 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-error/90"
+              >
+                <Trash2 size={14} />
+                {confirmTarget.kind === "one" ? "删除" : "清空"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

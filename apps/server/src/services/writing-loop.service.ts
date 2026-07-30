@@ -114,7 +114,7 @@ export class WritingLoopService {
         extensions: [".md"],
       });
       for (const f of acts) {
-        const m = path.basename(f).match(/^ch(\d+)\.md$/);
+        const m = path.basename(f).match(/^ch(\d+)/);
         if (m) written.add(Number(m[1]));
       }
     } catch {
