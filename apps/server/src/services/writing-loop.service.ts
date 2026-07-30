@@ -12,9 +12,10 @@
 import { createAgent } from "../agents/index.js";
 import { ChapterWriterAgent } from "../agents/chapter-writer.js";
 import { EditorAgent } from "../agents/editor.js";
-import { checkProse, type ProseReport } from "../utils/prose-check.js";
+import { checkProse } from "../utils/prose-check.js";
 import { parseReviewVerdict, type Verdict } from "../utils/verdict.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
+import { findChapterFile } from "../utils/chapter-files.js";
 import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 import * as path from "path";
 import { entityStats } from "./entity-store.js";
@@ -140,8 +141,10 @@ export class WritingLoopService {
     const editor = createAgent("editor", this.novelDir, this.agentModels) as EditorAgent;
     // 注入调试 trace + agent_outputs 记录（与 pipeline runStage 对齐）。下沉到 service 层，
     // 让 runChapterLoop 的所有调用方（端点直调 / autopilot 内部）都自动落 trace + 调试任务。
-    const traceFilename = options?.traceFilename ?? `chapter-writer-${Date.now()}.trace.json`;
-    writer.traceFilename = traceFilename;
+    // 多段 trace：所有段共享 baseTs 前缀（便于关联/清理）。各段文件名
+    // chapter-writer-<baseTs>-s<seq>-<type>.trace.json，由 runSegment 逐段设给 writer.traceFilename，
+    // 并同步更新 agent_outputs.trace_filename 指向当前段（让 SSE 实时跟进活动段）。
+    const baseTs = `${Date.now()}`;
     const outputId = uuid();
     db.insert(schema.agentOutputs)
       .values({
@@ -155,7 +158,7 @@ export class WritingLoopService {
         modelUsed: "",
         providerUsed: "",
         status: "running",
-        traceFilename,
+        traceFilename: `chapter-writer-${baseTs}-s0-draft.trace.json`,
         tokensInput: 0,
         tokensOutput: 0,
         cost: 0,
@@ -164,10 +167,56 @@ export class WritingLoopService {
       })
       .run();
     let passed = false;
+    let segSeq = 0;
+    /** 段化一次 writeChapter/applyReviewFix：独立 trace 文件 + 写 agent_trace_segments 行，
+     *  并把 agent_outputs.trace_filename 指向当前段（让 SSE 实时跟进活动段）。 */
+    const runSegment = async <T>(
+      type: "draft" | "prose-fix" | "review-fix",
+      fn: () => Promise<T>,
+    ): Promise<T> => {
+      const seq = segSeq++;
+      const segTrace = `chapter-writer-${baseTs}-s${seq}-${type}.trace.json`;
+      writer.traceFilename = segTrace;
+      try {
+        db.update(schema.agentOutputs)
+          .set({ traceFilename: segTrace })
+          .where(eq(schema.agentOutputs.id, outputId))
+          .run();
+      } catch {
+        // trace_filename 更新失败不阻塞
+      }
+      const startedAt = new Date().toISOString();
+      const res = await fn();
+      const sum = summarizeTrace(writer.lastTrace);
+      try {
+        db.insert(schema.agentTraceSegments)
+          .values({
+            id: uuid(),
+            agentOutputId: outputId,
+            segmentType: type,
+            seq,
+            traceFilename: segTrace,
+            turnCount: sum.turnCount,
+            toolCallCount: sum.toolCallCount,
+            modelUsed: sum.modelUsed,
+            startedAt,
+            completedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          })
+          .run();
+      } catch {
+        // 段记录失败不阻塞主流程
+      }
+      return res;
+    };
     try {
 
     const chapterPath = await this.resolveChapterPath(chapterNumber);
-    const reviewPath = `reviews/ch${String(chapterNumber).padStart(2, "0")}-review.md`;
+    // reviewPath 对齐 editor.ts 命名（基于章节文件 basename），保证 editor 写 / 本处读一致。
+    const chapterBasename =
+      chapterPath.split("/").pop()?.replace(/\.md$/, "") ??
+      `ch${String(chapterNumber).padStart(2, "0")}`;
+    const reviewPath = `reviews/${chapterBasename}-review.md`;
     const emit = (p: LoopProgress) => onProgress?.(p);
 
     // 确保实体已索引（首次）。上下文改由 chapter-writer 推→拉（todoGuidance 引导
@@ -183,7 +232,7 @@ export class WritingLoopService {
 
     // 第 0 轮：写作（options 透传：支持重写已有章节 incrementalTarget/userDirective）
     emit({ phase: "writing", round: 0, message: `写作第 ${chapterNumber} 章` });
-    const writeResult = await writer.writeChapter(chapterNumber, options);
+    const writeResult = await runSegment("draft", () => writer.writeChapter(chapterNumber, options));
     if (!writeResult.success) {
       // 假完成（agent 未 write_file 落盘）：直接判失败，不进 editor 审核循环，
       // 让 runAutopilot 的 consecutiveFails 累计触发停止（避免死循环重写同一章）。
@@ -215,7 +264,7 @@ export class WritingLoopService {
         round: i + 1,
         message: `修复 ${prose.blocking.length} 条 blocking prose 问题`,
       });
-      await writer.writeChapter(chapterNumber, { userDirective: proseFixDirective(prose) });
+      await runSegment("prose-fix", () => writer.applyProseFix(chapterNumber, prose));
     }
 
     // 阶段 2：审核-修复循环（最多 maxRounds 轮）
@@ -223,9 +272,12 @@ export class WritingLoopService {
     let round = 0;
     for (round = 1; round <= maxRounds; round++) {
       emit({ phase: "reviewing", round, message: `第 ${round} 轮编辑审核` });
-      await editor.reviewChapter(chapterPath);
-
-      const reviewText = (await readFileSafe(path.join(this.novelDir, reviewPath))) ?? "";
+      // 用 editor 返回的报告全文（agent 产出）作主源，避免报告文件命名不一致读空；文件兜底。
+      const reviewResult = await editor.reviewChapter(chapterPath);
+      const reviewText =
+        reviewResult.output?.trim() ||
+        (await readFileSafe(path.join(this.novelDir, reviewPath))) ||
+        "";
       verdict = parseReviewVerdict(reviewText);
       emit({
         phase: "reviewing",
@@ -284,11 +336,22 @@ export class WritingLoopService {
       emit({
         phase: "review-fix",
         round,
-        message: `按审核报告修复（severe=${verdict.severe} normal=${verdict.normal}）`,
+        message: `按审核报告定向修复（severe=${verdict.severe} normal=${verdict.normal}）`,
       });
-      await writer.writeChapter(chapterNumber, {
-        userDirective: reviewFixDirective(verdict, reviewText),
-      });
+      await runSegment("review-fix", () => writer.applyReviewFix(chapterNumber, reviewText));
+      // review-fix 后确定性 prose 兜底：修掉 review-fix 改写可能引入的禁用词/硬规，
+      // 避免下一轮 editor 再为禁用词判 severe、review-fix 改 A 引入 B 的死循环。
+      const proseAfterFix = checkProse(
+        (await readFileSafe(path.join(this.novelDir, chapterPath))) ?? "",
+      );
+      if (proseAfterFix.blocking.length > 0) {
+        emit({
+          phase: "prose-fix",
+          round,
+          message: `review-fix 后确定性兜底：修 ${proseAfterFix.blocking.length} 条 blocking`,
+        });
+        await runSegment("prose-fix", () => writer.applyProseFix(chapterNumber, proseAfterFix));
+      }
     }
 
     // maxRounds 仍未通过：中止，交用户决定
@@ -305,13 +368,25 @@ export class WritingLoopService {
       entitiesUpdated: 0,
     };
     } finally {
-      // 回填 agent_outputs（用 chapter-writer 的 trace 汇总 model/轮次/工具数）
+      // 回填 agent_outputs：轮次/工具数按所有段累加（不再只看最后一段 writer.lastTrace）
       try {
+        const lastSum = summarizeTrace(writer.lastTrace);
+        const segs = db
+          .select()
+          .from(schema.agentTraceSegments)
+          .where(eq(schema.agentTraceSegments.agentOutputId, outputId))
+          .all();
+        const totalTurns = segs.reduce((n, s) => n + (s.turnCount ?? 0), 0);
+        const totalTools = segs.reduce((n, s) => n + (s.toolCallCount ?? 0), 0);
+        const lastSegModel = segs.length > 0 ? segs[segs.length - 1].modelUsed ?? "" : "";
         db.update(schema.agentOutputs)
           .set({
             status: passed ? "completed" : "failed",
             tokensOutput: 0,
-            ...summarizeTrace(writer.lastTrace),
+            modelUsed: lastSegModel || lastSum.modelUsed,
+            providerUsed: lastSum.providerUsed,
+            turnCount: totalTurns,
+            toolCallCount: totalTools,
             completedAt: new Date().toISOString(),
           })
           .where(eq(schema.agentOutputs.id, outputId))
@@ -384,53 +459,16 @@ export class WritingLoopService {
    * 解析章节文件相对路径：优先在现有 act 目录中找；找不到（尚未写作）用默认 act。
    */
   private async resolveChapterPath(chapterNumber: number): Promise<string> {
-    const num = String(chapterNumber).padStart(2, "0");
-    try {
-      const files = await listFiles(path.join(this.novelDir, "chapters"), {
-        recursive: true,
-        extensions: [".md"],
-      });
-      const match = files.find((f) => path.basename(f) === `ch${num}.md`);
-      if (match) {
-        return path.relative(this.novelDir, match).replace(/\\/g, "/");
-      }
-    } catch {
-      // chapters/ 不存在
+    // 用 findChapterFile 按章号正则匹配（兼容 chXX / chXX_actN-标题 等 act 动态命名）。
+    // 旧逻辑 basename === chXX.md 精确匹配，act 动态化后文件名变 chXX_actN-标题.md，
+    // 匹配失败会回退到不存在的默认路径，导致 editor 读不到正文 + 报告命名错乱。
+    const found = await findChapterFile(this.novelDir, chapterNumber);
+    if (found) {
+      return path.relative(this.novelDir, found).replace(/\\/g, "/");
     }
+    const num = String(chapterNumber).padStart(2, "0");
     const act = chapterNumber <= 7 ? 1 : chapterNumber <= 14 ? 2 : 3;
     return `chapters/act-${act}/ch${num}.md`;
   }
 }
 
-/**
- * 把 blocking prose findings 转成给写手的修复指令。
- */
-function proseFixDirective(prose: ProseReport): string {
-  const lines = prose.blocking.map(
-    (f, i) =>
-      `${i + 1}. [${f.type}] 第${f.line}行：${f.message}\n   原文片段：${f.excerpt}`,
-  );
-  return [
-    "确定性 AI 味检测发现以下必须修复的 blocking 问题，请逐条改写。",
-    "要求：不新增情节，不改变人物行为和事件，只调整表达方式消除 AI 腔。",
-    "",
-    ...lines,
-  ].join("\n");
-}
-
-/**
- * 把审核 verdict + 报告转成给写手的修复指令。
- */
-function reviewFixDirective(verdict: Verdict, reviewText: string): string {
-  return [
-    `编辑审核未通过（评分 ${verdict.grade ?? "?"}，严重 ${verdict.severe}，一般 ${verdict.normal}）。`,
-    "请按审核报告中的问题逐条修复：",
-    "- 严重问题和一般问题必须全部解决",
-    "- 严格遵循 style-guide.md，不要自由发挥风格",
-    "- 不要新增或删减核心情节，只针对问题改写",
-    "",
-    "审核报告：",
-    "",
-    reviewText,
-  ].join("\n");
-}

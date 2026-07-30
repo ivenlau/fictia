@@ -18,6 +18,7 @@ import {
   chapterToAct,
 } from "../utils/context-extractor.js";
 import * as path from "path";
+import type { ProseReport } from "../utils/prose-check.js";
 
 export class ChapterWriterAgent extends BaseAgent {
   protected stageName: StageName = "chapters";
@@ -211,6 +212,142 @@ ${todoGuidance}
 
     return {
       output: `${output}\n\n---\n字数统计: ${wordCount}字`,
+      filesWritten: [outputPath],
+      success: true,
+    };
+  }
+
+  /**
+   * 定向修复：按编辑审核报告逐条用 edit_file 精改，**不重写整章**。
+   *
+   * 取代 review-fix 对 writeChapter 的复用——后者走「修改第 X 章」分支，prompt 收尾
+   * 「输出完整修改后内容」会鼓励重写，叠加默认迭代上限，一次「改几个点」跑成
+   * 「长 todo + 跨章改 + 跑满上限」。editor 报告的「修改建议」本身已是可执行的
+   * edit 指令（原文→改后），故这里收敛为定向 edit、压到 ≤8 轮。
+   *
+   * success 仅代表「本轮修复已执行」，是否真正达标由下一轮 editor.reviewChapter 重判
+   * （与原 writeChapter 在 review-fix 场景语义一致：落盘 ≠ 审核通过）。
+   */
+  async applyReviewFix(chapterNumber: number, reviewText: string): Promise<AgentRunResult> {
+    const systemPrompt = await this.buildSystemPrompt();
+
+    const curFile = await findChapterFile(this.novelDir, chapterNumber);
+    if (!curFile) {
+      return {
+        output: "",
+        filesWritten: [],
+        success: false,
+        error: `applyReviewFix: 找不到第 ${chapterNumber} 章的正文文件，无法定向修复`,
+      };
+    }
+    const outputPath = path.relative(this.novelDir, curFile).replace(/\\/g, "/");
+    const REVIEW_FIX_MAX_ITERATIONS = 8;
+
+    const input = `## 定向修复第 ${chapterNumber} 章（按编辑审核报告精改）
+
+### 目标章节文件
+${outputPath}（需要定位片段时用 \`read_file\` 读取相应段落，**不要整章重写**）
+
+### 编辑审核报告
+${reviewText}
+
+### 执行要求（违反则任务失败）
+1. **只处理上面审核报告「问题清单」中的「严重问题」和「一般问题」**，逐条用 \`edit_file\` 做最小改动；「细节问题」可跳过。
+2. 报告每条的「修改建议」已给出明确改法（原文→改后），**照做**即可；仅当与正文实际文字对不上时，就近适配。
+3. **禁止 \`write_file\` 整章正文**、禁止重写未出问题的段落、禁止新增或删减情节。
+4. **禁止跨章修改**：报告可能引用别章作对照，但只允许改本章 \`${outputPath}\`。
+5. **不要先 \`todo\` 规划长流程**——逐条定位→\`edit_file\` 即可，改完就停。
+6. 全部改完后用 \`count_words\` 核一次字数即可，**不要反复 \`validate_style\` / \`scan_consistency\`**。
+
+本轮最多约 ${REVIEW_FIX_MAX_ITERATIONS} 次工具往返，优先处理严重问题。`;
+
+    this.lastUserBudget = [
+      { name: "审核报告", chars: reviewText.length },
+      { name: "定向修复指令", chars: input.length - reviewText.length },
+    ];
+
+    const output = await this.runLLM(input, systemPrompt, REVIEW_FIX_MAX_ITERATIONS);
+
+    // success 判定：修复后章节文件仍在即视为本轮执行完成（是否达标由下一轮 editor 重判）。
+    const stillExists = await readFileSafe(path.join(this.novelDir, outputPath));
+    if (!stillExists) {
+      return {
+        output,
+        filesWritten: [],
+        success: false,
+        error: "applyReviewFix: 修复后章节正文文件丢失",
+      };
+    }
+    return {
+      output,
+      filesWritten: [outputPath],
+      success: true,
+    };
+  }
+
+  /**
+   * 定向修复：按确定性 prose 检测的 blocking findings 逐条用 edit_file 改掉（禁用词/句式/比喻过密）。
+   *
+   * 取代 prose-fix 对 writeChapter 的复用--确定性检测出的问题本就是「定位->改几处」，
+   * 用定向 edit 即可，无需重写整章。draft 后 + review-fix 后都会调用（后者兜底 review-fix
+   * 改写可能引入的禁用词，避免 editor 反复挑硬规、review-fix 改 A 引入 B 的死循环）。
+   */
+  async applyProseFix(chapterNumber: number, prose: ProseReport): Promise<AgentRunResult> {
+    const systemPrompt = await this.buildSystemPrompt();
+
+    const curFile = await findChapterFile(this.novelDir, chapterNumber);
+    if (!curFile) {
+      return {
+        output: "",
+        filesWritten: [],
+        success: false,
+        error: `applyProseFix: 找不到第 ${chapterNumber} 章的正文文件，无法定向修复`,
+      };
+    }
+    const outputPath = path.relative(this.novelDir, curFile).replace(/\\/g, "/");
+    const PROSE_FIX_MAX_ITERATIONS = 8;
+
+    const findings = prose.blocking
+      .map(
+        (f, i) =>
+          `${i + 1}. [${f.type}] 第${f.line}行：${f.message}\n   原文片段：${f.excerpt}`,
+      )
+      .join("\n");
+
+    const input = `## 定向修复第 ${chapterNumber} 章（确定性 prose 检测的硬规问题）
+
+### 目标章节文件
+${outputPath}（需要定位片段时用 \`read_file\` 读取相应段落，**不要整章重写**）
+
+### 确定性检测发现的 blocking 问题（必须全部修复）
+${findings}
+
+### 执行要求（违反则任务失败）
+1. 逐条用 \`edit_file\` 改掉上述 blocking 问题（禁用词/禁用句式/比喻过密等）。
+2. **禁止 \`write_file\` 整章**、禁止重写未出问题的段落、禁止新增删减情节、**禁止跨章修改**。
+3. **不要先 \`todo\` 规划长流程**，逐条定位->\`edit_file\` 即可，改完就停。
+4. 改完用 \`count_words\` 核一次字数即可，不要反复 \`validate_style\`。
+
+本轮最多约 ${PROSE_FIX_MAX_ITERATIONS} 次工具往返。`;
+
+    this.lastUserBudget = [
+      { name: "prose blocking 问题", chars: findings.length },
+      { name: "定向修复指令", chars: input.length - findings.length },
+    ];
+
+    const output = await this.runLLM(input, systemPrompt, PROSE_FIX_MAX_ITERATIONS);
+
+    const stillExists = await readFileSafe(path.join(this.novelDir, outputPath));
+    if (!stillExists) {
+      return {
+        output,
+        filesWritten: [],
+        success: false,
+        error: "applyProseFix: 修复后章节正文文件丢失",
+      };
+    }
+    return {
+      output,
       filesWritten: [outputPath],
       success: true,
     };

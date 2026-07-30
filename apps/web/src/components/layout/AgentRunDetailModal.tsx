@@ -17,7 +17,7 @@ import {
   Terminal,
   ListTodo,
 } from "lucide-react";
-import type { AgentRunTrace, AgentRoundTrace, AgentToolCallTrace, PromptBudget, PromptBudgetItem, TodoSnapshot } from "@fictia/shared";
+import type { AgentRunTrace, AgentRoundTrace, AgentToolCallTrace, PromptBudget, PromptBudgetItem, TodoSnapshot, AgentTraceSegment } from "@fictia/shared";
 import { agentsApi } from "@/api/agents";
 
 interface AgentRunDetailModalProps {
@@ -33,8 +33,13 @@ type Tab = "overview" | "rounds" | "output";
 export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }: AgentRunDetailModalProps) {
   const [status, setStatus] = useState<string>("running");
   const [content, setContent] = useState<string>("");
-  const [trace, setTrace] = useState<AgentRunTrace | null>(null);
+  const [liveTrace, setLiveTrace] = useState<AgentRunTrace | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
+  // 多段 trace：segments = 该任务所有段（初稿/prose-fix/review-fix）。
+  // viewingFile = null 时跟随活动段（SSE liveTrace，实时）；非空时看指定历史段（按需 fetch）。
+  const [segments, setSegments] = useState<AgentTraceSegment[]>([]);
+  const [viewingFile, setViewingFile] = useState<string | null>(null);
+  const [segTraceMap, setSegTraceMap] = useState<Record<string, AgentRunTrace>>({});
 
   useEffect(() => {
     const url = agentsApi.getStreamUrl(outputId);
@@ -46,7 +51,7 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
         if (data.type === "status") {
           if (data.status) setStatus(data.status);
           if (typeof data.content === "string") setContent(data.content);
-          if (data.trace) setTrace(data.trace as AgentRunTrace);
+          if (data.trace) setLiveTrace(data.trace as AgentRunTrace);
         } else if (data.type === "done") {
           if (data.status) setStatus(data.status);
           es.close();
@@ -60,7 +65,26 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
     return () => es.close();
   }, [outputId]);
 
+  // 拉取该任务所有段（多段写作）；切换 outputId 时重置。
+  useEffect(() => {
+    setSegments([]);
+    setViewingFile(null);
+    setSegTraceMap({});
+    agentsApi.getSegments(outputId).then(setSegments).catch(() => {});
+  }, [outputId]);
+
+  // 看历史段时按需 fetch 该段 trace（活动段走 liveTrace，不必 fetch）。
+  useEffect(() => {
+    if (!viewingFile || segTraceMap[viewingFile]) return;
+    agentsApi
+      .getTrace(outputId, viewingFile)
+      .then((t) => setSegTraceMap((m) => ({ ...m, [viewingFile]: t })))
+      .catch(() => {});
+  }, [viewingFile, outputId, segTraceMap]);
+
   const isRunning = status === "running" || status === "pending";
+  // 当前展示的 trace：看历史段用其 fetch 结果，否则跟随活动段 liveTrace。
+  const trace = viewingFile ? segTraceMap[viewingFile] ?? null : liveTrace;
 
   const statusBadge =
     status === "running" || status === "pending" ? (
@@ -123,6 +147,25 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
           </div>
         </div>
 
+        {/* 段切换（多段写作：初稿/prose-fix/review-fix 各自独立 trace）*/}
+        {segments.length > 1 && (
+          <div className="flex items-center gap-1 border-b border-subtle px-3 py-1.5 overflow-x-auto">
+            <SegButton active={viewingFile === null} onClick={() => setViewingFile(null)}>
+              {isRunning ? "进行中" : "最新"}
+              {liveTrace ? ` · ${liveTrace.totalRounds}轮` : ""}
+            </SegButton>
+            {segments.map((seg) => (
+              <SegButton
+                key={seg.id}
+                active={viewingFile === seg.traceFilename}
+                onClick={() => setViewingFile(seg.traceFilename)}
+              >
+                {SEGMENT_LABEL[seg.segmentType] ?? seg.segmentType} · {seg.turnCount}轮
+              </SegButton>
+            ))}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-subtle px-3 py-1.5">
           <TabButton active={tab === "overview"} onClick={() => setTab("overview")} icon={<Info size={12} />}>
@@ -172,6 +215,33 @@ function TabButton({
     </button>
   );
 }
+
+function SegButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-caption text-[11px] transition-colors ${
+        active ? "bg-accent-bg text-accent" : "text-fg-muted hover:bg-surface-muted hover:text-fg-primary"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const SEGMENT_LABEL: Record<string, string> = {
+  draft: "初稿",
+  "prose-fix": "prose修复",
+  "review-fix": "审核修复",
+};
 
 // ==================== 轮次 ====================
 

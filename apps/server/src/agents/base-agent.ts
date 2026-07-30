@@ -320,7 +320,12 @@ export abstract class BaseAgent {
    * 自动工具执行/回填/多轮。工具来自 ToolRegistry（按 agentType 过滤），
    * 替代原手写 complete() 循环与 getTools/executeTool。
    */
-  protected async runLLM(userMessage: string, systemPrompt?: string): Promise<string> {
+  protected async runLLM(
+    userMessage: string,
+    systemPrompt?: string,
+    /** 覆盖本 agent 的 maxToolIterations（如轻量定向修复用更小轮次）；不传则回落实例默认。 */
+    maxIterationsOverride?: number,
+  ): Promise<string> {
     const resolvedSystemPrompt = systemPrompt ?? await this.buildSystemPrompt();
     const ctx: ToolContext = {
       novelId: path.basename(this.novelDir),
@@ -375,7 +380,7 @@ export abstract class BaseAgent {
         agentType: this.agentType,
         modelLabel: this.modelId,
         providerLabel: this.providerId,
-        maxIterations: this.maxToolIterations,
+        maxIterations: maxIterationsOverride ?? this.maxToolIterations,
         promptBudget,
         onToolCall: (name, input) => console.log(`[${this.agentName}] Tool call: ${name}`, input),
         onToolResult: (name, _input, result) =>

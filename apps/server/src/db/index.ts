@@ -72,6 +72,20 @@ sqlite.exec(`
     created_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS agent_trace_segments (
+    id TEXT PRIMARY KEY,
+    agent_output_id TEXT NOT NULL REFERENCES agent_outputs(id) ON DELETE CASCADE,
+    segment_type TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    trace_filename TEXT NOT NULL,
+    turn_count INTEGER DEFAULT 0,
+    tool_call_count INTEGER DEFAULT 0,
+    model_used TEXT DEFAULT '',
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    created_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT DEFAULT '',

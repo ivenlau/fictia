@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { AgentOutput, AgentRunTrace, AgentType } from "@fictia/shared";
+import type { AgentOutput, AgentRunTrace, AgentTraceSegment, AgentType } from "@fictia/shared";
 
 export const agentsApi = {
   triggerNovelAgent: (novelId: string, agentType: AgentType, persona?: string) =>
@@ -7,7 +7,9 @@ export const agentsApi = {
   triggerChapterAgent: (chapterId: string, agentType: AgentType, persona?: string) =>
     api.post<{ outputId: string }>(`/chapters/${chapterId}/agents/${agentType}/trigger`, { persona }),
   getStatus: (outputId: string) => api.get<AgentOutput>(`/agents/${outputId}/status`),
-  getTrace: (outputId: string) => api.get<AgentRunTrace>(`/agents/${outputId}/trace`),
+  getTrace: (outputId: string, file?: string) =>
+    api.get<AgentRunTrace>(`/agents/${outputId}/trace${file ? `?file=${encodeURIComponent(file)}` : ""}`),
+  getSegments: (outputId: string) => api.get<AgentTraceSegment[]>(`/agents/${outputId}/segments`),
   cancel: (outputId: string) => api.post(`/agents/${outputId}/cancel`),
   deleteOutput: (outputId: string) => api.delete<{ ok: boolean }>(`/agents/${outputId}`),
   clearOutputs: (novelId: string) => api.delete<{ ok: boolean; deleted: number }>(`/novels/${novelId}/agent-outputs`),

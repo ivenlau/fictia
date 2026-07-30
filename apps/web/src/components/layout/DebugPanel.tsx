@@ -218,6 +218,12 @@ export function DebugPanel() {
                           {output.turnCount}轮
                         </span>
                       )}
+                      {output.segmentCount && output.segmentCount > 1 && (
+                        <span className="inline-flex items-center gap-0.5 font-caption text-[10px] text-accent/80">
+                          <Layers size={9} />
+                          {output.segmentCount}段
+                        </span>
+                      )}
                       {output.toolCallCount > 0 && (
                         <span className="inline-flex items-center gap-0.5 font-caption text-[10px] text-fg-muted/60">
                           <Wrench size={9} />

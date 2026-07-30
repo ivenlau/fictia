@@ -95,6 +95,23 @@ export interface AgentOutput {
   turnCount: number;
   /** 总工具调用次数。 */
   toolCallCount: number;
+  /** 该任务的 trace 段数（>1 = 多段写作：初稿/prose-fix/review-fix 各自独立 trace）。trigger 单段路径为 0。 */
+  segmentCount?: number;
+}
+
+/** 一次章节写作任务内单段 writeChapter 的 trace 记录（初稿/prose-fix/review-fix）。 */
+export interface AgentTraceSegment {
+  id: string;
+  agentOutputId: string;
+  segmentType: "draft" | "prose-fix" | "review-fix";
+  seq: number;
+  traceFilename: string;
+  turnCount: number;
+  toolCallCount: number;
+  modelUsed: string;
+  startedAt: string;
+  completedAt: string | null;
+  createdAt: string;
 }
 
 // ===== Agent 运行调试 Trace =====

@@ -301,14 +301,26 @@ router.get("/agents/:outputId/trace", async (req, res) => {
     return;
   }
 
-  const trace = output.traceFilename
-    ? await fileService.readAgentTrace(output.novelId, output.traceFilename)
-    : null;
+  // 支持读取指定段 trace（?file=<traceFilename>）；不传则读 agent_outputs.trace_filename（最新活动段，兼容现状）。
+  const file =
+    typeof req.query.file === "string" && req.query.file ? req.query.file : output.traceFilename;
+  const trace = file ? await fileService.readAgentTrace(output.novelId, file) : null;
   if (!trace) {
     res.status(404).json({ error: "No trace available" });
     return;
   }
   res.json(trace);
+});
+
+// GET /agents/:outputId/segments - 列出该任务的所有 trace 段（多段写作：初稿/prose-fix/review-fix，按 seq 排序）
+router.get("/agents/:outputId/segments", (req, res) => {
+  const segs = db
+    .select()
+    .from(schema.agentTraceSegments)
+    .where(eq(schema.agentTraceSegments.agentOutputId, req.params.outputId))
+    .all()
+    .sort((a, b) => a.seq - b.seq);
+  res.json(segs);
 });
 
 // DELETE /agents/:outputId - 删除单条任务记录（DB row + .md + .trace.json；级联删 review_feedback）
@@ -324,9 +336,25 @@ router.delete("/agents/:outputId", (req, res) => {
     return;
   }
 
+  // 收集所有段 trace 文件（多段写作）+ content 文件一并清理；DB 行删除级联清 segments 行。
+  const segs = db
+    .select()
+    .from(schema.agentTraceSegments)
+    .where(eq(schema.agentTraceSegments.agentOutputId, output.id))
+    .all();
+  const traceFiles = Array.from(
+    new Set(
+      segs
+        .map((s) => s.traceFilename)
+        .concat(output.traceFilename ? [output.traceFilename] : []),
+    ),
+  );
   fileService
-    .deleteAgentOutputFiles(output.novelId, output.filename, output.traceFilename)
-    .catch((e) => console.error(`[agent-outputs] delete files failed for ${output.id}`, e));
+    .deleteAgentOutputFiles(output.novelId, output.filename, null)
+    .catch((e) => console.error(`[agent-outputs] delete content failed for ${output.id}`, e));
+  fileService
+    .deleteAgentTraceFiles(output.novelId, traceFiles)
+    .catch((e) => console.error(`[agent-outputs] delete trace files failed for ${output.id}`, e));
   db.delete(schema.agentOutputs).where(eq(schema.agentOutputs.id, req.params.outputId)).run();
   res.json({ ok: true });
 });
@@ -378,7 +406,12 @@ router.get("/novels/:novelId/agent-outputs", async (req, res) => {
     if (output.filename) {
       content = await fileService.readAgentOutput(output.novelId, output.filename);
     }
-    results.push({ ...output, content });
+    const segmentCount = db
+      .select()
+      .from(schema.agentTraceSegments)
+      .where(eq(schema.agentTraceSegments.agentOutputId, output.id))
+      .all().length;
+    results.push({ ...output, content, segmentCount });
   }
 
   res.json(results);
@@ -399,9 +432,22 @@ router.delete("/novels/:novelId/agent-outputs", async (req, res) => {
     .all();
 
   await Promise.all(
-    outputs.map((o) =>
-      fileService.deleteAgentOutputFiles(o.novelId, o.filename, o.traceFilename),
-    ),
+    outputs.map(async (o) => {
+      const segs = db
+        .select()
+        .from(schema.agentTraceSegments)
+        .where(eq(schema.agentTraceSegments.agentOutputId, o.id))
+        .all();
+      const traceFiles = Array.from(
+        new Set(
+          segs
+            .map((s) => s.traceFilename)
+            .concat(o.traceFilename ? [o.traceFilename] : []),
+        ),
+      );
+      await fileService.deleteAgentOutputFiles(o.novelId, o.filename, null);
+      await fileService.deleteAgentTraceFiles(o.novelId, traceFiles);
+    }),
   );
   db.delete(schema.agentOutputs)
     .where(eq(schema.agentOutputs.novelId, req.params.novelId))

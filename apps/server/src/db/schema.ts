@@ -63,6 +63,22 @@ export const reviewFeedback = sqliteTable("review_feedback", {
   createdAt: text("created_at").notNull(),
 });
 
+// 章节写作一次任务内的多段 trace（初稿/prose-fix/review-fix 各自独立文件）。
+// 一次 agent_outputs 对多段；删任务级联清段。
+export const agentTraceSegments = sqliteTable("agent_trace_segments", {
+  id: text("id").primaryKey(),
+  agentOutputId: text("agent_output_id").notNull().references(() => agentOutputs.id, { onDelete: "cascade" }),
+  segmentType: text("segment_type").notNull(),
+  seq: integer("seq").notNull(),
+  traceFilename: text("trace_filename").notNull(),
+  turnCount: integer("turn_count").default(0),
+  toolCallCount: integer("tool_call_count").default(0),
+  modelUsed: text("model_used").default(""),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").default(""),

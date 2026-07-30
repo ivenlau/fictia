@@ -178,6 +178,15 @@ export const fileService = {
     await Promise.all(targets.map((f) => fs.unlink(path.join(dir, f)).catch(() => {})));
   },
 
+  /** 批量删除多个段 trace 文件（多段写作任务清理用）。Best-effort：缺失文件忽略。 */
+  async deleteAgentTraceFiles(novelId: string, traceFilenames: string[]): Promise<void> {
+    if (traceFilenames.length === 0) return;
+    const dir = path.join(this.getNovelDir(novelId), "agent-outputs");
+    await Promise.all(
+      traceFilenames.filter(Boolean).map((f) => fs.unlink(path.join(dir, f)).catch(() => {})),
+    );
+  },
+
   // ==================== Workspace file operations ====================
 
   /**
