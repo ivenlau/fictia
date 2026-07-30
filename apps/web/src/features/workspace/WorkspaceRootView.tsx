@@ -106,7 +106,10 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
     if (novel) setCurrentNovel(novel);
   }, [novel, setCurrentNovel]);
 
-  const allChaptersWritten = chapterFiles.length > 0 && chapterFiles.every((ch) => ch.hasContent);
+  const allChaptersWritten =
+    chapterFiles.length >= (novel?.targetChapters ?? Infinity) &&
+    chapterFiles.length > 0 &&
+    chapterFiles.every((ch) => ch.hasContent);
 
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
