@@ -4,6 +4,10 @@ import { runAutopilot, type WritingLoopEvent, type AutopilotOptions } from "@/ap
 
 interface AutopilotDialogProps {
   novelId: string;
+  /** 固定起始章（已写章数 + 1，不可调）。 */
+  startChapter: number;
+  /** 结束章上限（目标章数 targetChapters）。 */
+  maxChapter: number;
   onClose: () => void;
   onDone?: () => void;
 }
@@ -22,14 +26,14 @@ const STOP_LABEL: Record<string, string> = {
   aborted: "已中止",
 };
 
-export function AutopilotDialog({ novelId, onClose, onDone }: AutopilotDialogProps) {
+export function AutopilotDialog({ novelId, startChapter, maxChapter, onClose, onDone }: AutopilotDialogProps) {
   const [started, setStarted] = useState(false);
   const [running, setRunning] = useState(false);
   const [chapters, setChapters] = useState<ChapterStatus[]>([]);
   const [milestoneMsg, setMilestoneMsg] = useState<string | null>(null);
   const [summary, setSummary] = useState<{ chaptersWritten: number; stopped: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [options, setOptions] = useState<AutopilotOptions>({});
+  const [options, setOptions] = useState<AutopilotOptions>({ startChapter, endChapter: maxChapter });
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,29 +116,30 @@ export function AutopilotDialog({ novelId, onClose, onDone }: AutopilotDialogPro
               <p className="font-body text-xs text-fg-secondary">
                 连续自动写多章（写作循环 + 审核修复），每 5 章自动做一致性校验，未通过则暂停。
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 items-center">
                 <label className="font-caption text-[11px] text-fg-muted flex items-center gap-1.5">
                   起始章
                   <input
                     type="number"
-                    className="w-20 rounded border border-subtle bg-surface-muted px-1.5 py-0.5 text-xs"
-                    value={options.startChapter ?? ""}
-                    onChange={(e) =>
-                      setOptions({ ...options, startChapter: e.target.value ? Number(e.target.value) : undefined })
-                    }
+                    className="w-20 rounded border border-subtle bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted"
+                    value={startChapter}
+                    disabled
                   />
                 </label>
                 <label className="font-caption text-[11px] text-fg-muted flex items-center gap-1.5">
                   结束章
                   <input
                     type="number"
+                    min={startChapter}
+                    max={maxChapter}
                     className="w-20 rounded border border-subtle bg-surface-muted px-1.5 py-0.5 text-xs"
-                    value={options.endChapter ?? ""}
+                    value={options.endChapter ?? maxChapter}
                     onChange={(e) =>
                       setOptions({ ...options, endChapter: e.target.value ? Number(e.target.value) : undefined })
                     }
                   />
                 </label>
+                <span className="font-caption text-[10px] text-fg-muted">最大 {maxChapter}</span>
               </div>
               <button
                 onClick={() => setStarted(true)}

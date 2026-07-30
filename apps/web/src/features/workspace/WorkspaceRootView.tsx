@@ -433,6 +433,8 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
       {showAutopilot && novelId && (
         <AutopilotDialog
           novelId={novelId}
+          startChapter={chapterFiles.length + 1}
+          maxChapter={novel?.targetChapters ?? 20}
           onClose={() => setShowAutopilot(false)}
           onDone={() => refreshFiles()}
         />
