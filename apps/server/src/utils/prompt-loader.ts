@@ -10,12 +10,13 @@ function getServerRoot(): string {
 
 /**
  * Load a system prompt template for an agent.
- * Looks for templates/agents/{agentName}/system.md
+ * Looks for templates/agents/{agentName}/system.md，或 system-{variant}.md（如轻量版）。
  */
-export async function loadPromptTemplate(agentName: string): Promise<string> {
+export async function loadPromptTemplate(agentName: string, variant?: string): Promise<string> {
+  const file = variant ? `system-${variant}.md` : "system.md";
   const candidates = [
-    path.join(process.cwd(), PROMPTS_DIR, agentName, "system.md"),
-    path.join(getServerRoot(), PROMPTS_DIR, agentName, "system.md"),
+    path.join(process.cwd(), PROMPTS_DIR, agentName, file),
+    path.join(getServerRoot(), PROMPTS_DIR, agentName, file),
   ];
 
   for (const candidate of candidates) {
@@ -27,7 +28,7 @@ export async function loadPromptTemplate(agentName: string): Promise<string> {
     }
   }
 
-  throw new Error(`Prompt template not found for agent: ${agentName}`);
+  throw new Error(`Prompt template not found for agent: ${agentName}${variant ? ` (${variant})` : ""}`);
 }
 
 const CRAFT_DIR = "templates/writing-craft";

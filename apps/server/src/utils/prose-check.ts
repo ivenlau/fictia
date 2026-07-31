@@ -242,8 +242,8 @@ const QUOTE_PAIRS: [string, string][] = [
   ['"', '"'], ["'", "'"],
 ];
 
-// em-dash
-const DASH_PATTERN = /--|-|--+/;
+// em-dash / en-dash / ASCII hyphen（含中文破折号 —— U+2014、– U+2013）
+const DASH_PATTERN = /[—–-]+/;
 
 // ---------------------------------------------------------------------------
 // 工具函数

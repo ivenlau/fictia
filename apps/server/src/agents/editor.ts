@@ -8,6 +8,7 @@ import {
 } from "../utils/context-extractor.js";
 import { listFiles } from "../utils/file.js";
 import * as path from "path";
+import { loadPromptTemplate } from "../utils/prompt-loader.js";
 
 export class EditorAgent extends BaseAgent {
   protected stageName: StageName = "editor";
@@ -55,9 +56,13 @@ export class EditorAgent extends BaseAgent {
 
   async reviewChapter(
     chapterPath: string,
-    options?: AgentRunOptions
+    options?: AgentRunOptions,
+    /** 轻量模式：用 system-light 模板（写作循环内审核），不注入 craft/参考/style-guide，输出精简。 */
+    light?: boolean,
   ): Promise<AgentRunResult> {
-    const systemPrompt = await this.buildSystemPrompt();
+    const systemPrompt = light
+      ? await loadPromptTemplate("editor", "light")
+      : await this.buildSystemPrompt();
     const chapterContent = await this.readProjectFile(chapterPath);
 
     const artDesign = await this.readProjectFile("design/art-design.md");
@@ -89,6 +94,18 @@ ${currentReview}
 ${options.userDirective}
 
 请根据要求修改审核报告，输出完整的修改后内容。`;
+    } else if (light) {
+      // 轻量审核（写作循环内）：只给章节正文 + 设定概览，审核标准与输出格式由 system-light 定义，
+      // 不在此重复完整输出要求（否则会架空 system-light 的精简输出）。
+      input = `## 审核章节（写作循环内快速判定）
+
+### 待审核章节 (${chapterPath})
+${chapterContent}
+
+### 设定概览（交叉校验）
+${context}
+
+按系统提示词的审核标准与输出格式快速审核本章。`;
     } else {
       input = `## 审核章节
 

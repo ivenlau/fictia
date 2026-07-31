@@ -67,9 +67,8 @@ export class DesignLoopService {
     const reviewer = createAgent("design-reviewer", this.novelDir, this.agentModels) as DesignReviewerAgent;
     const emit = (p: DesignLoopProgress) => onProgress?.(p);
 
-    // 注入 trace + agent_outputs（与 writing-loop 对齐，service 层下沉覆盖所有调用方）
-    const traceFilename = `${designAgentType}-${Date.now()}.trace.json`;
-    designAgent.traceFilename = traceFilename;
+    // 多段 trace：所有段共享 baseTs 前缀，由 runSegment 逐段设给 designAgent.traceFilename。
+    const baseTs = `${Date.now()}`;
     const outputId = uuid();
     db.insert(schema.agentOutputs)
       .values({
@@ -83,7 +82,7 @@ export class DesignLoopService {
         modelUsed: "",
         providerUsed: "",
         status: "running",
-        traceFilename,
+        traceFilename: `${designAgentType}-${baseTs}-s0-draft.trace.json`,
         tokensInput: 0,
         tokensOutput: 0,
         cost: 0,
@@ -95,10 +94,52 @@ export class DesignLoopService {
     let passed = false;
     let verdict: Verdict | null = null;
     let rounds = 0;
+    let segSeq = 0;
+    /** 段化一次 designAgent.run：独立 trace 文件 + 写 agent_trace_segments 行，
+     *  并把 agent_outputs.trace_filename 指向当前段（让 SSE 实时跟进活动段）。 */
+    const runSegment = async <T>(
+      type: "draft" | "review-fix",
+      fn: () => Promise<T>,
+    ): Promise<T> => {
+      const seq = segSeq++;
+      const segTrace = `${designAgentType}-${baseTs}-s${seq}-${type}.trace.json`;
+      designAgent.traceFilename = segTrace;
+      try {
+        db.update(schema.agentOutputs)
+          .set({ traceFilename: segTrace })
+          .where(eq(schema.agentOutputs.id, outputId))
+          .run();
+      } catch {
+        // trace_filename 更新失败不阻塞
+      }
+      const startedAt = new Date().toISOString();
+      const res = await fn();
+      const sum = summarizeTrace(designAgent.lastTrace);
+      try {
+        db.insert(schema.agentTraceSegments)
+          .values({
+            id: uuid(),
+            agentOutputId: outputId,
+            segmentType: type,
+            seq,
+            traceFilename: segTrace,
+            turnCount: sum.turnCount,
+            toolCallCount: sum.toolCallCount,
+            modelUsed: sum.modelUsed,
+            startedAt,
+            completedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          })
+          .run();
+      } catch {
+        // 段记录失败不阻塞主流程
+      }
+      return res;
+    };
     try {
       // 第 0 轮：design 产出
       emit({ phase: "design", round: 0, message: `${stageName} 设计产出` });
-      await designAgent.run({});
+      await runSegment("draft", () => designAgent.run({}));
 
       // review-fix 循环
       for (rounds = 1; rounds <= maxRounds; rounds++) {
@@ -124,11 +165,16 @@ export class DesignLoopService {
           round: rounds,
           message: `按审核报告修复（severe=${verdict.severe} normal=${verdict.normal}）`,
         });
-        await designAgent.run({
-          userDirective:
-            `设计审核未通过（评分 ${verdict.grade ?? "?"}，严重 ${verdict.severe}，一般 ${verdict.normal}）。` +
-            `请按审核报告逐条修复严重/一般问题，重新输出完整设计：\n\n${reviewText}`,
-        });
+        const grade = verdict?.grade ?? "?";
+        const severe = verdict?.severe ?? 0;
+        const normal = verdict?.normal ?? 0;
+        await runSegment("review-fix", () =>
+          designAgent.run({
+            userDirective:
+              `设计审核未通过（评分 ${grade}，严重 ${severe}，一般 ${normal}）。` +
+              `请按审核报告逐条修复严重/一般问题，重新输出完整设计：\n\n${reviewText}`,
+          }),
+        );
       }
 
       // 通过则确认 stage（与 writing-loop confirmStage 对齐）
@@ -148,13 +194,24 @@ export class DesignLoopService {
       });
       return { stageName, rounds, passed, finalVerdict: verdict };
     } finally {
-      // 回填 agent_outputs（用 design agent 的 trace 汇总）
+      // 回填 agent_outputs：轮次/工具数按所有段累加
       try {
+        const lastSum = summarizeTrace(designAgent.lastTrace);
+        const segs = db
+          .select()
+          .from(schema.agentTraceSegments)
+          .where(eq(schema.agentTraceSegments.agentOutputId, outputId))
+          .all();
+        const totalTurns = segs.reduce((n, s) => n + (s.turnCount ?? 0), 0);
+        const totalTools = segs.reduce((n, s) => n + (s.toolCallCount ?? 0), 0);
+        const lastSegModel = segs.length > 0 ? segs[segs.length - 1].modelUsed ?? "" : "";
         db.update(schema.agentOutputs)
           .set({
             status: passed ? "completed" : "failed",
-            tokensOutput: 0,
-            ...summarizeTrace(designAgent.lastTrace),
+            modelUsed: lastSegModel || lastSum.modelUsed,
+            providerUsed: lastSum.providerUsed,
+            turnCount: totalTurns,
+            toolCallCount: totalTools,
             completedAt: new Date().toISOString(),
           })
           .where(eq(schema.agentOutputs.id, outputId))

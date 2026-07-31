@@ -232,17 +232,20 @@ router.post("/novels/:novelId/pipeline/stages/:stage", async (req, res) => {
       result,
     });
   } catch (err: any) {
+    console.error(`[pipeline] stage ${stage} failed:`, err);
     // Mark output as failed（读回已增量写入的 trace 补 errorMessage 后回填汇总）
     if (def) {
       const partial = await fileService.readAgentTrace(novelId, traceFilename);
       if (partial) {
-        await fileService
-          .writeAgentTrace(novelId, traceFilename, {
+        try {
+          await fileService.writeAgentTrace(novelId, traceFilename, {
             ...partial,
             completedAt: now(),
             errorMessage: err?.message ?? "Unknown error",
-          })
-          .catch(() => {});
+          });
+        } catch (e) {
+          console.error(`[pipeline] write error trace failed for ${outputId}`, e);
+        }
       }
       db.update(schema.agentOutputs)
         .set({

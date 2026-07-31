@@ -267,71 +267,77 @@ export class WritingLoopService {
       await runSegment("prose-fix", () => writer.applyProseFix(chapterNumber, prose));
     }
 
-    // 阶段 2：审核-修复循环（最多 maxRounds 轮）
-    let verdict: Verdict | null = null;
-    let round = 0;
-    for (round = 1; round <= maxRounds; round++) {
-      emit({ phase: "reviewing", round, message: `第 ${round} 轮编辑审核` });
+    // 审核一次（轻量 editor），返回 verdict + 报告全文。
+    const doReview = async (
+      reviewRound: number,
+    ): Promise<{ verdict: Verdict; reviewText: string }> => {
+      emit({ phase: "reviewing", round: reviewRound, message: `第 ${reviewRound} 轮编辑审核` });
+      // light=true：用 system-light 模板（不注入 craft/参考/style-guide、输出精简），写作循环内审核。
       // 用 editor 返回的报告全文（agent 产出）作主源，避免报告文件命名不一致读空；文件兜底。
-      const reviewResult = await editor.reviewChapter(chapterPath);
-      const reviewText =
+      const reviewResult = await editor.reviewChapter(chapterPath, undefined, true);
+      const rText =
         reviewResult.output?.trim() ||
         (await readFileSafe(path.join(this.novelDir, reviewPath))) ||
         "";
-      verdict = parseReviewVerdict(reviewText);
+      const v = parseReviewVerdict(rText);
       emit({
         phase: "reviewing",
-        round,
-        message: `verdict: grade=${verdict.grade ?? "?"} severe=${verdict.severe} normal=${verdict.normal} passed=${verdict.passed}`,
-        verdict,
+        round: reviewRound,
+        message: `verdict: grade=${v.grade ?? "?"} severe=${v.severe} normal=${v.normal} passed=${v.passed}`,
+        verdict: v,
       });
+      return { verdict: v, reviewText: rText };
+    };
 
-      if (verdict.passed) {
-        // 通过：更新实体状态（从本章写作备注），供下一章动态上下文使用
-        let entitiesUpdated = 0;
-        try {
-          const r = await updateEntitiesFromChapterNotes(this.novelId, chapterNumber);
-          entitiesUpdated = r.updated;
-        } catch {
-          // 状态更新失败不阻塞
-        }
-        // 摘要现由 chapter-writer.run 统一生成（手动触发也覆盖）；此处仅探测是否成功，
-        // 不再重复调 LLM，避免与 chapter-writer.run 双重生成。
-        let summarySource: "llm" | "fallback" | null = null;
-        try {
-          if (getSummary(this.novelId, chapterNumber)) summarySource = "llm";
-        } catch {
-          // 探测失败不阻塞
-        }
-        emit({
-          phase: "done",
-          round,
-          message: `第 ${chapterNumber} 章通过（${round} 轮），实体状态更新 ${entitiesUpdated} 条，摘要=${summarySource ?? "无"}`,
-        });
-        // 补同步：写通过后确认 chapters stage（pipelineStatus 按字段判定、不按文件推算，
-        // 故需显式 confirm，否则 chapters stage 状态不推进）。chapters 是增量 stage，每写一章
-        // confirm 一次不阻碍下一章。
-        try {
-          const orch = getOrCreateOrchestrator(this.novelId, this.novelDir);
-          await orch.init();
-          await orch.confirmStage("chapters");
-        } catch {
-          // 状态同步失败不阻塞写作
-        }
-        passed = true;
-        return {
-          chapterNumber,
-          chapterPath,
-          reviewPath,
-          rounds: round,
-          passed: true,
-          finalVerdict: verdict,
-          proseBlockingRemaining,
-          proseAdvisory,
-          entitiesUpdated,
-          summarySource,
-        };
+    // 审核通过后的收尾：实体更新 + 摘要探测 + confirmStage，返回通过的 LoopResult。
+    const finalizePass = async (reviewRound: number, v: Verdict): Promise<LoopResult> => {
+      let entitiesUpdated = 0;
+      try {
+        const r = await updateEntitiesFromChapterNotes(this.novelId, chapterNumber);
+        entitiesUpdated = r.updated;
+      } catch {
+        // 状态更新失败不阻塞
       }
+      let summarySource: "llm" | "fallback" | null = null;
+      try {
+        if (getSummary(this.novelId, chapterNumber)) summarySource = "llm";
+      } catch {
+        // 探测失败不阻塞
+      }
+      emit({
+        phase: "done",
+        round: reviewRound,
+        message: `第 ${chapterNumber} 章通过（${reviewRound} 轮审核），实体状态更新 ${entitiesUpdated} 条，摘要=${summarySource ?? "无"}`,
+      });
+      try {
+        const orch = getOrCreateOrchestrator(this.novelId, this.novelDir);
+        await orch.init();
+        await orch.confirmStage("chapters");
+      } catch {
+        // 状态同步失败不阻塞写作
+      }
+      passed = true;
+      return {
+        chapterNumber,
+        chapterPath,
+        reviewPath,
+        rounds: reviewRound,
+        passed: true,
+        finalVerdict: v,
+        proseBlockingRemaining,
+        proseAdvisory,
+        entitiesUpdated,
+        summarySource,
+      };
+    };
+
+    // 阶段 2：审核-修复循环（最多 maxRounds 轮）
+    let verdict: Verdict | null = null;
+    let reviewText = "";
+    let round = 0;
+    for (round = 1; round <= maxRounds; round++) {
+      ({ verdict, reviewText } = await doReview(round));
+      if (verdict.passed) return await finalizePass(round, verdict);
 
       emit({
         phase: "review-fix",
@@ -354,13 +360,17 @@ export class WritingLoopService {
       }
     }
 
-    // maxRounds 仍未通过：中止，交用户决定
-    emit({ phase: "aborted", round: maxRounds, message: `${maxRounds} 轮未通过，交用户决定` });
+    // 最后一轮修复后补一次最终审核验证（避免最后一轮修复被浪费）。
+    ({ verdict, reviewText } = await doReview(maxRounds + 1));
+    if (verdict.passed) return await finalizePass(maxRounds + 1, verdict);
+
+    // 最终审核仍未通过：中止，交用户决定
+    emit({ phase: "aborted", round: maxRounds + 1, message: `${maxRounds} 轮修复 + 最终审核仍未通过，交用户决定` });
     return {
       chapterNumber,
       chapterPath,
       reviewPath,
-      rounds: maxRounds,
+      rounds: maxRounds + 1,
       passed: false,
       finalVerdict: verdict,
       proseBlockingRemaining,
