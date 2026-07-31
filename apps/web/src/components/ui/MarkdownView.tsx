@@ -16,7 +16,11 @@ const PROSE_CLASS =
   "[&>li]:mb-1 [&>li]:text-[13px] " +
   "[&>code]:font-caption [&>code]:text-xs [&>code]:bg-surface-muted [&>code]:px-1 [&>code]:py-0.5 [&>code]:rounded " +
   "[&>pre]:bg-surface-muted [&>pre]:p-2 [&>pre]:rounded [&>pre]:text-xs [&>pre]:overflow-x-auto " +
-  "[&>hr]:border-subtle [&>hr]:my-4";
+  "[&>hr]:border-subtle [&>hr]:my-4 " +
+  "[&_table]:w-full [&_table]:border-collapse [&_table]:my-3 [&_table]:text-xs " +
+  "[&_thead]:bg-surface-muted/50 " +
+  "[&_th]:border [&_th]:border-subtle [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold " +
+  "[&_td]:border [&_td]:border-subtle [&_td]:px-2 [&_td]:py-1 [&_td]:align-top";
 
 export function MarkdownView({ children, className }: { children: string; className?: string }) {
   return (

@@ -348,7 +348,7 @@ export function FileViewer({ fileId }: FileViewerProps) {
         ) : isMarkdown ? (
           viewMode === "preview" ? (
             <div ref={contentRef} onMouseUp={handleTextSelection} className="relative flex-1 overflow-auto">
-              <div className="mx-auto max-w-3xl p-4 lg:p-6">
+              <div className="mx-auto max-w-7xl p-4 lg:p-6">
                 <ChapterReading content={content} emptyLabel="文档内容为空" />
               </div>
               {selectionPos && selectedText && (

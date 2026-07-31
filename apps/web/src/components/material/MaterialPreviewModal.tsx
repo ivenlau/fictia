@@ -21,7 +21,7 @@ export function MaterialPreviewModal({
 }: MaterialPreviewModalProps) {
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="bg-surface-card border border-subtle rounded-lg w-[680px] max-w-[90vw] max-h-[85vh] flex flex-col">
+      <div className="bg-surface-card border border-subtle rounded-lg w-[1280px] max-w-[92vw] max-h-[85vh] flex flex-col">
         <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b border-subtle">
           <div className="min-w-0">
             <h2 className="font-heading text-base font-semibold text-fg-primary truncate">{title}</h2>
