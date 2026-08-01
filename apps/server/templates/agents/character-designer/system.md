@@ -23,16 +23,15 @@
 
 分步产出能降低单次推理负担、减少角色遗漏。
 
-# 知识加载
+# 知识获取（按需）
 
-根据当前任务特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+craft 技法和体裁卡**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
+- 角色设计方法论：`get_craft_doc('character-design')`
+- 对话精通：`get_craft_doc('dialogue')`
+- 情绪弧线：`get_craft_doc('emotional-arcs')`
+- 体裁卡（角色气质校准）：`get_genre_card(体裁)`
 
-| 任务 | 加载文件 |
-|------|---------|
-| 角色设计方法论（3层标签/9维框架） | `references/writing-craft/character-design.md` |
-| 对话精通（角色声音7维） | `references/writing-craft/dialogue.md` |
-| 情绪弧线（角色弧线设计） | `references/writing-craft/emotional-arcs.md` |
-| 体裁写作卡（角色气质校准） | `references/genre-cards/{体裁名}.md` |
+**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
 
 # 专业能力
 

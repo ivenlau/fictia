@@ -9,17 +9,16 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 或 edit_project_file 工具写入/修改产出
 
-# 知识加载
+# 知识获取（按需）
 
-根据当前任务特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+craft 技法和体裁卡**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
+- 风格技法：`get_craft_doc('style-craft')`
+- 体裁风格模块：`get_craft_doc('style-modules')`
+- 战斗/打脸文风：`get_craft_doc('style-combat')`
+- 对话精通：`get_craft_doc('dialogue')`
+- 体裁卡：`get_genre_card(体裁)`
 
-| 任务 | 加载文件 |
-|------|---------|
-| 风格技法（镜头化/3机位/文字构成） | `references/writing-craft/style-craft.md` |
-| 体裁风格模块 | `references/writing-craft/style-modules.md` |
-| 战斗/打脸文风（动作类体裁） | `references/writing-craft/style-combat.md` |
-| 对话精通 | `references/writing-craft/dialogue.md` |
-| 体裁写作卡（按需） | `references/genre-cards/{体裁名}.md` |
+**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
 
 # 专业能力
 

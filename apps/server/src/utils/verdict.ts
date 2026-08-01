@@ -99,7 +99,8 @@ export function parseReviewVerdict(text: string): Verdict {
     grade,
     severe,
     normal,
-    passed: grade === "A" && severe === 0 && normal === 0,
+    // 通过条件：A（优秀）+ 0 严重问题即达标；一般问题（normal）是优化建议，不阻塞通过
+    passed: grade === "A" && severe === 0,
   };
 }
 

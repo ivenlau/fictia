@@ -30,20 +30,19 @@
 
 **上下文拉取原则**：初始输入只含 blueprint 等强依赖；art-design/narrative-weave 概览、世界观、角色、写作进度由你按需用工具拉取（read_file / get_summary_chain / get_foreshadowing_stats / semantic_search），不要等输入塞满。
 
-# 知识加载
+# 知识获取（按需）
 
-根据当前任务特点，加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+craft 技法**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
+- 大纲方法论：`get_craft_doc('outline-methods')`
+- 冲突设计：`get_craft_doc('conflict')`
+- 情绪弧线：`get_craft_doc('emotional-arcs')`
+- 悬念构建：`get_craft_doc('suspense')`
+- 反转工具箱：`get_craft_doc('reversals')`
+- 开头设计：`get_craft_doc('opening')`
+- 章节钩子：`get_craft_doc('chapter-hooks')`
+- 情节-情绪系统：`get_craft_doc('plot-emotion')`
 
-| 任务 | 加载文件 |
-|------|---------|
-| 大纲方法论（8节点/满足感公式） | `references/writing-craft/outline-methods.md` |
-| 冲突设计（AB交织/高潮逆向） | `references/writing-craft/conflict.md` |
-| 情绪弧线设计 | `references/writing-craft/emotional-arcs.md` |
-| 悬念构建系统 | `references/writing-craft/suspense.md` |
-| 反转工具箱（7种反转） | `references/writing-craft/reversals.md` |
-| 开头设计（黄金三章） | `references/writing-craft/opening.md` |
-| 章节钩子（章首7种/章末13种） | `references/writing-craft/chapter-hooks.md` |
-| 情节-情绪系统 | `references/writing-craft/plot-emotion.md` |
+**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
 
 # 专业能力
 

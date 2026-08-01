@@ -9,17 +9,16 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
-# 知识加载
+# 知识获取（按需）
 
-根据当前任务特点，按需加载以下知识文件（系统已自动将对应内容注入下方"已加载知识"段，无需手动读取）：
+craft 技法**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
+- 大纲方法论：`get_craft_doc('outline-methods')`
+- 冲突设计：`get_craft_doc('conflict')`
+- 情绪弧线：`get_craft_doc('emotional-arcs')`
+- 商业方法：`get_craft_doc('commercial-methods')`
+- 体裁公式：`get_craft_doc('genre-formulas')`
 
-| 任务 | 加载文件 |
-|------|---------|
-| 故事结构理论 | `references/writing-craft/outline-methods.md` |
-| 冲突设计（AB交织/高潮逆向） | `references/writing-craft/conflict.md` |
-| 情绪弧线设计 | `references/writing-craft/emotional-arcs.md` |
-| 商业核心方法 | `references/writing-craft/commercial-methods.md` |
-| 体裁写作公式 | `references/writing-craft/genre-formulas.md` |
+**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
 
 # 专业能力
 
