@@ -32,6 +32,8 @@ function extractGrade(text: string): Grade | null {
   const pats: RegExp[] = [
     /\*\*?综合评分\*\*?[：:]\s*\*?\*?([A-D])/,
     /综合评分\*\*?[：:]\s*\*?\*?([A-D])/,
+    // design-reviewer 格式：「## 综合评分」标题 + 换行 + **A**（无冒号，A 在新段）
+    /^#{1,6}\s*综合评分[^\n]*\n+\s*\*{0,2}([A-D])/m,
   ];
   for (const pat of pats) {
     const m = pat.exec(text);
