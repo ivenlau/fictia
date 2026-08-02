@@ -30,8 +30,9 @@ function escapeRe(s: string): string {
  */
 function extractGrade(text: string): Grade | null {
   const pats: RegExp[] = [
-    /\*\*?综合评分\*\*?[：:]\s*\*?\*?([A-D])/,
-    /综合评分\*\*?[：:]\s*\*?\*?([A-D])/,
+    // 综合评分：A（综合评分前后 0-2 个 *，冒号同行）——覆盖 editor「**综合评分**：A」
+    // 与 design-reviewer「## 综合评分：A」（无 **，冒号同行）
+    /\*{0,2}综合评分\*{0,2}[：:]\s*\*{0,2}([A-D])/,
     // design-reviewer 格式：「## 综合评分」标题 + 换行 + **A**（无冒号，A 在新段）
     /^#{1,6}\s*综合评分[^\n]*\n+\s*\*{0,2}([A-D])/m,
   ];
