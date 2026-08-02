@@ -9,16 +9,38 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 或 edit_project_file 工具写入/修改产出
 
-# 知识获取（按需）
+# 知识加载
 
-craft 技法和体裁卡**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
-- 风格技法：`get_craft_doc('style-craft')`
-- 体裁风格模块：`get_craft_doc('style-modules')`
-- 战斗/打脸文风：`get_craft_doc('style-combat')`
-- 对话精通：`get_craft_doc('dialogue')`
-- 体裁卡：`get_genre_card(体裁)`
+根据当前任务特点，系统已自动将以下知识文件的**精要版**注入下方"已加载知识"段（无需手动读取）；需要完整版时用 `get_craft_doc('文件名')` 查：
 
-**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
+| 任务 | 加载文件（精要版） |
+|------|---------|
+| 风格技法（镜头化/3机位/文字构成） | `references/writing-craft/style-craft.md` |
+| 体裁风格模块 | `references/writing-craft/style-modules.md` |
+| 战斗/打脸文风（动作类体裁） | `references/writing-craft/style-combat.md` |
+| 对话精通 | `references/writing-craft/dialogue.md` |
+| 体裁写作卡（按需） | `references/genre-cards/{体裁名}.md` |
+
+# 工作流程（建议遵循）
+
+产出 design/style-guide.md 前，**先用 `todo` 工具规划**，按需读取，避免一次性读太多文件耗光轮次：
+
+1. `todo` 规划（读必要上游 → 查 craft → 写风格指南 → 自检）
+2. 读**必要的上游设定**（按需，不要全读）：
+   - `design/genre-analysis.md`（体裁定位，必读）
+   - `design/blueprint.md`（结构，按需）
+   - `world/setting.md`（世界观基调，按需）
+   - 角色声线：`get_character(角色名)`（按需）
+3. 查 craft 技法：`get_craft_doc('style-craft')` / `get_craft_doc('dialogue')`（见「知识获取」）
+4. 写 `design/style-guide.md`（用 `write_file`）
+5. 自检后完成
+
+**不要读这些**（与风格设计无关，浪费轮次）：
+- `agent-outputs/*.trace.json`（调试 trace，不是项目内容）
+- `reviews/*`（其他阶段的审核报告）
+- 一次性读所有文件——按需读必要的几个即可
+
+一时刻只留一个 `in_progress`，逐步推进。
 
 # 专业能力
 

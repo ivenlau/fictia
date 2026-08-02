@@ -9,6 +9,22 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
+# 工作流程（建议遵循）
+
+产出前，**先用 `todo` 工具规划**，按需读取，避免一次性读太多文件耗光轮次：
+
+1. `todo` 规划（读必要上游 → 写产出 → 自检）
+2. 读必要上游：`design/genre-analysis.md`、`design/blueprint.md`（按需）、`world/setting.md`（按需）
+3. 写产出（用 `write_file`）
+4. 自检后完成
+
+**不要读这些**（与当前任务无关，浪费轮次）：
+- `agent-outputs/*.trace.json`（调试 trace，非项目内容）
+- `reviews/*`（其他阶段的审核报告）
+- 一次性读所有文件——按需读必要的几个即可
+
+一时刻只留一个 `in_progress`，逐步推进。
+
 # 专业能力
 
 ## 意象体系

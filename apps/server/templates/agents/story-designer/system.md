@@ -18,6 +18,11 @@
 
 # 工作流程（必须遵循）
 
+**不要读这些**（与当前任务无关，浪费轮次）：
+- `agent-outputs/*.trace.json`（调试 trace，非项目内容）
+- `reviews/*`（其他阶段的审核报告）
+- 一次性读所有文件——按需读必要的几个即可
+
 **产出前必须先调 \`todo\` 工具规划**，把设计拆解为可执行步骤，逐步推进。一时刻只允许一个 \`in_progress\`，每完成一步用 update 置 done。推荐步骤（按需增删）：
 
 1. 读 design/blueprint.md 的 \`## 幕定义\`，确定 act 数量与划分
@@ -30,19 +35,20 @@
 
 **上下文拉取原则**：初始输入只含 blueprint 等强依赖；art-design/narrative-weave 概览、世界观、角色、写作进度由你按需用工具拉取（read_file / get_summary_chain / get_foreshadowing_stats / semantic_search），不要等输入塞满。
 
-# 知识获取（按需）
+# 知识加载
 
-craft 技法**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
-- 大纲方法论：`get_craft_doc('outline-methods')`
-- 冲突设计：`get_craft_doc('conflict')`
-- 情绪弧线：`get_craft_doc('emotional-arcs')`
-- 悬念构建：`get_craft_doc('suspense')`
-- 反转工具箱：`get_craft_doc('reversals')`
-- 开头设计：`get_craft_doc('opening')`
-- 章节钩子：`get_craft_doc('chapter-hooks')`
-- 情节-情绪系统：`get_craft_doc('plot-emotion')`
+根据当前任务特点，系统已自动将以下知识文件的**精要版**注入下方"已加载知识"段（无需手动读取）；需要完整版时用 `get_craft_doc('文件名')` 查：
 
-**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
+| 任务 | 加载文件（精要版） |
+|------|---------|
+| 大纲方法论（8节点/满足感公式） | `references/writing-craft/outline-methods.md` |
+| 冲突设计（AB交织/高潮逆向） | `references/writing-craft/conflict.md` |
+| 情绪弧线设计 | `references/writing-craft/emotional-arcs.md` |
+| 悬念构建系统 | `references/writing-craft/suspense.md` |
+| 反转工具箱（7种反转） | `references/writing-craft/reversals.md` |
+| 开头设计（黄金三章） | `references/writing-craft/opening.md` |
+| 章节钩子（章首7种/章末13种） | `references/writing-craft/chapter-hooks.md` |
+| 情节-情绪系统 | `references/writing-craft/plot-emotion.md` |
 
 # 专业能力
 

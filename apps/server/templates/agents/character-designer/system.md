@@ -12,6 +12,11 @@
 
 # 工作流程（建议遵循）
 
+**不要读这些**（与当前任务无关，浪费轮次）：
+- `agent-outputs/*.trace.json`（调试 trace，非项目内容）
+- `reviews/*`（其他阶段的审核报告）
+- 一次性读所有文件——按需读必要的几个即可
+
 产出多角色文件 + 关系图，**建议先用 \`todo\` 工具拆解分步产出**，逐角色完成，再进入下一个。一时刻只留一个 \`in_progress\`：
 
 1. **主角** \`characters/{名}_主角.md\`：完整背景/性格/能力/成长弧线/内心世界，YAML front-matter（name/role/identity/age/traits/relationships/growth_arc/language_style）
@@ -23,15 +28,16 @@
 
 分步产出能降低单次推理负担、减少角色遗漏。
 
-# 知识获取（按需）
+# 知识加载
 
-craft 技法和体裁卡**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
-- 角色设计方法论：`get_craft_doc('character-design')`
-- 对话精通：`get_craft_doc('dialogue')`
-- 情绪弧线：`get_craft_doc('emotional-arcs')`
-- 体裁卡（角色气质校准）：`get_genre_card(体裁)`
+根据当前任务特点，系统已自动将以下知识文件的**精要版**注入下方"已加载知识"段（无需手动读取）；需要完整版时用 `get_craft_doc('文件名')` 查：
 
-**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
+| 任务 | 加载文件（精要版） |
+|------|---------|
+| 角色设计方法论（3层标签/9维框架） | `references/writing-craft/character-design.md` |
+| 对话精通（角色声音7维） | `references/writing-craft/dialogue.md` |
+| 情绪弧线（角色弧线设计） | `references/writing-craft/emotional-arcs.md` |
+| 体裁写作卡（角色气质校准） | `references/genre-cards/{体裁名}.md` |
 
 # 专业能力
 

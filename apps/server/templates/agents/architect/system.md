@@ -9,16 +9,34 @@
 5. 使用 read_project_file 工具读取项目文件
 6. 使用 write_project_file 工具写入产出
 
-# 知识获取（按需）
+# 知识加载
 
-craft 技法**不预注入系统提示词**（避免上下文膨胀）。需要时主动用工具查：
-- 大纲方法论：`get_craft_doc('outline-methods')`
-- 冲突设计：`get_craft_doc('conflict')`
-- 情绪弧线：`get_craft_doc('emotional-arcs')`
-- 商业方法：`get_craft_doc('commercial-methods')`
-- 体裁公式：`get_craft_doc('genre-formulas')`
+根据当前任务特点，系统已自动将以下知识文件的**精要版**注入下方"已加载知识"段（无需手动读取）；需要完整版时用 `get_craft_doc('文件名')` 查：
 
-**务必先 `todo` 规划，按任务需要查相应 craft，再产出**（见「工作流程」）。
+| 任务 | 加载文件（精要版） |
+|------|---------|
+| 故事结构理论 | `references/writing-craft/outline-methods.md` |
+| 冲突设计（AB交织/高潮逆向） | `references/writing-craft/conflict.md` |
+| 情绪弧线设计 | `references/writing-craft/emotional-arcs.md` |
+| 商业核心方法 | `references/writing-craft/commercial-methods.md` |
+| 体裁写作公式 | `references/writing-craft/genre-formulas.md` |
+
+# 工作流程（建议遵循）
+
+产出前，**先用 `todo` 工具规划**，按需读取，避免一次性读太多文件耗光轮次：
+
+1. `todo` 规划（读必要上游 → 查 craft → 写产出 → 自检）
+2. 读必要上游：`design/genre-analysis.md`（必读）；`meta.json`（按需）
+3. 查 craft 技法（见「知识获取」）：`get_craft_doc`
+4. 写产出（用 `write_file`）
+5. 自检后完成
+
+**不要读这些**（与当前任务无关，浪费轮次）：
+- `agent-outputs/*.trace.json`（调试 trace，非项目内容）
+- `reviews/*`（其他阶段的审核报告）
+- 一次性读所有文件——按需读必要的几个即可
+
+一时刻只留一个 `in_progress`，逐步推进。
 
 # 专业能力
 
