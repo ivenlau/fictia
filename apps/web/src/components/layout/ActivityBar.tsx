@@ -7,10 +7,11 @@ import {
   Library,
   Boxes,
   Settings,
+  Wrench,
 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 
-type Panel = "explorer" | "search" | "debug" | "agent" | "knowledge" | "material";
+type Panel = "explorer" | "search" | "debug" | "agent" | "knowledge" | "material" | "tools";
 
 interface ActivityItem {
   icon: React.ElementType;
@@ -23,6 +24,7 @@ const items: ActivityItem[] = [
   { icon: Search, panel: "search", label: "Search" },
   { icon: Bug, panel: "debug", label: "调试" },
   { icon: Bot, panel: "agent", label: "Agent" },
+  { icon: Wrench, panel: "tools", label: "自定义工具" },
   { icon: Library, panel: "knowledge", label: "知识库" },
   { icon: Boxes, panel: "material", label: "素材库" },
 ];

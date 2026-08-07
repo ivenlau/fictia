@@ -2,7 +2,8 @@ import { useCallback, useState, type ReactNode } from "react";
 import { Bot, Cog, MessageSquare } from "lucide-react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { AGENT_TYPE_LABELS } from "@fictia/shared";
-import type { AgentModelAssignment, AgentType, ProviderInfo } from "@fictia/shared";
+import type { AgentType } from "@fictia/shared";
+import { ModelSelector, modelSelectCls as selectCls } from "@/components/common/ModelSelector";
 
 const allAgentTypes: AgentType[] = [
   "genre-analyst",
@@ -17,52 +18,6 @@ const allAgentTypes: AgentType[] = [
   "editor",
   "consistency-checker",
 ];
-
-const selectCls =
-  "w-full rounded-md border border-subtle bg-surface-muted px-2.5 py-1.5 font-caption text-xs text-fg-primary focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20";
-
-/** provider + model 双 select，复用于助手组 / 系统组。 */
-function ModelSelector({
-  value,
-  providers,
-  usable,
-  onChangeProvider,
-  onChangeModel,
-}: {
-  value: AgentModelAssignment;
-  providers: ProviderInfo[];
-  usable: ProviderInfo[];
-  onChangeProvider: (providerId: string) => void;
-  onChangeModel: (modelId: string) => void;
-}) {
-  const provider = providers.find((p) => p.id === value.providerId);
-  const models = provider?.models.filter((m) => m.enabled) ?? [];
-  const providerDisabled = !!value.providerId && !usable.some((p) => p.id === value.providerId);
-  return (
-    <div className="max-w-md rounded-lg border border-subtle bg-surface-card p-3 space-y-2">
-      <select value={value.providerId} onChange={(e) => onChangeProvider(e.target.value)} className={selectCls}>
-        {usable.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-        {providerDisabled && (
-          <option value={value.providerId}>{provider?.name ?? value.providerId}（已停用）</option>
-        )}
-      </select>
-      <select value={value.modelId} onChange={(e) => onChangeModel(e.target.value)} className={selectCls}>
-        {models.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name}
-          </option>
-        ))}
-        {value.modelId && !models.some((m) => m.id === value.modelId) && (
-          <option value={value.modelId}>{value.modelId}（已停用）</option>
-        )}
-      </select>
-    </div>
-  );
-}
 
 function Group({
   icon: Icon,
