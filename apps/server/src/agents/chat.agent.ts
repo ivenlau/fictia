@@ -5,6 +5,7 @@ import { fileService } from "../services/file.service.js";
 import { runAgentSession } from "./agent-runner.js";
 import { MEMORY_PATH } from "@fictia/shared";
 import { toolRegistry, CHAT_TOOLS, type ToolContext } from "../tools/index.js";
+import { customToolService } from "../services/custom-tool-service.js";
 
 export interface ChatToolCall {
   tool: string;
@@ -126,7 +127,8 @@ export async function runChatAgent(
     novelId: novelId ?? "",
     novelDir: novelId ? fileService.getNovelDir(novelId) : "",
   };
-  const toolNames = novelId ? CHAT_TOOLS : ["create_novel"];
+  // 工具：有 novelId 给全量 chat 工具 + 所有启用的自定义工具；无 novelId 只给 create_novel（建书不依赖 novelId）
+  const toolNames = novelId ? [...CHAT_TOOLS, ...customToolService.enabledToolNames()] : ["create_novel"];
   const tools = toolRegistry.getTools(ctx, toolNames);
 
   const { text } = await runAgentSession({

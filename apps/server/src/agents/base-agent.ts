@@ -11,6 +11,7 @@ import { validateDesign, writeDesignValidationReport } from "../utils/design-val
 import { runAgentSession } from "./agent-runner.js";
 import { toolRegistry, type ToolContext } from "../tools/index.js";
 import { fileService } from "../services/file.service.js";
+import { customToolService } from "../services/custom-tool-service.js";
 import * as path from "path";
 
 export interface AgentRunResult {
@@ -331,7 +332,14 @@ export abstract class BaseAgent {
       novelId: path.basename(this.novelDir),
       novelDir: this.novelDir,
     };
-    const tools = toolRegistry.getToolsForAgent(ctx, this.agentType);
+    // 合并所有启用的自定义工具（让 pipeline agent 也能按需调用自定义工具）。去重防同名重复。
+    const toolNames = Array.from(
+      new Set([
+        ...toolRegistry.getAgentToolNames(this.agentType),
+        ...customToolService.enabledToolNames(),
+      ]),
+    );
+    const tools = toolRegistry.getTools(ctx, toolNames);
 
     // 组装 prompt 预算（system/user 各块字符数），下发给 trace 供调试视图量化上下文构成。
     const systemTotal = this.lastSystemBudget.reduce((n, b) => n + b.chars, 0);

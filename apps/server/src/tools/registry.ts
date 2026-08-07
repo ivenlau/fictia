@@ -48,6 +48,11 @@ class ToolRegistry {
     return out;
   }
 
+  /** 取某 agent 声明的工具名清单（不含动态注入的自定义工具）。 */
+  getAgentToolNames(agentType: AgentType): string[] {
+    return this.agentToolNames.get(agentType) ?? [];
+  }
+
   /** 取某 agent 的工具集。 */
   getToolsForAgent(ctx: ToolContext, agentType: AgentType): FictiaTool[] {
     const names = this.agentToolNames.get(agentType) ?? [];
