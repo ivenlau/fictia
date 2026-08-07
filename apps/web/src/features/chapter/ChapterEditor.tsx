@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Save, Loader2, PenLine, RefreshCw, Eye, Edit3, Wand2, AlertTriangle, AlertCircle, Info, ChevronUp, ChevronDown, FastForward } from "lucide-react";
+import { Save, Loader2, PenLine, RefreshCw, Eye, Edit3, Wand2, AlertTriangle, AlertCircle, Info, ChevronUp, ChevronDown, FastForward, Wrench } from "lucide-react";
 import { useChapter, useChapterFeedback } from "@/hooks/useNovel";
 import { useTriggerChapterAgent } from "@/hooks/useAgent";
 import { useAgentStore } from "@/stores/agentStore";
@@ -12,12 +12,15 @@ import { novelsApi } from "@/api/novels";
 import { pipelinesApi } from "@/api/pipelines";
 import { agentsApi } from "@/api/agents";
 import { feedbackApi } from "@/api/feedback";
+import { customToolsApi } from "@/api/custom-tools";
 import { ChapterReading } from "./ChapterReading";
 import { ReviewActions } from "./ReviewActions";
 import { ProblemsPanel } from "./ProblemsPanel";
 import { RewriteDialog } from "./RewriteDialog";
+import { RunToolDialog } from "@/components/tools/RunToolDialog";
 import { runWritingLoop } from "@/api/writing-loop";
 import { countWords } from "@/lib/markdown";
+import type { CustomToolDef } from "@fictia/shared";
 import type { WorkspaceFile } from "@fictia/shared";
 
 // File-based review suggestion types
@@ -125,6 +128,16 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
   const [selectedText, setSelectedText] = useState<string | null>(null);
   const [showRewriteDialog, setShowRewriteDialog] = useState(false);
   const [selectionPos, setSelectionPos] = useState<{ x: number; y: number } | null>(null);
+  // 自定义工具下拉 + 运行弹窗
+  const [customTools, setCustomTools] = useState<CustomToolDef[]>([]);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [runTool, setRunTool] = useState<CustomToolDef | null>(null);
+  useEffect(() => {
+    customToolsApi
+      .list()
+      .then((ts) => setCustomTools(ts.filter((t) => t.enabled)))
+      .catch(() => {});
+  }, []);
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [chapterSummary, setChapterSummary] = useState<string | null>(null);
@@ -555,6 +568,40 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             <Wand2 size={13} />
             改写
           </button>
+          {/* 自定义工具下拉：选工具 → 参数匹配弹窗 → 结果弹窗 */}
+          <div className="relative">
+            <button
+              onClick={() => setShowToolsMenu((v) => !v)}
+              disabled={customTools.length === 0 || !content}
+              title="运行自定义工具"
+              className="flex items-center gap-1.5 rounded-md border border-subtle bg-surface-muted px-3 py-1.5 font-body text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Wrench size={13} />
+              工具
+              <ChevronDown size={11} />
+            </button>
+            {showToolsMenu && customTools.length > 0 && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowToolsMenu(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1 max-h-72 w-56 overflow-y-auto rounded-md border border-subtle bg-surface-card py-1 shadow-lg">
+                  {customTools.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => {
+                        setRunTool(t);
+                        setShowToolsMenu(false);
+                      }}
+                      className="block w-full px-2.5 py-1.5 text-left font-caption text-[11px] text-fg-primary hover:bg-accent-bg/40"
+                      title={t.description}
+                    >
+                      <span className="font-medium">{t.label || t.name}</span>
+                      <span className="ml-1.5 text-fg-muted">{t.kind.kind}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <div className="w-px h-5 bg-subtle mx-1" />
           <div className="flex items-center rounded-md border border-subtle bg-surface-muted p-0.5">
             <button
@@ -675,6 +722,15 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
           selectedText={selectedText ?? undefined}
           onClose={() => { setShowRewriteDialog(false); setSelectedText(null); }}
           onRewritten={handleRewritten}
+        />
+      )}
+      {runTool && novelId && (
+        <RunToolDialog
+          tool={runTool}
+          novelId={novelId}
+          currentDocContent={content}
+          currentDocPath={filePath}
+          onClose={() => setRunTool(null)}
         />
       )}
     </div>

@@ -12,13 +12,17 @@ import {
   Eye,
   Edit3,
   Wand2,
+  Wrench,
+  ChevronDown,
 } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import { novelsApi } from "@/api/novels";
+import { customToolsApi } from "@/api/custom-tools";
 import { ChapterEditor } from "@/features/chapter/ChapterEditor";
 import { ChapterReading } from "@/features/chapter/ChapterReading";
 import { RewriteDialog } from "@/features/chapter/RewriteDialog";
-import type { WorkspaceFile } from "@fictia/shared";
+import { RunToolDialog } from "@/components/tools/RunToolDialog";
+import type { WorkspaceFile, CustomToolDef } from "@fictia/shared";
 
 function getFileType(path: string): "json" | "yaml" | "markdown" {
   if (path.endsWith(".json")) return "json";
@@ -80,6 +84,17 @@ export function FileViewer({ fileId }: FileViewerProps) {
   const [selectionPos, setSelectionPos] = useState<{ x: number; y: number } | null>(null);
   const [showRewriteDialog, setShowRewriteDialog] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // 自定义工具下拉 + 运行弹窗
+  const [customTools, setCustomTools] = useState<CustomToolDef[]>([]);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [runTool, setRunTool] = useState<CustomToolDef | null>(null);
+  useEffect(() => {
+    customToolsApi
+      .list()
+      .then((ts) => setCustomTools(ts.filter((t) => t.enabled)))
+      .catch(() => {});
+  }, []);
 
   const fileType = activeFile?.type === "workspace" ? getFileType(activeFile.path) : "markdown";
   const isMarkdown = fileType === "markdown";
@@ -278,6 +293,40 @@ export function FileViewer({ fileId }: FileViewerProps) {
                 <Wand2 size={12} />
                 改写
               </button>
+              {/* 自定义工具下拉：选工具 → 参数匹配弹窗（用户输入/当前文档/指定文档）→ 结果弹窗 */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowToolsMenu((v) => !v)}
+                  disabled={customTools.length === 0}
+                  title="运行自定义工具"
+                  className="flex items-center gap-1 rounded-md border border-subtle bg-surface-muted px-2.5 py-1.5 font-body text-[11px] font-medium text-fg-secondary transition-colors hover:bg-surface-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Wrench size={12} />
+                  工具
+                  <ChevronDown size={10} />
+                </button>
+                {showToolsMenu && customTools.length > 0 && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowToolsMenu(false)} />
+                    <div className="absolute left-0 top-full z-20 mt-1 max-h-72 w-56 overflow-y-auto rounded-md border border-subtle bg-surface-card py-1 shadow-lg">
+                      {customTools.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setRunTool(t);
+                            setShowToolsMenu(false);
+                          }}
+                          className="block w-full px-2.5 py-1.5 text-left font-caption text-[11px] text-fg-primary hover:bg-accent-bg/40"
+                          title={t.description}
+                        >
+                          <span className="font-medium">{t.label || t.name}</span>
+                          <span className="ml-1.5 text-fg-muted">{t.kind.kind}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
               <div className="w-px h-5 bg-subtle mx-1" />
               <div className="flex items-center rounded-md border border-subtle bg-surface-muted p-0.5">
                 <button
@@ -408,6 +457,15 @@ export function FileViewer({ fileId }: FileViewerProps) {
           selectedText={selectedText ?? undefined}
           onClose={() => { setShowRewriteDialog(false); setSelectedText(null); }}
           onRewritten={handleRewritten}
+        />
+      )}
+      {runTool && activeFile.novelId && (
+        <RunToolDialog
+          tool={runTool}
+          novelId={activeFile.novelId}
+          currentDocContent={content}
+          currentDocPath={activeFile.path}
+          onClose={() => setRunTool(null)}
         />
       )}
     </div>
