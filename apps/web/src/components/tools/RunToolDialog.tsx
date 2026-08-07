@@ -9,17 +9,44 @@ const inputCls =
 const labelCls = "block mb-1 font-caption text-[11px] font-medium text-fg-secondary";
 
 type MatchType = "input" | "current" | "file";
+type DocValue = "path" | "content";
 interface ParamMatch {
   type: MatchType;
   value: string; // 用户输入的值
   filePath: string; // 指定文档时选的文件路径
+  docValue: DocValue; // 当前文档/指定文档 时取「路径」还是「正文」
+}
+
+/** 按参数名启发式决定默认取路径还是正文：名字含 path/file/dir 默认路径，否则正文。 */
+function defaultDocValue(paramName: string): DocValue {
+  return /path|file|dir/i.test(paramName) ? "path" : "content";
 }
 
 function initMatchings(parameters: JsonSchema | undefined): Record<string, ParamMatch> {
   const out: Record<string, ParamMatch> = {};
   const props = (parameters?.properties ?? {}) as Record<string, unknown>;
-  for (const name of Object.keys(props)) out[name] = { type: "input", value: "", filePath: "" };
+  for (const name of Object.keys(props))
+    out[name] = { type: "input", value: "", filePath: "", docValue: defaultDocValue(name) };
   return out;
+}
+
+/** 当前文档/指定文档 的取值切换：路径 or 正文。 */
+function DocValueToggle({ value, onChange }: { value: DocValue; onChange: (v: DocValue) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="font-caption text-[10px] text-fg-muted">取值：</span>
+      {(["path", "content"] as const).map((k) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => onChange(k)}
+          className={`rounded px-2 py-0.5 font-caption text-[10px] ${value === k ? "bg-accent text-white" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}
+        >
+          {k === "path" ? "路径" : "正文"}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -58,12 +85,22 @@ export function RunToolDialog({
   const setMatch = (name: string, patch: Partial<ParamMatch>) =>
     setMatchings((m) => ({ ...m, [name]: { ...m[name], ...patch } }));
 
+  const paramTypes = useMemo(() => {
+    const props = (tool.parameters?.properties ?? {}) as Record<string, { type?: string }>;
+    return props;
+  }, [tool]);
+
   const buildParams = (): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
     for (const [name, m] of Object.entries(matchings)) {
-      if (m.type === "input") out[name] = m.value;
-      else if (m.type === "current") out[name] = currentDocContent;
-      else if (m.type === "file") out[name] = files.find((f) => f.path === m.filePath)?.content ?? "";
+      if (m.type === "input") {
+        out[name] = paramTypes[name]?.type === "number" ? Number(m.value) : m.value;
+      } else if (m.type === "current") {
+        out[name] = m.docValue === "path" ? (currentDocPath ?? "") : currentDocContent;
+      } else if (m.type === "file") {
+        const f = files.find((x) => x.path === m.filePath);
+        out[name] = m.docValue === "path" ? (f?.path ?? "") : (f?.content ?? "");
+      }
     }
     return out;
   };
@@ -153,25 +190,34 @@ export function RunToolDialog({
                     ))}
                   </div>
                   {m.type === "input" && (
-                    <input
+                    <textarea
                       className={inputCls}
+                      rows={3}
                       value={m.value}
                       onChange={(e) => setMatch(name, { value: e.target.value })}
-                      placeholder={schema.type === "number" ? "输入数字" : "输入文本"}
+                      placeholder={schema.type === "number" ? "输入数字" : "输入文本（支持多行）"}
                     />
                   )}
                   {m.type === "current" && (
-                    <div className="rounded border border-subtle bg-surface-card px-2 py-1 font-caption text-[10px] text-fg-secondary">
-                      使用当前文档{currentDocPath ? `：${currentDocPath}` : ""}（{currentDocContent.length} 字）
+                    <div className="space-y-1.5">
+                      <DocValueToggle value={m.docValue} onChange={(v) => setMatch(name, { docValue: v })} />
+                      <div className="rounded border border-subtle bg-surface-card px-2 py-1 font-caption text-[10px] text-fg-secondary">
+                        {m.docValue === "path"
+                          ? `将传入路径：${currentDocPath ?? "（当前文档无路径）"}`
+                          : `将传入正文：${currentDocPath ?? "当前文档"}（${currentDocContent.length} 字）`}
+                      </div>
                     </div>
                   )}
                   {m.type === "file" && (
-                    <select className={inputCls} value={m.filePath} onChange={(e) => setMatch(name, { filePath: e.target.value })}>
-                      <option value="">选择项目文件…</option>
-                      {files.map((f) => (
-                        <option key={f.path} value={f.path}>{f.path}（{f.content?.length ?? 0} 字）</option>
-                      ))}
-                    </select>
+                    <div className="space-y-1.5">
+                      <select className={inputCls} value={m.filePath} onChange={(e) => setMatch(name, { filePath: e.target.value })}>
+                        <option value="">选择项目文件…</option>
+                        {files.map((f) => (
+                          <option key={f.path} value={f.path}>{f.path}（{f.content?.length ?? 0} 字）</option>
+                        ))}
+                      </select>
+                      {m.filePath && <DocValueToggle value={m.docValue} onChange={(v) => setMatch(name, { docValue: v })} />}
+                    </div>
                   )}
                 </div>
               );
