@@ -85,6 +85,21 @@ export const settings = sqliteTable("settings", {
   updatedAt: text("updated_at").notNull(),
 });
 
+// 用户自定义工具（llm / http / js 三种 execute）。全局资源（不绑 novel）。
+// parameters 存 JSON Schema，kind 存整个 CustomToolKind 的 JSON。
+export const customTools = sqliteTable("custom_tools", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  label: text("label").notNull(),
+  description: text("description").default(""),
+  tier: text("tier").notNull().default("readonly"),
+  parameters: text("parameters").notNull(),
+  kind: text("kind").notNull(),
+  enabled: integer("enabled").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const chatMessages = sqliteTable("chat_messages", {
   id: text("id").primaryKey(),
   novelId: text("novel_id").references(() => novels.id, { onDelete: "cascade" }),

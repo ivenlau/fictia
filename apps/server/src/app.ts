@@ -16,6 +16,7 @@ import { providerRoutes } from "./routes/providers.js";
 import { materialRoutes } from "./routes/materials.js";
 import { referenceRoutes } from "./routes/references.js";
 import { aiRoutes } from "./routes/ai.js";
+import { customToolRoutes } from "./routes/custom-tools.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 export function createApp() {
@@ -40,6 +41,7 @@ export function createApp() {
   app.use("/api", materialRoutes);
   app.use("/api", referenceRoutes);
   app.use("/api/ai", aiRoutes);
+  app.use("/api", customToolRoutes);
 
   app.use(errorHandler);
 

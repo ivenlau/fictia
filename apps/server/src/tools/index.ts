@@ -20,6 +20,7 @@ import { createStateWriteTools } from "./state-write-tools.js";
 import { createTriggerTools } from "./trigger-tools.js";
 import { createOrchestrationTools } from "./orchestration-tools.js";
 import { createTodoTools } from "./todo-tools.js";
+import { createCustomTools } from "./custom-tools.js";
 
 // ---------- 工具工厂注册 ----------
 toolRegistry.registerFactory(createFileTools);
@@ -35,6 +36,8 @@ toolRegistry.registerFactory(createStateWriteTools);
 toolRegistry.registerFactory(createTriggerTools);
 toolRegistry.registerFactory(createOrchestrationTools);
 toolRegistry.registerFactory(createTodoTools);
+// 自定义工具工厂：每次 buildAll 按 ctx 现读 DB（enabled 行），CRUD 后热生效。
+toolRegistry.registerFactory(createCustomTools);
 
 // ---------- 工具组（按域聚合，便于组合分配） ----------
 const FILE_TOOLS = ["read_file", "write_file", "edit_file", "list_files", "count_words"];
