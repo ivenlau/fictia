@@ -11,7 +11,8 @@
 import { createAgent } from "../agents/index.js";
 import { ConsistencyCheckerAgent } from "../agents/consistency-checker.js";
 import { parseConsistencyVerdict, type Verdict } from "../utils/verdict.js";
-import { readFileSafe, listFiles } from "../utils/file.js";
+import { readFileSafe } from "../utils/file.js";
+import { listChapterFiles } from "../utils/chapter-files.js";
 import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 import * as path from "path";
 
@@ -33,15 +34,13 @@ export type ConsistencyProgressCb = (p: {
 }) => void;
 
 /**
- * 统计已写作章节数（chapters/act-N/chNN.md 文件数）。
+ * 统计已写作章节数。走 listChapterFiles 统一解析（兼容 chXX 与 chXX_actN-标题
+ * 命名）——旧手写正则 / ^ch\d+\.md$/ 在 act 动态命名下恒为 0，导致里程碑
+ * 校验从未触发。
  */
 export async function countChapters(novelDir: string): Promise<number> {
   try {
-    const files = await listFiles(path.join(novelDir, "chapters"), {
-      recursive: true,
-      extensions: [".md"],
-    });
-    return files.filter((f) => /^ch\d+\.md$/.test(path.basename(f))).length;
+    return (await listChapterFiles(novelDir)).length;
   } catch {
     return 0;
   }

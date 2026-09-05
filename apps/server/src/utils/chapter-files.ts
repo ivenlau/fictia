@@ -7,17 +7,42 @@ import { parseChapterNumber, parseActNumber, parseCharacterPath } from "@fictia/
 import { listFiles, readFileSafe } from "./file.js";
 import { parseActDefinitions } from "./context-extractor.js";
 
+/**
+ * 章节文件统一清单：扫 chapters/（含子目录），parseChapterNumber 识别章号
+ * （兼容 ch01.md 与 ch01_act1-标题.md），同号多 act 版本只留 act 最大者，
+ * 按章号升序。所有「章节文件数/最新章/按号定位」的消费方都应走这里，
+ * 避免各处手写正则与命名规范脱节（历史 bug：countChapters/向量索引漏 act 命名）。
+ */
+export interface ChapterFileEntry {
+  number: number;
+  /** 文件名中的 act 编号；旧扁平命名（ch01.md）为 0。 */
+  act: number;
+  /** 绝对路径。 */
+  path: string;
+}
+
+export async function listChapterFiles(novelDir: string): Promise<ChapterFileEntry[]> {
+  const files = await listFiles(path.join(novelDir, "chapters"), {
+    recursive: true,
+    extensions: [".md"],
+  });
+  const byNumber = new Map<number, { act: number; file: string }>();
+  for (const f of files) {
+    const num = parseChapterNumber(path.basename(f));
+    if (num === null) continue;
+    const act = parseActNumber(path.basename(f)) ?? 0;
+    const cur = byNumber.get(num);
+    if (!cur || act > cur.act) byNumber.set(num, { act, file: f });
+  }
+  return [...byNumber.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([number, { act, file }]) => ({ number, act, path: file }));
+}
+
 /** 扫 chapters/ 找指定章节号对应的文件（扁平，act 进文件名）。同号多版本取 act 最大者。 */
 export async function findChapterFile(novelDir: string, number: number): Promise<string | null> {
-  const files = await listFiles(path.join(novelDir, "chapters"), { extensions: [".md"] });
-  const matches = files.filter((f) => parseChapterNumber(path.basename(f)) === number);
-  if (matches.length === 0) return null;
-  if (matches.length === 1) return matches[0];
-  // 历史脏数据残留（同章节号多 act 版本）：取 act 最大的（通常最新）
-  matches.sort(
-    (a, b) => (parseActNumber(path.basename(a)) ?? 0) - (parseActNumber(path.basename(b)) ?? 0),
-  );
-  return matches[matches.length - 1];
+  const entry = (await listChapterFiles(novelDir)).find((e) => e.number === number);
+  return entry?.path ?? null;
 }
 
 /** 扫 outline/chapters/ 找指定章节号对应的大纲文件。 */

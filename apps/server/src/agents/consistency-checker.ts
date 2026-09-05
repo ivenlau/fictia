@@ -1,8 +1,8 @@
 import { BaseAgent, type AgentRunResult, type AgentRunOptions } from "./base-agent.js";
 import type { StageName, AgentType } from "@fictia/shared";
 import type { Model } from "@earendil-works/pi-ai";
-import { listFiles, readFileSafe, relativePath } from "../utils/file.js";
-import * as path from "path";
+import { readFileSafe } from "../utils/file.js";
+import { listChapterFiles } from "../utils/chapter-files.js";
 
 export class ConsistencyCheckerAgent extends BaseAgent {
   protected stageName: StageName = "consistency";
@@ -31,16 +31,15 @@ export class ConsistencyCheckerAgent extends BaseAgent {
   async run(options?: AgentRunOptions): Promise<AgentRunResult> {
     const systemPrompt = await this.buildSystemPrompt();
 
-    const chapterFiles = await listFiles(
-      path.join(this.novelDir, "chapters"),
-      { recursive: true, extensions: [".md"] }
-    );
-    const sortedChapterFiles = chapterFiles.sort();
-    const latestFile = sortedChapterFiles.length > 0 ? sortedChapterFiles[sortedChapterFiles.length - 1] : null;
-    const latestContent = latestFile ? ((await readFileSafe(latestFile)) ?? "") : "";
-    const latestRel = latestFile ? relativePath(this.novelDir, latestFile).replace(/\\/g, "/") : "";
-    const scope = sortedChapterFiles.length > 0
-      ? `ch01-ch${String(sortedChapterFiles.length).padStart(2, "0")}`
+    // 统一章节清单：act 动态命名兼容 + 同号取最大 act + 按章号排序
+    const chapters = await listChapterFiles(this.novelDir);
+    const latest = chapters.length > 0 ? chapters[chapters.length - 1] : null;
+    const latestContent = latest ? ((await readFileSafe(latest.path)) ?? "") : "";
+    const latestRel = latest
+      ? latest.path.slice(this.novelDir.length + 1).replace(/\\/g, "/")
+      : "";
+    const scope = latest
+      ? `ch01-ch${String(latest.number).padStart(2, "0")}`
       : "无章节";
 
     // L3 推→拉：user message 只保留最新章正文（审核刚需）+ 扫描范围。设定概览、历史章节
