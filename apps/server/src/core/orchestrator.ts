@@ -184,13 +184,27 @@ export class Orchestrator extends EventEmitter {
       }
     }
 
+    await this.updateStateConfirmed(stageName);
+    return false;
+  }
+
+  /**
+   * Force-confirm a failed/warned stage after artifact check passes.
+   * 用于「审核未过/轮次跑满但产物已成立」时，用户手工放行流程。
+   */
+  async forceConfirmStage(stageName: StageName): Promise<void> {
+    const stage = this.pipeline.find(s => s.name === stageName);
+    if (!stage) throw new Error(`未知阶段: ${stageName}`);
+    await this.updateStateConfirmed(stageName);
+  }
+
+  private async updateStateConfirmed(stageName: StageName): Promise<void> {
     await this.stateTracker.updateState(stageName, {
       status: "confirmed",
       confirmedAt: new Date().toISOString(),
     });
     this.emit("stage:confirmed", stageName);
     console.log(`[Pipeline] Stage "${stageName}" confirmed`);
-    return false;
   }
 
   /**

@@ -12,6 +12,7 @@ import { runAgentSession } from "./agent-runner.js";
 import { toolRegistry, type ToolContext } from "../tools/index.js";
 import { fileService } from "../services/file.service.js";
 import { customToolService } from "../services/custom-tool-service.js";
+import { settingsService } from "../services/settings.service.js";
 import * as path from "path";
 
 export interface AgentRunResult {
@@ -58,7 +59,7 @@ export abstract class BaseAgent {
   protected model: Model<"openai-completions">;
   protected apiKey: string;
   /** 最大工具迭代次数，0 表示不限制 */
-  protected maxToolIterations = 20;
+  protected maxToolIterations = 30;
 
   // ===== 调试 trace 接线（由 createAgent / runAgent / runStage 注入）=====
   /** 模型 id（写入 trace modelUsed）。 */
@@ -69,6 +70,8 @@ export abstract class BaseAgent {
   traceFilename?: string;
   /** 最近一次 runLLM 的完整 trace（失败诊断用）。 */
   lastTrace?: AgentRunTrace;
+  /** 最近一次 runLLM 是否触达轮次上限被切断（产物可能不完整，子类据此降级为警告）。 */
+  lastRunHitTurnLimit = false;
   /** 最近一次 buildSystemPrompt 收集的 system 各块字符数（预算诊断）。 */
   protected lastSystemBudget: PromptBudgetItem[] = [];
   /** 最近一次构建 user message 收集的各块字符数（子类填充；预算诊断）。 */
@@ -238,6 +241,7 @@ export abstract class BaseAgent {
   /**
    * 设计产出校验：结构校验（validateDesign）+ 假完成检测（文件不存在 -> error）。
    * 供设计类 agent run() 在 runLLM 后调用。返回 warnings（结构问题）或 error（假完成）。
+   * 轮次跑满被切断时：产物缺失则 error 附提示；产物成立则降级为警告（流程继续）。
    */
   protected async validateDesignOutput(): Promise<{
     warnings?: string[];
@@ -249,15 +253,21 @@ export abstract class BaseAgent {
       (i) => i.includes("不存在或为空") || i.includes("无角色文件"),
     );
     if (hasMissing) {
+      const turnHint = this.lastRunHitTurnLimit
+        ? "（检测到轮次跑满被切断，可在设置调大「单次会话轮数」后重试）"
+        : "";
       return {
-        error: `${this.agentName} 产出缺失（${validation.issues.join("; ")}）。请确认 agent 用 write_file 落盘后重试。`,
+        error: `${this.agentName} 产出缺失（${validation.issues.join("; ")}）。请确认 agent 用 write_file 落盘后重试。${turnHint}`,
       };
     }
     const reportFile = await writeDesignValidationReport(this.novelDir, this.agentName, validation);
-    return {
-      warnings: validation.passed ? undefined : validation.issues,
-      reportFile,
-    };
+    const warnings = validation.passed ? undefined : [...validation.issues];
+    if (this.lastRunHitTurnLimit) {
+      const list = warnings ?? [];
+      list.push("本轮触达工具轮次上限被切断，产出可能不完整，建议通读检查。");
+      return { warnings: list, reportFile };
+    }
+    return { warnings, reportFile };
   }
 
   /**
@@ -379,6 +389,16 @@ export abstract class BaseAgent {
 
     let text = "";
     try {
+      // 轮次上限：settings 全局值（agentMaxTurns，0=不限）优先，未配置回落实例默认。
+      let maxIterations = maxIterationsOverride ?? this.maxToolIterations;
+      try {
+        const turns = settingsService.get().agentMaxTurns;
+        if (maxIterationsOverride === undefined && turns !== undefined && turns >= 0) {
+          maxIterations = turns;
+        }
+      } catch {
+        // settings 读取失败不阻塞
+      }
       const res = await runAgentSession({
         model: this.model,
         apiKey: this.apiKey,
@@ -388,7 +408,7 @@ export abstract class BaseAgent {
         agentType: this.agentType,
         modelLabel: this.modelId,
         providerLabel: this.providerId,
-        maxIterations: maxIterationsOverride ?? this.maxToolIterations,
+        maxIterations,
         promptBudget,
         onToolCall: (name, input) => console.log(`[${this.agentName}] Tool call: ${name}`, input),
         onToolResult: (name, _input, result) =>
@@ -397,6 +417,10 @@ export abstract class BaseAgent {
       });
       text = res.text;
       this.lastTrace = res.trace;
+      this.lastRunHitTurnLimit = res.hitTurnLimit;
+      if (res.hitTurnLimit) {
+        console.warn(`[${this.agentName}] 跑满 ${maxIterations} 轮工具迭代被切断，产物可能不完整`);
+      }
     } finally {
       await writeChain;
     }

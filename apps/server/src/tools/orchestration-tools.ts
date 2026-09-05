@@ -49,13 +49,15 @@ export function createOrchestrationTools(ctx: ToolContext): FictiaTool[] {
         if (target === null) {
           return { content: [{ type: "text", text: "所有章节已完成，无需写作" }], details: { done: true } };
         }
-        const result = await loop.runChapterLoop(target, (max_rounds as number) ?? 3);
+        const result = await loop.runChapterLoop(target, (max_rounds as number) ?? settingsService.getReviewFixRounds());
+        const outcomeLabel =
+          result.outcome === "pass" ? "是（满分）" : result.outcome === "warn" ? `警告通过（${result.warnings[0] ?? "审核未满分"}）` : "否";
         const text = `第${target}章写作完成：
-- 通过审核: ${result.passed ? "是" : "否"}
+- 通过审核: ${outcomeLabel}
 - 轮次: ${result.rounds}
 - 实体更新: ${result.entitiesUpdated}
 - 摘要来源: ${result.summarySource ?? "无"}
-- 阻塞性问题残留: ${result.proseBlockingRemaining}`;
+- 阻塞性问题残留: ${result.proseBlockingRemaining}${result.outcome === "warn" ? `\n- 警告: ${result.warnings.join("；")}` : ""}`;
         return { content: [{ type: "text", text }], details: { chapter: target, ...result } };
       },
     },

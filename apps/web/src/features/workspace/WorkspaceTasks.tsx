@@ -17,6 +17,7 @@ import {
   RotateCcw,
   FileText,
   AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 import {
   PIPELINE_PHASES,
@@ -103,6 +104,21 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
     }
     return map;
   })();
+
+  const handleForceConfirm = useCallback(
+    async (stageName: StageName) => {
+      try {
+        await pipelinesApi.forceConfirmStage(novelId, stageName);
+        refreshStatus();
+      } catch (err: any) {
+        setErrorModal({
+          stage: stageName,
+          message: err?.message ?? "核心产物不成立，无法强制确认",
+        });
+      }
+    },
+    [novelId, refreshStatus],
+  );
 
   const handleOpenAgentFile = useCallback(
     (agentType: AgentType) => {
@@ -242,6 +258,7 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
                   onRun={handleRunStage}
                   onOpenFile={handleOpenAgentFile}
                   onRefresh={refreshStatus}
+                  onForceConfirm={handleForceConfirm}
                 />
               );
             })}
@@ -292,6 +309,8 @@ interface AgentCardProps {
   onRun: (stageName: StageName, options?: { isRedo?: boolean; userDirective?: string }) => void;
   onOpenFile: (agentType: AgentType) => void;
   onRefresh: () => void;
+  /** 失败时按当前产物强制确认（跳过审核结论放行流程）。 */
+  onForceConfirm: (stageName: StageName) => void;
 }
 
 function AgentCard({
@@ -301,8 +320,10 @@ function AgentCard({
   onRun,
   onOpenFile,
   onRefresh,
+  onForceConfirm,
 }: AgentCardProps) {
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isForceConfirming, setIsForceConfirming] = useState(false);
   const [showRerunModal, setShowRerunModal] = useState(false);
 
   const Icon = agentIcons[stage.agentType] ?? Search;
@@ -321,6 +342,15 @@ function AgentCard({
       setIsExecuting(false);
     }
   }, [stage.name, onRun, onRefresh]);
+
+  const handleForceConfirm = useCallback(async () => {
+    setIsForceConfirming(true);
+    try {
+      await onForceConfirm(stage.name);
+    } finally {
+      setIsForceConfirming(false);
+    }
+  }, [stage.name, onForceConfirm]);
 
   const handleRerunConfirm = useCallback(async (directive: string) => {
     setIsExecuting(true);
@@ -422,13 +452,25 @@ function AgentCard({
               </>
             )}
             {isFailed && (
-              <button
-                onClick={handleRun}
-                className="rounded p-1 text-error transition-colors hover:bg-error/10"
-                title="重试"
-              >
-                <RotateCcw size={13} />
-              </button>
+              <>
+                <button
+                  onClick={handleRun}
+                  disabled={isForceConfirming}
+                  className="rounded p-1 text-error transition-colors hover:bg-error/10"
+                  title="重试"
+                >
+                  <RotateCcw size={13} />
+                </button>
+                <button
+                  onClick={handleForceConfirm}
+                  disabled={isForceConfirming}
+                  className="flex items-center gap-0.5 rounded px-1 text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
+                  title="核心产物已在时，跳过审核结论强制确认，放行后续阶段"
+                >
+                  <CheckCircle size={13} />
+                  <span className="font-caption text-[10px]">按产物继续</span>
+                </button>
+              </>
             )}
             {!isDone && !isRunning && !isFailed && !isNeedsUpdate && canRun && (
               <button

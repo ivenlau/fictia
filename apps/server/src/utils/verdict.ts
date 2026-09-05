@@ -8,6 +8,8 @@
  * web 的 editor 产出的报告（综合评分 A/B/C/D + 严重/一般问题表）直接适用。
  */
 
+import type { ReviewPolicy } from "@fictia/shared";
+
 export type Grade = "A" | "B" | "C" | "D";
 
 export interface Verdict {
@@ -111,4 +113,57 @@ export function parseReviewVerdict(text: string): Verdict {
  */
 export function parseConsistencyVerdict(text: string): Verdict {
   return parseReviewVerdict(text);
+}
+
+// ===== 三级判定：pass（完全通过）/ warn（警告通过）/ fail（硬失败）=====
+
+export type VerdictLevel = "pass" | "warn" | "fail";
+
+export const DEFAULT_REVIEW_POLICY: ReviewPolicy = {
+  passGrade: "B",
+  severeHardFail: 3,
+};
+
+const GRADE_ORDER: Record<Grade, number> = { A: 0, B: 1, C: 2, D: 3 };
+
+export interface VerdictJudgement {
+  level: VerdictLevel;
+  /** 判定依据（透出给用户的警告/失败原因）。 */
+  reason: string;
+}
+
+/**
+ * 按 policy 对 verdict 做三级判定：
+ * - pass：A + severe 0（与 parseReviewVerdict.passed 一致）
+ * - fail：grade D、severe >= severeHardFail、或没解析出评级（报告格式异常）
+ * - warn：其余（grade 达到 passGrade 但非满分，或 severe 少量）
+ */
+export function judgeVerdict(v: Verdict, policy: ReviewPolicy = DEFAULT_REVIEW_POLICY): VerdictJudgement {
+  if (!v.grade) {
+    return { level: "fail", reason: "审核报告未解析出综合评分（格式异常）" };
+  }
+  if (v.severe >= policy.severeHardFail) {
+    return {
+      level: "fail",
+      reason: `严重问题 ${v.severe} 条（≥ 上限 ${policy.severeHardFail}），产物质量不达标`,
+    };
+  }
+  if (GRADE_ORDER[v.grade] >= GRADE_ORDER.D) {
+    return { level: "fail", reason: `综合评分 D，产物质量不达标` };
+  }
+  if (v.passed) {
+    return { level: "pass", reason: "综合评分 A 且无严重问题" };
+  }
+  const belowPolicy = GRADE_ORDER[v.grade] > GRADE_ORDER[policy.passGrade];
+  if (belowPolicy) {
+    // grade 为 C 且 passGrade=B 等：按约定 C 仍警告通过（B/C 都算可接受），见方案确认项 ①
+    return {
+      level: "warn",
+      reason: `综合评分 ${v.grade}（严重 ${v.severe} / 一般 ${v.normal}），低于首选评级 ${policy.passGrade} 但可接受`,
+    };
+  }
+  return {
+    level: "warn",
+    reason: `综合评分 ${v.grade}（严重 ${v.severe} / 一般 ${v.normal}），建议人工复核`,
+  };
 }

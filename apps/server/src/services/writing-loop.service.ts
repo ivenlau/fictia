@@ -13,7 +13,7 @@ import { createAgent } from "../agents/index.js";
 import { ChapterWriterAgent } from "../agents/chapter-writer.js";
 import { EditorAgent } from "../agents/editor.js";
 import { checkProse } from "../utils/prose-check.js";
-import { parseReviewVerdict, type Verdict } from "../utils/verdict.js";
+import { parseReviewVerdict, judgeVerdict, type Verdict } from "../utils/verdict.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
 import { findChapterFile } from "../utils/chapter-files.js";
 import type { AgentType, AgentModelAssignment } from "@fictia/shared";
@@ -26,6 +26,7 @@ import {
 import { getSummary } from "./chapter-summary-store.js";
 import { runConsistencyCheck, checkMilestone, countChapters } from "./milestone.service.js";
 import { getOrCreateOrchestrator } from "./pipeline.service.js";
+import { settingsService } from "./settings.service.js";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { db, schema } from "../db/index.js";
@@ -54,6 +55,10 @@ export interface LoopResult {
   reviewPath: string;
   rounds: number;
   passed: boolean;
+  /** 三级结果：pass=完全通过；warn=产物成立但审核未满分（流程继续，交用户复核）；fail=真失败。 */
+  outcome: "pass" | "warn" | "fail";
+  /** warn 时的警告明细（verdict 摘要 / 轮次跑满提示等）。 */
+  warnings: string[];
   finalVerdict: Verdict | null;
   proseBlockingRemaining: number;
   proseAdvisory: number;
@@ -64,8 +69,8 @@ export interface LoopResult {
 
 export type ProgressCb = (p: LoopProgress) => void;
 
-/** 自动驾驶停止原因。 */
-export type AutopilotStopReason = "completed" | "quality" | "milestone" | "range" | "aborted";
+/** 自动驾驶停止原因。warning_streak = 连续多章仅警告通过，暂停请用户抽查质量。 */
+export type AutopilotStopReason = "completed" | "quality" | "warning_streak" | "milestone" | "range" | "aborted";
 
 export interface AutopilotOptions {
   startChapter?: number;
@@ -73,8 +78,10 @@ export interface AutopilotOptions {
   maxRounds?: number;
   /** 里程碑一致性校验失败时暂停（默认 true）。 */
   stopOnMilestoneFail?: boolean;
-  /** 连续未通过章数上限，达此暂停（默认 2）。 */
+  /** 连续真失败（产物不成立）章数上限，达此暂停（默认 2）。 */
   maxConsecutiveFails?: number;
+  /** 连续警告通过（审核未满分但产物成立）章数上限，达此暂停（默认 3，0=不暂停）。 */
+  warningStreakLimit?: number;
 }
 
 export interface AutopilotEvent {
@@ -167,6 +174,11 @@ export class WritingLoopService {
       })
       .run();
     let passed = false;
+    /** 流程完成（完全通过或警告通过）：agent_outputs 状态回填用。 */
+    let finished = false;
+    let finalOutcome: "pass" | "warn" | "fail" = "fail";
+    /** 任一段（draft/prose-fix/review-fix）触达轮次上限：warnings 提示用。 */
+    let hitLimitAnySegment = false;
     let segSeq = 0;
     /** 段化一次 writeChapter/applyReviewFix：独立 trace 文件 + 写 agent_trace_segments 行，
      *  并把 agent_outputs.trace_filename 指向当前段（让 SSE 实时跟进活动段）。 */
@@ -187,6 +199,7 @@ export class WritingLoopService {
       }
       const startedAt = new Date().toISOString();
       const res = await fn();
+      if (writer.lastRunHitTurnLimit) hitLimitAnySegment = true;
       const sum = summarizeTrace(writer.lastTrace);
       try {
         db.insert(schema.agentTraceSegments)
@@ -234,12 +247,18 @@ export class WritingLoopService {
     emit({ phase: "writing", round: 0, message: `写作第 ${chapterNumber} 章` });
     const writeResult = await runSegment("draft", () => writer.writeChapter(chapterNumber, options));
     if (!writeResult.success) {
-      // 假完成（agent 未 write_file 落盘）：直接判失败，不进 editor 审核循环，
-      // 让 runAutopilot 的 consecutiveFails 累计触发停止（避免死循环重写同一章）。
-      emit({ phase: "aborted", round: 0, message: `写作未产出：${writeResult.error ?? "agent 未 write_file 落盘"}` });
+      // 真失败（产物未落盘）：不进 editor 审核循环，让 runAutopilot 的 consecutiveFails
+      // 累计触发停止（避免死循环重写同一章）。
+      const reason = writeResult.error ?? "agent 未 write_file 落盘";
+      if (hitLimitAnySegment) {
+        emit({ phase: "aborted", round: 0, message: `写作未产出（轮次跑满被切断）：${reason}` });
+      } else {
+        emit({ phase: "aborted", round: 0, message: `写作未产出：${reason}` });
+      }
+      finalOutcome = "fail";
       return {
         chapterNumber, chapterPath, reviewPath,
-        rounds: 0, passed: false, finalVerdict: null,
+        rounds: 0, passed: false, outcome: "fail", warnings: [], finalVerdict: null,
         proseBlockingRemaining: 0, proseAdvisory: 0, entitiesUpdated: 0,
       };
     }
@@ -289,8 +308,13 @@ export class WritingLoopService {
       return { verdict: v, reviewText: rText };
     };
 
-    // 审核通过后的收尾：实体更新 + 摘要探测 + confirmStage，返回通过的 LoopResult。
-    const finalizePass = async (reviewRound: number, v: Verdict): Promise<LoopResult> => {
+    // 审核通过（或警告通过）后的收尾：实体更新 + 摘要探测 + confirmStage，返回对应 LoopResult。
+    const finalizePass = async (
+      reviewRound: number,
+      v: Verdict,
+      level: "pass" | "warn" = "pass",
+      warnings: string[] = [],
+    ): Promise<LoopResult> => {
       let entitiesUpdated = 0;
       try {
         const r = await updateEntitiesFromChapterNotes(this.novelId, chapterNumber);
@@ -307,7 +331,9 @@ export class WritingLoopService {
       emit({
         phase: "done",
         round: reviewRound,
-        message: `第 ${chapterNumber} 章通过（${reviewRound} 轮审核），实体状态更新 ${entitiesUpdated} 条，摘要=${summarySource ?? "无"}`,
+        message: level === "pass"
+          ? `第 ${chapterNumber} 章通过（${reviewRound} 轮审核），实体状态更新 ${entitiesUpdated} 条，摘要=${summarySource ?? "无"}`
+          : `第 ${chapterNumber} 章警告通过（${reviewRound} 轮审核未满分），实体状态更新 ${entitiesUpdated} 条——建议人工复核`,
       });
       try {
         const orch = getOrCreateOrchestrator(this.novelId, this.novelDir);
@@ -316,13 +342,17 @@ export class WritingLoopService {
       } catch {
         // 状态同步失败不阻塞写作
       }
-      passed = true;
+      passed = level === "pass";
+      finished = true;
+      finalOutcome = level;
       return {
         chapterNumber,
         chapterPath,
         reviewPath,
         rounds: reviewRound,
-        passed: true,
+        passed: level === "pass",
+        outcome: level,
+        warnings,
         finalVerdict: v,
         proseBlockingRemaining,
         proseAdvisory,
@@ -337,7 +367,7 @@ export class WritingLoopService {
     let round = 0;
     for (round = 1; round <= maxRounds; round++) {
       ({ verdict, reviewText } = await doReview(round));
-      if (verdict.passed) return await finalizePass(round, verdict);
+      if (verdict.passed) return await finalizePass(round, verdict, "pass");
 
       emit({
         phase: "review-fix",
@@ -362,23 +392,47 @@ export class WritingLoopService {
 
     // 最后一轮修复后补一次最终审核验证（避免最后一轮修复被浪费）。
     ({ verdict, reviewText } = await doReview(maxRounds + 1));
-    if (verdict.passed) return await finalizePass(maxRounds + 1, verdict);
+    if (verdict.passed) return await finalizePass(maxRounds + 1, verdict, "pass");
 
-    // 最终审核仍未通过：中止，交用户决定
-    emit({ phase: "aborted", round: maxRounds + 1, message: `${maxRounds} 轮修复 + 最终审核仍未通过，交用户决定` });
+    // 最终审核仍未通过：按策略三级判定。产物（章节正文）已成立，只有策略判 fail
+    // （D 级 / 严重问题达上限 / 报告无评级）才中止；warn 则警告通过、交用户复核。
+    const judgement = judgeVerdict(verdict!, settingsService.getReviewPolicy());
+    if (judgement.level !== "fail") {
+      const warnings = [
+        `${maxRounds} 轮审核-修复未达满分：${judgement.reason}。`,
+        "已按当前版本继续（产物已确认）。可在编辑器手工修改后，对本章重跑编辑审核。",
+      ];
+      if (proseBlockingRemaining > 0) {
+        warnings.push(`仍有 ${proseBlockingRemaining} 条确定性 prose 问题未修完（见章内标记）。`);
+      }
+      if (hitLimitAnySegment) {
+        warnings.push("写作/修复阶段触达工具轮次上限被切断，产出可能不完整，建议通读检查。");
+      }
+      return await finalizePass(maxRounds + 1, verdict!, "warn", warnings);
+    }
+
+    emit({
+      phase: "aborted",
+      round: maxRounds + 1,
+      message: `${maxRounds} 轮修复 + 最终审核未通过：${judgement.reason}。交用户处理`,
+    });
+    finalOutcome = "fail";
     return {
       chapterNumber,
       chapterPath,
       reviewPath,
       rounds: maxRounds + 1,
       passed: false,
+      outcome: "fail",
+      warnings: [judgement.reason],
       finalVerdict: verdict,
       proseBlockingRemaining,
       proseAdvisory,
       entitiesUpdated: 0,
     };
     } finally {
-      // 回填 agent_outputs：轮次/工具数按所有段累加（不再只看最后一段 writer.lastTrace）
+      // 回填 agent_outputs：轮次/工具数按所有段累加（不再只看最后一段 writer.lastTrace）。
+      // 警告通过（finished=true, passed=false）仍记 completed——流程已完成，警告经 SSE/结果透出。
       try {
         const lastSum = summarizeTrace(writer.lastTrace);
         const segs = db
@@ -391,7 +445,7 @@ export class WritingLoopService {
         const lastSegModel = segs.length > 0 ? segs[segs.length - 1].modelUsed ?? "" : "";
         db.update(schema.agentOutputs)
           .set({
-            status: passed ? "completed" : "failed",
+            status: finished ? "completed" : "failed",
             tokensOutput: 0,
             modelUsed: lastSegModel || lastSum.modelUsed,
             providerUsed: lastSum.providerUsed,
@@ -415,11 +469,13 @@ export class WritingLoopService {
     options: AutopilotOptions = {},
     onProgress?: (e: AutopilotEvent) => void,
   ): Promise<AutopilotResult> {
-    const maxRounds = options.maxRounds ?? 3;
+    const maxRounds = options.maxRounds ?? settingsService.getReviewFixRounds();
     const maxFails = options.maxConsecutiveFails ?? 2;
+    const warnStreakLimit = options.warningStreakLimit ?? 3;
     let chaptersWritten = 0;
     let lastChapter: number | null = null;
     let consecutiveFails = 0;
+    let consecutiveWarns = 0;
     let next = options.startChapter ?? await this.findNextChapter();
 
     while (next !== null) {
@@ -429,11 +485,34 @@ export class WritingLoopService {
       onProgress?.({ type: "chapter_start", chapter: next });
       try {
         const result = await this.runChapterLoop(next, maxRounds);
-        if (result.passed) {
-          onProgress?.({ type: "chapter_done", chapter: next, result });
+        if (result.outcome === "fail") {
+          // 真失败（产物不成立）：计入连续失败，达上限停车。
+          consecutiveFails++;
+          consecutiveWarns = 0;
+          onProgress?.({ type: "chapter_failed", chapter: next, result, message: result.warnings[0] ?? "写作未产出" });
+          if (consecutiveFails >= maxFails) {
+            return { chaptersWritten, lastChapter, stopped: "quality" };
+          }
+        } else {
           chaptersWritten++;
           lastChapter = next;
           consecutiveFails = 0;
+          if (result.outcome === "warn") {
+            // 警告通过：审核未满分但产物成立，继续写下一章；累计触发质量抽查暂停。
+            consecutiveWarns++;
+            onProgress?.({
+              type: "chapter_done",
+              chapter: next,
+              result,
+              message: `第 ${next} 章警告通过：${result.warnings[0] ?? "审核未满分"}（可在编辑器修改后重跑审核）`,
+            });
+            if (warnStreakLimit > 0 && consecutiveWarns >= warnStreakLimit) {
+              return { chaptersWritten, lastChapter, stopped: "warning_streak" };
+            }
+          } else {
+            consecutiveWarns = 0;
+            onProgress?.({ type: "chapter_done", chapter: next, result });
+          }
           // 里程碑一致性校验（每 5 章）
           const cnt = await countChapters(this.novelDir);
           const ms = checkMilestone(cnt);
@@ -445,15 +524,10 @@ export class WritingLoopService {
               return { chaptersWritten, lastChapter, stopped: "milestone" };
             }
           }
-        } else {
-          consecutiveFails++;
-          onProgress?.({ type: "chapter_failed", chapter: next, result, message: "未通过审核" });
-          if (consecutiveFails >= maxFails) {
-            return { chaptersWritten, lastChapter, stopped: "quality" };
-          }
         }
       } catch (e: any) {
         consecutiveFails++;
+        consecutiveWarns = 0;
         onProgress?.({ type: "chapter_failed", chapter: next, message: e?.message ?? "写作异常" });
         if (consecutiveFails >= maxFails) {
           return { chaptersWritten, lastChapter, stopped: "quality" };

@@ -77,6 +77,8 @@ export interface AgentRunnerResult {
   /** 写类工具触及的文件/章节标识（path 或章节号字符串）。 */
   filesWritten: string[];
   toolCalls: AgentRunnerToolCall[];
+  /** 是否触达 maxIterations 轮次上限被切断（产物可能不完整，调用方据此降级为警告）。 */
+  hitTurnLimit: boolean;
   /** 本次运行的调试 trace（完整）。 */
   trace: AgentRunTrace;
 }
@@ -146,6 +148,7 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
   const filesWritten: string[] = [];
   const toolCalls: AgentRunnerToolCall[] = [];
   let turnCount = 0;
+  let hitTurnLimit = false;
 
   // ===== 调试 trace 增量状态 =====
   const startedAt = new Date().toISOString();
@@ -200,7 +203,11 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
     toolExecution: "sequential",
     shouldStopAfterTurn: () => {
       turnCount += 1;
-      return maxIterations > 0 && turnCount >= maxIterations;
+      if (maxIterations > 0 && turnCount >= maxIterations) {
+        hitTurnLimit = true;
+        return true;
+      }
+      return false;
     },
     afterToolCall: async (ctx: AfterToolCallContext) => {
       const name = ctx.toolCall.name;
@@ -307,5 +314,5 @@ export async function runAgentSession(opts: AgentRunnerOptions): Promise<AgentRu
   }
 
   opts.onTraceUpdate?.(finalTrace);
-  return { text, filesWritten, toolCalls, trace: finalTrace };
+  return { text, filesWritten, toolCalls, hitTurnLimit, trace: finalTrace };
 }

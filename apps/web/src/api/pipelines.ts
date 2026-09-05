@@ -95,6 +95,17 @@ export const pipelinesApi = {
     }>(`/novels/${novelId}/pipeline/stages/${stage}/confirm`),
 
   /**
+   * 按当前产物强制确认阶段：审核未通过/轮次跑满但核心产物已在时，跳过审核结论放行流程。
+   * 产物不成立时后端返回 400 + missing 清单。
+   */
+  forceConfirmStage: (novelId: string, stage: StageName) =>
+    api.post<{
+      status: "confirmed";
+      stage: StageName;
+      message: string;
+    }>(`/novels/${novelId}/pipeline/stages/${stage}/force-confirm`),
+
+  /**
    * Modify a stage's output and propagate changes
    */
   modifyStage: (novelId: string, stage: StageName, content?: string) =>

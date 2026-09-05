@@ -175,6 +175,63 @@ export async function validateDesign(
   }
 }
 
+// ===== 产物底线检查（force-confirm 用）：只查「核心文件存在且非空」，不查结构 =====
+
+/** 各阶段核心产物文件清单（相对 novelDir）。 */
+const STAGE_ARTIFACTS: Record<string, string[]> = {
+  genre_analysis: ["design/genre-analysis.md"],
+  architecture: ["design/blueprint.md"],
+  style: ["design/style-guide.md"],
+  art_design: ["design/art-design.md"],
+  narrative_weave: ["design/narrative-weave.md"],
+  world: ["world/setting.md", "world/rules.md", "world/timeline.md"],
+};
+
+/**
+ * 检查某阶段的核心产物是否成立（存在且非空）。供 force-confirm 端点使用：
+ * 产物成立即可强制确认阶段（审核/结构问题降级为用户自担），不成立则拒绝。
+ */
+export async function checkArtifactsExist(
+  novelDir: string,
+  stageName: string,
+): Promise<DesignValidation> {
+  const issues: string[] = [];
+
+  const files = STAGE_ARTIFACTS[stageName];
+  if (files) {
+    for (const f of files) {
+      const content = await readFileSafe(path.join(novelDir, f));
+      if (!content || !content.trim()) issues.push(`${f} 不存在或为空`);
+    }
+    return done(issues);
+  }
+
+  if (stageName === "characters") {
+    const charFiles = await listCharacterFiles(novelDir);
+    if (charFiles.length === 0) issues.push("characters/ 无角色文件");
+    return done(issues);
+  }
+
+  if (stageName === "story") {
+    const outlineFiles = await fs
+      .readdir(path.join(novelDir, "outline"), { recursive: true })
+      .catch(() => [] as string[]);
+    if (!outlineFiles.some((f) => f.endsWith(".md"))) issues.push("outline/ 无大纲文件");
+    return done(issues);
+  }
+
+  if (stageName === "chapters") {
+    const chapterFiles = await fs
+      .readdir(path.join(novelDir, "chapters"), { recursive: true })
+      .catch(() => [] as string[]);
+    if (!chapterFiles.some((f) => f.endsWith(".md"))) issues.push("chapters/ 无章节文件");
+    return done(issues);
+  }
+
+  // editor / consistency 等报告型阶段：无下游依赖产物，默认放行
+  return { passed: true, issues: [] };
+}
+
 /**
  * 把校验结果落盘到 reviews/{agentName}-validation.md。通过则删除旧报告，返回 null；
  * 未通过则写报告，返回报告路径。供 agent run() 接入（复用 story-designer 模式）。

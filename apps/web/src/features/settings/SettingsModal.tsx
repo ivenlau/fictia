@@ -1,10 +1,11 @@
 import { useState, useCallback } from "react";
-import { Loader2, Plug, Bot, MessageSquare, Database, Info } from "lucide-react";
+import { Loader2, Plug, Bot, MessageSquare, Database, Workflow, Info } from "lucide-react";
 import { useUIStore, type SettingsTab } from "@/stores/uiStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { settingsApi } from "@/api/settings";
 import { ProviderSection } from "./ProviderSection";
 import { AgentModelSection } from "./AgentModelSection";
+import { PipelineSection } from "./PipelineSection";
 
 type TabKey = SettingsTab;
 
@@ -13,6 +14,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Plug }[] = [
   { key: "agents", label: "模型", icon: Bot },
   { key: "assistant", label: "对话助手", icon: MessageSquare },
   { key: "knowledge", label: "知识库", icon: Database },
+  { key: "pipeline", label: "流程控制", icon: Workflow },
   { key: "about", label: "关于", icon: Info },
 ];
 
@@ -36,6 +38,10 @@ export function SettingsModal() {
         embeddingProvider: settingsStore.embeddingProvider,
         embeddingModelDir: settingsStore.embeddingModelDir,
         embeddingApiKey: settingsStore.embeddingApiKey,
+        agentMaxTurns: settingsStore.agentMaxTurns,
+        reviewFixRounds: settingsStore.reviewFixRounds,
+        reviewPassGrade: settingsStore.reviewPolicy.passGrade,
+        reviewSevereHardFail: settingsStore.reviewPolicy.severeHardFail,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -100,6 +106,7 @@ export function SettingsModal() {
             {tab === "agents" && <AgentModelSection />}
             {tab === "assistant" && <AssistantSection />}
             {tab === "knowledge" && <KnowledgeSection />}
+            {tab === "pipeline" && <PipelineSection />}
             {tab === "about" && <AboutSection />}
           </main>
         </div>

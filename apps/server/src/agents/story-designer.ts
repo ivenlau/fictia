@@ -11,7 +11,7 @@ export class StoryDesignerAgent extends BaseAgent {
   protected stageName: StageName = "story";
   protected agentType: AgentType = "story-designer";
   protected agentName = "story-designer";
-  protected maxToolIterations = 0; // 不限制，支持长篇小说 150+ 章节
+  // 轮次上限统一走 settings.agentMaxTurns（0=不限）；长篇 150+ 章节场景在设置里调大。
 
   constructor(novelDir: string, model: Model<"openai-completions">, apiKey: string) {
     super(novelDir, model, apiKey);
@@ -171,11 +171,15 @@ ${todoGuidance}
       console.warn(`[story-designer] 设计校验未通过（见 reviews/story-design-validation.md）：\n${validation.issues.map((i) => `  - ${i}`).join("\n")}`);
     }
 
+    const warnings = validation.passed ? [] : [...validation.issues];
+    if (this.lastRunHitTurnLimit) {
+      warnings.push("本轮触达工具轮次上限被切断，大纲可能不完整，建议通读检查。");
+    }
     return {
       output,
       filesWritten,
       success: true,
-      warnings: validation.passed ? undefined : validation.issues,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
 }

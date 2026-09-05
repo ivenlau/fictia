@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AgentType, AgentModelAssignment, ProviderInfo } from "@fictia/shared";
+import type { AgentType, AgentModelAssignment, ProviderInfo, ReviewPolicy } from "@fictia/shared";
 import { DEFAULT_AGENT_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_SYSTEM_MODEL } from "@fictia/shared";
 
 interface SettingsState {
@@ -11,6 +11,9 @@ interface SettingsState {
   embeddingProvider: "glm" | "bge-m3";
   embeddingModelDir: string;
   embeddingApiKey: string;
+  agentMaxTurns: number;
+  reviewFixRounds: number;
+  reviewPolicy: ReviewPolicy;
   setProviders: (providers: ProviderInfo[]) => void;
   upsertProvider: (provider: ProviderInfo) => void;
   removeProvider: (id: string) => void;
@@ -21,6 +24,9 @@ interface SettingsState {
   setEmbeddingProvider: (p: "glm" | "bge-m3") => void;
   setEmbeddingModelDir: (dir: string) => void;
   setEmbeddingApiKey: (key: string) => void;
+  setAgentMaxTurns: (n: number) => void;
+  setReviewFixRounds: (n: number) => void;
+  setReviewPolicy: (p: ReviewPolicy) => void;
   loadSettings: (settings: {
     agentModels: Record<AgentType, AgentModelAssignment>;
     chatPersona: string;
@@ -29,6 +35,9 @@ interface SettingsState {
     embeddingProvider: "glm" | "bge-m3";
     embeddingModelDir: string;
     embeddingApiKey: string;
+    agentMaxTurns: number;
+    reviewFixRounds: number;
+    reviewPolicy: ReviewPolicy;
   }) => void;
 }
 
@@ -41,6 +50,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   embeddingProvider: "glm",
   embeddingModelDir: "",
   embeddingApiKey: "",
+  agentMaxTurns: 30,
+  reviewFixRounds: 3,
+  reviewPolicy: { passGrade: "B", severeHardFail: 3 },
 
   setProviders: (providers) => set({ providers }),
 
@@ -69,6 +81,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setEmbeddingProvider: (p) => set({ embeddingProvider: p }),
   setEmbeddingModelDir: (dir) => set({ embeddingModelDir: dir }),
   setEmbeddingApiKey: (key) => set({ embeddingApiKey: key }),
+  setAgentMaxTurns: (n) => set({ agentMaxTurns: n }),
+  setReviewFixRounds: (n) => set({ reviewFixRounds: n }),
+  setReviewPolicy: (p) => set({ reviewPolicy: p }),
 
   loadSettings: (settings) => set(settings),
 }));

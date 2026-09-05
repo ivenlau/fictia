@@ -6,6 +6,7 @@ import { novelService } from "../services/novel.service.js";
 import { fileService } from "../services/file.service.js";
 import { WritingLoopService } from "../services/writing-loop.service.js";
 import { DesignLoopService } from "../services/design-loop.service.js";
+import { settingsService } from "../services/settings.service.js";
 import {
   countChapters,
   checkMilestone,
@@ -81,15 +82,15 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
 
     const result = await svc.runChapterLoop(
       target,
-      maxRounds ?? 3,
+      maxRounds ?? settingsService.getReviewFixRounds(),
       (p) => send({ type: "progress", ...p }),
       { incrementalTarget, userDirective, isRedo },
     );
 
     send({ type: "result", result });
 
-    // 通过后检查里程碑（每 5 章提醒一致性校验，不阻塞）
-    if (result.passed) {
+    // 通过（含警告通过）后检查里程碑（每 5 章提醒一致性校验，不阻塞）
+    if (result.outcome !== "fail") {
       const cnt = await countChapters(novelDir);
       const ms = checkMilestone(cnt);
       if (ms) {
@@ -101,7 +102,13 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
       }
     }
 
-    send({ type: "done", passed: result.passed, rounds: result.rounds });
+    send({
+      type: "done",
+      passed: result.passed,
+      outcome: result.outcome,
+      warnings: result.warnings,
+      rounds: result.rounds,
+    });
   } catch (err: any) {
     send({ type: "error", error: err?.message ?? "写作循环失败" });
   } finally {
@@ -161,7 +168,7 @@ router.post("/novels/:novelId/consistency-check", async (req, res) => {
  */
 router.post("/novels/:novelId/autopilot", async (req, res) => {
   const { novelId } = req.params;
-  const { startChapter, endChapter, maxRounds, stopOnMilestoneFail, maxConsecutiveFails } = req.body ?? {};
+  const { startChapter, endChapter, maxRounds, stopOnMilestoneFail, maxConsecutiveFails, warningStreakLimit } = req.body ?? {};
   const novel = novelService.getById(novelId);
   if (!novel) {
     res.status(404).json({ error: "Novel not found" });
@@ -183,7 +190,7 @@ router.post("/novels/:novelId/autopilot", async (req, res) => {
   try {
     send({ type: "start" });
     const result = await svc.runAutopilot(
-      { startChapter, endChapter, maxRounds, stopOnMilestoneFail, maxConsecutiveFails },
+      { startChapter, endChapter, maxRounds, stopOnMilestoneFail, maxConsecutiveFails, warningStreakLimit },
       (e) => send({ ...e }),
     );
     send({ type: "done", ...result });
@@ -227,11 +234,16 @@ router.post("/novels/:novelId/design-loop", async (req, res) => {
 
   try {
     send({ type: "start", stageName });
-    const result = await svc.runDesignLoop(stageName, maxRounds ?? 3, (p) =>
+    const result = await svc.runDesignLoop(stageName, maxRounds ?? undefined, (p) =>
       send({ type: "progress", ...p }),
     );
     send({ type: "result", result });
-    send({ type: "done", passed: result.passed });
+    send({
+      type: "done",
+      passed: result.passed,
+      outcome: result.outcome,
+      warnings: result.warnings,
+    });
   } catch (err: any) {
     send({ type: "error", error: err?.message ?? "设计循环失败" });
   } finally {

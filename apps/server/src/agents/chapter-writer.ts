@@ -210,10 +210,16 @@ ${todoGuidance}
       }
     }
 
+    // 写作段触达轮次上限但正文已落盘：不判失败，降级为警告（后续审核循环兜底质量）。
+    const warnings = this.lastRunHitTurnLimit
+      ? ["写作触达工具轮次上限被切断，章节可能不完整（审核循环会继续检查）。"]
+      : undefined;
+
     return {
       output: `${output}\n\n---\n字数统计: ${wordCount}字`,
       filesWritten: [outputPath],
       success: true,
+      warnings,
     };
   }
 

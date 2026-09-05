@@ -11,11 +11,12 @@
  */
 import { createAgent } from "../agents/index.js";
 import { DesignReviewerAgent } from "../agents/design-reviewer.js";
-import { parseReviewVerdict, type Verdict } from "../utils/verdict.js";
+import { parseReviewVerdict, judgeVerdict, type Verdict } from "../utils/verdict.js";
 import { readFileSafe } from "../utils/file.js";
 import type { AgentType, StageName, AgentModelAssignment } from "@fictia/shared";
 import { STAGE_TO_AGENT } from "@fictia/shared";
 import { getOrCreateOrchestrator } from "./pipeline.service.js";
+import { settingsService } from "./settings.service.js";
 import { summarizeTrace } from "./file.service.js";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
@@ -33,6 +34,10 @@ export interface DesignLoopResult {
   stageName: string;
   rounds: number;
   passed: boolean;
+  /** 三级结果：pass=完全通过；warn=产物成立但审核未满分（已 confirm，交用户复核）；fail=未通过。 */
+  outcome: "pass" | "warn" | "fail";
+  /** warn 时的警告明细。 */
+  warnings: string[];
   finalVerdict: Verdict | null;
 }
 
@@ -56,13 +61,14 @@ export class DesignLoopService {
 
   async runDesignLoop(
     stageName: string,
-    maxRounds = 3,
+    maxRounds?: number,
     onProgress?: (p: DesignLoopProgress) => void,
   ): Promise<DesignLoopResult> {
     const designAgentType = STAGE_TO_AGENT[stageName as StageName];
     if (!designAgentType || !DESIGN_STAGES.includes(stageName as StageName)) {
-      return { stageName, rounds: 0, passed: false, finalVerdict: null };
+      return { stageName, rounds: 0, passed: false, outcome: "fail", warnings: [], finalVerdict: null };
     }
+    const roundsLimit = maxRounds ?? settingsService.getReviewFixRounds();
     const designAgent = createAgent(designAgentType, this.novelDir, this.agentModels);
     const reviewer = createAgent("design-reviewer", this.novelDir, this.agentModels) as DesignReviewerAgent;
     const emit = (p: DesignLoopProgress) => onProgress?.(p);
@@ -92,6 +98,8 @@ export class DesignLoopService {
       .run();
 
     let passed = false;
+    let finalOutcome: "pass" | "warn" | "fail" = "fail";
+    let warnings: string[] = [];
     let verdict: Verdict | null = null;
     let rounds = 0;
     let segSeq = 0;
@@ -137,12 +145,23 @@ export class DesignLoopService {
       return res;
     };
     try {
-      // 第 0 轮：design 产出
+      // 第 0 轮：design 产出。产物未落盘（假完成/轮次跑满中断）直接 fail，不进审核循环。
       emit({ phase: "design", round: 0, message: `${stageName} 设计产出` });
-      await runSegment("draft", () => designAgent.run({}));
+      const draftResult = await runSegment("draft", () => designAgent.run({}));
+      if (!draftResult.success) {
+        const reason = draftResult.error ?? "design agent 未产出核心文件";
+        finalOutcome = "fail";
+        warnings = [reason];
+        emit({
+          phase: "aborted",
+          round: 0,
+          message: `${stageName} 设计产出失败：${reason}${designAgent.lastRunHitTurnLimit ? "（轮次跑满被切断，可在设置调大 agentMaxTurns 重试）" : ""}`,
+        });
+        return { stageName, rounds: 0, passed: false, outcome: "fail", warnings, finalVerdict: null };
+      }
 
       // review-fix 循环
-      for (rounds = 1; rounds <= maxRounds; rounds++) {
+      for (rounds = 1; rounds <= roundsLimit; rounds++) {
         emit({ phase: "review", round: rounds, message: `第 ${rounds} 轮设计审核` });
         await reviewer.reviewDesign(stageName);
         const reviewPath = path.join(this.novelDir, "reviews", `${stageName}-design-review.md`);
@@ -177,8 +196,32 @@ export class DesignLoopService {
         );
       }
 
-      // 通过则确认 stage（与 writing-loop confirmStage 对齐）
-      if (passed) {
+      // 通过/警告通过则确认 stage（与 writing-loop confirmStage 对齐）。
+      // 设计产物（design/*.md 等）已落盘成立：只有策略判 fail 才不 confirm，
+      // warn 时照常 confirm 让流程继续，警告交用户复核。
+      let confirmed = false;
+      if (verdict) {
+        const judgement = judgeVerdict(verdict, settingsService.getReviewPolicy());
+        if (judgement.level === "pass") {
+          passed = true;
+          finalOutcome = "pass";
+          confirmed = true;
+        } else if (judgement.level === "warn") {
+          finalOutcome = "warn";
+          warnings = [
+            `${roundsLimit} 轮设计审核未达满分：${judgement.reason}。`,
+            "已按当前版本确认阶段（产物成立）。可人工修改设计文档后重跑本阶段或设计审核。",
+          ];
+          if (designAgent.lastRunHitTurnLimit) {
+            warnings.push("设计阶段触达工具轮次上限被切断，产出可能不完整，建议通读检查。");
+          }
+          confirmed = true;
+        } else {
+          finalOutcome = "fail";
+          warnings = [judgement.reason];
+        }
+      }
+      if (confirmed) {
         try {
           const orch = getOrCreateOrchestrator(this.novelId, this.novelDir);
           await orch.init();
@@ -188,11 +231,15 @@ export class DesignLoopService {
         }
       }
       emit({
-        phase: passed ? "done" : "aborted",
+        phase: finalOutcome === "fail" ? "aborted" : "done",
         round: rounds,
-        message: passed ? `${stageName} 审核通过` : `${maxRounds} 轮未通过，交用户决定`,
+        message: finalOutcome === "pass"
+          ? `${stageName} 审核通过`
+          : finalOutcome === "warn"
+            ? `${stageName} 警告通过（审核未满分），已确认——建议人工复核`
+            : `${stageName} 审核未通过：${warnings[0] ?? "交用户决定"}`,
       });
-      return { stageName, rounds, passed, finalVerdict: verdict };
+      return { stageName, rounds, passed, outcome: finalOutcome, warnings, finalVerdict: verdict };
     } finally {
       // 回填 agent_outputs：轮次/工具数按所有段累加
       try {
@@ -207,7 +254,7 @@ export class DesignLoopService {
         const lastSegModel = segs.length > 0 ? segs[segs.length - 1].modelUsed ?? "" : "";
         db.update(schema.agentOutputs)
           .set({
-            status: passed ? "completed" : "failed",
+            status: finalOutcome !== "fail" ? "completed" : "failed",
             modelUsed: lastSegModel || lastSum.modelUsed,
             providerUsed: lastSum.providerUsed,
             turnCount: totalTurns,

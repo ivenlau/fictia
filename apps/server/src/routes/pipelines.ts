@@ -14,6 +14,7 @@ import {
 import { getStageDefinition } from "../core/pipeline.js";
 import { StateTracker } from "../core/state-tracker.js";
 import { fileService, summarizeTrace } from "../services/file.service.js";
+import { checkArtifactsExist } from "../utils/design-validation.js";
 
 const now = () => new Date().toISOString();
 
@@ -293,6 +294,49 @@ router.post("/novels/:novelId/pipeline/stages/:stage/confirm", async (req, res) 
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "确认失败" });
+  }
+});
+
+// POST /novels/:novelId/pipeline/stages/:stage/force-confirm
+// 产物成立即强制确认：审核未通过/轮次跑满但产物已在时，用户手工放行流程。
+router.post("/novels/:novelId/pipeline/stages/:stage/force-confirm", async (req, res) => {
+  const { novelId, stage } = req.params;
+
+  if (!validateStage(stage)) {
+    res.status(400).json({ error: `无效的阶段: ${stage}` });
+    return;
+  }
+
+  const novel = novelService.getById(novelId);
+  if (!novel) {
+    res.status(404).json({ error: "Novel not found" });
+    return;
+  }
+
+  const novelDir = fileService.getNovelDir(novelId);
+
+  try {
+    const artifacts = await checkArtifactsExist(novelDir, stage);
+    if (!artifacts.passed) {
+      res.status(400).json({
+        error: `核心产物不成立，无法强制确认：${artifacts.issues.join("；")}`,
+        missing: artifacts.issues,
+      });
+      return;
+    }
+
+    const agentModels = getAgentModels();
+    const orch = getOrCreateOrchestrator(novelId, novelDir, agentModels);
+    await orch.init();
+    await orch.forceConfirmStage(stage as StageName);
+
+    res.json({
+      status: "confirmed",
+      stage,
+      message: `阶段 "${STAGE_LABELS[stage as StageName]}" 已按当前产物强制确认（跳过审核结论，质量自负）`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "强制确认失败" });
   }
 });
 

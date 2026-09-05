@@ -5,6 +5,7 @@ export type SettingsTab =
   | "agents"
   | "assistant"
   | "knowledge"
+  | "pipeline"
   | "about";
 
 interface UIState {

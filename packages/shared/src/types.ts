@@ -267,6 +267,14 @@ export interface AgentModelAssignment {
   modelId: string;
 }
 
+/** 审核通过策略：警告通过的最低评级 + 严重问题硬失败上限。 */
+export interface ReviewPolicy {
+  /** grade >= passGrade 即可警告通过（A 完全通过）。 */
+  passGrade: 'A' | 'B' | 'C';
+  /** severe >= severeHardFail 直接硬失败（流程中止）。 */
+  severeHardFail: number;
+}
+
 export interface Settings {
   agentModels: Record<AgentType, AgentModelAssignment>;
   chatPersona: string;
@@ -277,6 +285,12 @@ export interface Settings {
   embeddingModelDir: string;
   /** GLM embedding 专用 API key（空则回退 providers 表的 GLM key）。 */
   embeddingApiKey: string;
+  /** 单次会话工具轮数上限（0=不限）。 */
+  agentMaxTurns: number;
+  /** 审核-修复循环轮数（1-6）。 */
+  reviewFixRounds: number;
+  /** 审核通过策略。 */
+  reviewPolicy: ReviewPolicy;
 }
 
 export interface ChatMessage {
