@@ -109,6 +109,16 @@ async function extractCharacters(novelDir: string): Promise<Entity[]> {
   return entities;
 }
 
+/**
+ * 从「回收位置」列解析计划回收章号：「第12章」/「ch12」/「第12-15章」（取起始）。
+ * 解析不出（自由文本如「第三幕末」）返回 null——无法参与到期计算，不误报。
+ */
+export function parsePlannedChapter(s: unknown): number | null {
+  if (typeof s !== "string") return null;
+  const m = s.match(/第\s*(\d+)\s*章/) ?? s.match(/ch\s*(\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
 async function extractForeshadowing(novelDir: string): Promise<Entity[]> {
   const nw = await readFileSafe(path.join(novelDir, "design/narrative-weave.md"));
   if (!nw) return [];
@@ -125,7 +135,11 @@ async function extractForeshadowing(novelDir: string): Promise<Entity[]> {
         id,
         name,
         state,
-        fields: { type, plant, strengthen, resolve, desc },
+        fields: {
+          type, plant, strengthen, resolve, desc,
+          // 计划回收章号：伏笔到期/超期提醒的依据（「回收位置」列的数字部分）
+          plannedChapter: parsePlannedChapter(resolve),
+        },
       } as Entity;
     });
 }
@@ -576,10 +590,17 @@ export function assembleDesignProgressContext(novelId: string): string {
  * 伏笔闭合统计：各态计数 + closureRate + 未闭合（open）列表。
  * `open` = 非 resolved 且非 suspended 的伏笔。
  */
-export function foreshadowStats(novelId: string): ForeshadowStats {
+/**
+ * 伏笔闭合统计。
+ * currentChapter：当前写到第几章（listChapterFiles 最大章号）。传入时计算
+ * overdue（到期/超期未回收）——写章注入与 get_foreshadowing_stats 都用它，
+ * 治「埋了忘收」。
+ */
+export function foreshadowStats(novelId: string, currentChapter?: number): ForeshadowStats {
   const foreshadows = listEntities(novelId, "foreshadowing");
   const counts = { planted: 0, strengthened: 0, resolved: 0, suspended: 0 };
   const open: ForeshadowStats["open"] = [];
+  const overdue: ForeshadowStats["overdue"] = [];
   for (const f of foreshadows) {
     const st = (f.state as ForeshadowState) || "planted";
     if (st in counts) (counts as Record<string, number>)[st]++;
@@ -590,11 +611,19 @@ export function foreshadowStats(novelId: string): ForeshadowStats {
         state: st,
         desc: typeof f.fields.desc === "string" && f.fields.desc ? f.fields.desc : undefined,
       });
+      // plannedChapter 优先取实体字段（实体索引时解析）；旧实体库无字段则现解析「回收位置」
+      const planned =
+        typeof f.fields.plannedChapter === "number"
+          ? f.fields.plannedChapter
+          : parsePlannedChapter(f.fields.resolve);
+      if (currentChapter != null && planned != null && currentChapter >= planned) {
+        overdue.push({ id: f.id, name: f.name, state: st, plannedChapter: planned });
+      }
     }
   }
   const total = foreshadows.length;
   const closureRate = total > 0 ? counts.resolved / total : 0;
-  return { total, ...counts, closureRate, open };
+  return { total, ...counts, closureRate, open, overdue };
 }
 
 export { extractCharacters, extractForeshadowing, extractStorylines, extractTimeline };

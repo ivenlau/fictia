@@ -393,4 +393,6 @@ export interface ForeshadowStats {
   suspended: number;
   closureRate: number; // resolved / total, 0..1
   open: Array<{ id: string; name: string; state: ForeshadowState; desc?: string }>;
+  /** 到期/超期未回收：plannedChapter 已到（currentChapter >= plannedChapter）仍未 resolved/suspended。 */
+  overdue: Array<{ id: string; name: string; state: ForeshadowState; plannedChapter: number }>;
 }

@@ -11,7 +11,9 @@ import type { Model } from "@earendil-works/pi-ai";
 import { countWords } from "../utils/word-counter.js";
 import { generateChapterSummary } from "../services/summary-chain.service.js";
 import { readFileSafe, listFiles } from "../utils/file.js";
-import { findChapterFile, findOutlineFile, extractOutlineTitle } from "../utils/chapter-files.js";
+import { findChapterFile, findOutlineFile, extractOutlineTitle, listChapterFiles } from "../utils/chapter-files.js";
+import { listEntities } from "../services/entity-store.js";
+import { parsePlannedChapter } from "../services/entity.service.js";
 import {
   extractChapterNarrativeWeave,
   buildPreviousChapterSummary,
@@ -116,6 +118,8 @@ ${options.userDirective}
       // 避免一次性塞满 user message 导致注意力稀释。参见 docs/chapter-writer-context-reform.md L3。
       const narrativeWeave = await this.readProjectFile(`${DESIGN_DIR}/narrative-weave.md`);
       const narrativeWeaveExcerpt = extractChapterNarrativeWeave(narrativeWeave, chapterNumber);
+      // 伏笔到期提醒：计划回收章已到仍未回收的伏笔强制进视野（治「埋了忘收」）
+      const overdueForeshadowNote = await this.buildOverdueForeshadowNote(chapterNumber);
 
       let previousChapterNotes = "";
       if (chapterNumber > 1) {
@@ -147,6 +151,7 @@ ${outline}
 ### 本章伏笔指令（narrative-weave）
 ${narrativeWeaveExcerpt}
 
+${overdueForeshadowNote}
 ### 上章衔接
 ${previousChapterNotes || "（这是第一章，无前文衔接）"}
 
@@ -178,6 +183,7 @@ ${todoGuidance}
           : []),
         { name: "章节大纲", chars: outline.length },
         { name: "本章伏笔指令", chars: narrativeWeaveExcerpt.length },
+        { name: "伏笔到期提醒", chars: overdueForeshadowNote.length },
         { name: "上章衔接备注", chars: previousChapterNotes.length },
         { name: "写作引导", chars: todoGuidance.length },
       ];
@@ -359,6 +365,49 @@ ${findings}
     };
   }
 
+  /**
+   * 一致性修复：按 consistency-checker 报告逐条定向修复（允许跨章 + 设定文档）。
+   *
+   * 与 applyReviewFix 的区别：一致性矛盾天然可能跨章（第 3 章与第 7 章冲突），
+   * 修复点也可能落在设定文档（正文没错、设定漂移时改设定）。纪律不变：
+   * edit_file 最小改动、禁止整章重写、禁止新增删减情节。
+   * 修复是否达标由复检（consistency-checker 重跑）判定。
+   */
+  async applyConsistencyFix(reportText: string): Promise<AgentRunResult> {
+    const systemPrompt = await this.buildSystemPrompt();
+    const CONSISTENCY_FIX_MAX_ITERATIONS = 16;
+
+    const input = `## 按一致性校验报告定向修复（可跨章 / 涉及设定文档）
+
+### 一致性校验报告
+${reportText}
+
+### 执行要求（违反则任务失败）
+1. 只处理报告「问题清单」中的「严重问题」和「一般问题」，逐条用 \`edit_file\` 做最小改动；「细节问题」可跳过。
+2. 修复位置以报告的「位置/修复方案」为准：正文矛盾改正文（允许跨多个章节文件），设定漂移则改对应设定文档（design/*.md 或 world/*.md）。
+3. **禁止 \`write_file\` 整章/整文档**、禁止重写未出问题的段落、禁止新增或删减情节。
+4. 修复不得引入新矛盾：保住报告「时间线/伏笔/支线/角色状态追踪表」中的既有事实。
+5. **不要先 \`todo\` 规划长流程**——逐条定位→\`edit_file\` 即可，改完就停。
+
+本轮最多约 ${CONSISTENCY_FIX_MAX_ITERATIONS} 次工具往返，优先处理严重问题。`;
+
+    this.lastUserBudget = [
+      { name: "一致性报告", chars: reportText.length },
+      { name: "修复指令", chars: input.length - reportText.length },
+    ];
+
+    const output = await this.runLLM(input, systemPrompt, CONSISTENCY_FIX_MAX_ITERATIONS);
+    const filesWritten = this.lastTrace?.filesWritten ?? [];
+    return {
+      output,
+      filesWritten,
+      success: true,
+      warnings: this.lastRunHitTurnLimit
+        ? ["一致性修复触达轮次上限被切断，可能未改完"]
+        : undefined,
+    };
+  }
+
   /** 章节标题：优先大纲文件名（已含 sanitized 标题），回退大纲正文「标题：」行或 H1。 */
   private resolveChapterTitle(outlineFile: string | null, outlineContent: string): string | undefined {
     if (outlineFile) {
@@ -366,6 +415,41 @@ ${findings}
       if (fromName && fromName !== "未命名") return fromName;
     }
     return extractOutlineTitle(outlineContent);
+  }
+
+  /**
+   * 伏笔到期提醒：计划回收章已到（chapterNumber >= plannedChapter）仍未 resolved/suspended
+   * 的伏笔注入 user message。plannedChapter 取实体字段（实体索引时解析）；旧实体库无字段
+   * 则现解析「回收位置」。实体库不可用/无到期伏笔时返回空串，不阻塞写作。
+   */
+  private async buildOverdueForeshadowNote(chapterNumber: number): Promise<string> {
+    try {
+      const foreshadows = listEntities(path.basename(this.novelDir), "foreshadowing");
+      if (foreshadows.length === 0) return "";
+      const overdue = foreshadows
+        .filter((f) => f.state !== "resolved" && f.state !== "suspended")
+        .map((f) => ({
+          id: f.id,
+          name: f.name,
+          planned:
+            typeof f.fields.plannedChapter === "number"
+              ? f.fields.plannedChapter
+              : parsePlannedChapter(f.fields.resolve),
+        }))
+        .filter((f): f is { id: string; name: string; planned: number } => f.planned != null && chapterNumber >= f.planned);
+      if (overdue.length === 0) return "";
+      return [
+        "### ⚠ 伏笔到期提醒（必须处理）",
+        "",
+        ...overdue.map(
+          (f) =>
+            `- [${f.id}] ${f.name}：计划第 ${f.planned} 章回收，本章已到期/超期。本章应安排回收或明确推进（写备注时更新伏笔状态），不得无视。`,
+        ),
+        "",
+      ].join("\n");
+    } catch {
+      return "";
+    }
   }
 
   private async findNextChapter(): Promise<number | null> {

@@ -10,9 +10,11 @@
 
 import { createAgent } from "../agents/index.js";
 import { ConsistencyCheckerAgent } from "../agents/consistency-checker.js";
-import { parseConsistencyVerdict, type Verdict } from "../utils/verdict.js";
+import { ChapterWriterAgent } from "../agents/chapter-writer.js";
+import { parseConsistencyVerdict, judgeVerdict, type Verdict } from "../utils/verdict.js";
 import { readFileSafe } from "../utils/file.js";
 import { listChapterFiles } from "../utils/chapter-files.js";
+import { settingsService } from "./settings.service.js";
 import type { AgentType, AgentModelAssignment } from "@fictia/shared";
 import * as path from "path";
 
@@ -28,7 +30,7 @@ export interface ConsistencyResult {
 }
 
 export type ConsistencyProgressCb = (p: {
-  phase: "checking" | "verdict";
+  phase: "checking" | "verdict" | "fixing" | "done";
   message: string;
   verdict?: Verdict;
 }) => void;
@@ -58,7 +60,7 @@ export function checkMilestone(count: number): MilestoneCheck | null {
 
 /**
  * 运行一致性校验：consistency-checker -> 解析 verdict。
- * 单次校验（auto-fix 章节 + 复查的 2 轮循环暂未实现）。
+ * 单次校验（不自动修复）。修复闭环见 runConsistencyLoop。
  */
 export async function runConsistencyCheck(
   novelDir: string,
@@ -84,4 +86,94 @@ export async function runConsistencyCheck(
   });
 
   return { reportPath, verdict, passed: verdict.passed };
+}
+
+export interface ConsistencyLoopResult {
+  reportPath: string;
+  rounds: number;
+  passed: boolean;
+  /** 三级结果（judgeVerdict）：pass / warn（报告在，交用户复核）/ fail。 */
+  outcome: "pass" | "warn" | "fail";
+  warnings: string[];
+  finalVerdict: Verdict | null;
+}
+
+/**
+ * 一致性校验 + 修复闭环：check -> 未过则按报告定向修复（chapter-writer，可跨章
+ * /设定文档）-> 复检，最多 maxFixRounds 轮修复。
+ *
+ * 修复后仍未满分时按策略分级（与写作循环同一套 judgeVerdict）：
+ * warn 交用户复核（报告与警告透出，不阻塞），fail 交用户处理。
+ * 修复 agent 异常不吞掉——向上抛给调用方（autopilot / SSE 端点自行处理）。
+ */
+export async function runConsistencyLoop(
+  novelDir: string,
+  agentModels?: Partial<Record<AgentType, AgentModelAssignment>>,
+  onProgress?: ConsistencyProgressCb,
+  options?: { maxFixRounds?: number },
+): Promise<ConsistencyLoopResult> {
+  const maxFixRounds = options?.maxFixRounds ?? 1;
+  const reportPath = "reviews/consistency-report.md";
+  const checker = createAgent(
+    "consistency-checker",
+    novelDir,
+    agentModels,
+  ) as ConsistencyCheckerAgent;
+  const writer = createAgent("chapter-writer", novelDir, agentModels) as ChapterWriterAgent;
+
+  let verdict: Verdict | null = null;
+  let rounds = 0;
+  for (;;) {
+    onProgress?.({ phase: "checking", message: `运行一致性校验（第 ${rounds + 1} 次）` });
+    await checker.run();
+    const reportText = (await readFileSafe(path.join(novelDir, reportPath))) ?? "";
+    verdict = parseConsistencyVerdict(reportText);
+    onProgress?.({
+      phase: "verdict",
+      message: `grade=${verdict.grade ?? "?"} severe=${verdict.severe} normal=${verdict.normal} passed=${verdict.passed}`,
+      verdict,
+    });
+
+    if (verdict.passed) {
+      onProgress?.({ phase: "done", message: "一致性校验通过", verdict });
+      return {
+        reportPath,
+        rounds,
+        passed: true,
+        outcome: "pass",
+        warnings: [],
+        finalVerdict: verdict,
+      };
+    }
+
+    // 修复轮次用尽：按策略分级交用户
+    if (rounds >= maxFixRounds) break;
+
+    // 按报告定向修复（chapter-writer.applyConsistencyFix）
+    rounds += 1;
+    onProgress?.({
+      phase: "fixing",
+      message: `按一致性报告修复（severe=${verdict.severe} normal=${verdict.normal}，第 ${rounds}/${maxFixRounds} 轮）`,
+    });
+    await writer.applyConsistencyFix(reportText);
+  }
+
+  const judgement = judgeVerdict(verdict!, settingsService.getReviewPolicy());
+  const warnings = [
+    `一致性校验未达满分（${rounds} 轮修复后）：${judgement.reason}。`,
+    "报告见 reviews/consistency-report.md。可按报告手工修订相关章节/设定后重跑校验。",
+  ];
+  onProgress?.({
+    phase: "done",
+    message: `一致性校验${judgement.level === "fail" ? "未通过" : "未达满分"}：${judgement.reason}`,
+    verdict: verdict!,
+  });
+  return {
+    reportPath,
+    rounds,
+    passed: false,
+    outcome: judgement.level,
+    warnings,
+    finalVerdict: verdict,
+  };
 }

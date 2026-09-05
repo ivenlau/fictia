@@ -24,7 +24,7 @@ import {
   updateEntitiesFromChapterNotes,
 } from "./entity.service.js";
 import { getSummary } from "./chapter-summary-store.js";
-import { runConsistencyCheck, checkMilestone, countChapters } from "./milestone.service.js";
+import { runConsistencyLoop, checkMilestone, countChapters } from "./milestone.service.js";
 import { getOrCreateOrchestrator } from "./pipeline.service.js";
 import { settingsService } from "./settings.service.js";
 import { eq } from "drizzle-orm";
@@ -520,14 +520,20 @@ export class WritingLoopService {
             consecutiveWarns = 0;
             onProgress?.({ type: "chapter_done", chapter: next, result });
           }
-          // 里程碑一致性校验（每 5 章）
+          // 里程碑一致性校验（每 5 章；含 1 轮按报告自动修复 + 复检）
           const cnt = await countChapters(this.novelDir);
           const ms = checkMilestone(cnt);
           if (ms?.reached) {
             onProgress?.({ type: "milestone_start", chapter: next, message: `第${next}章里程碑，运行一致性校验` });
-            const cr = await runConsistencyCheck(this.novelDir, this.agentModels, () => {});
-            onProgress?.({ type: "milestone_done", chapter: next, consistencyPassed: cr.passed });
-            if (!cr.passed && options.stopOnMilestoneFail !== false) {
+            const cr = await runConsistencyLoop(this.novelDir, this.agentModels, () => {});
+            const crMessage = cr.passed
+              ? undefined
+              : cr.outcome === "warn"
+                ? `一致性校验未达满分（已自动修复 ${cr.rounds} 轮）：${cr.warnings[0] ?? ""}`
+                : (cr.warnings[0] ?? "一致性校验未通过");
+            onProgress?.({ type: "milestone_done", chapter: next, consistencyPassed: cr.passed, message: crMessage });
+            // 仅硬失败且开启停车时暂停；警告通过继续写（报告交用户复核）
+            if (!cr.passed && cr.outcome === "fail" && options.stopOnMilestoneFail !== false) {
               return { chaptersWritten, lastChapter, stopped: "milestone" };
             }
           }

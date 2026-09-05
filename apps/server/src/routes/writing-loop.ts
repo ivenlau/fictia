@@ -10,7 +10,7 @@ import { settingsService } from "../services/settings.service.js";
 import {
   countChapters,
   checkMilestone,
-  runConsistencyCheck,
+  runConsistencyLoop,
 } from "../services/milestone.service.js";
 
 const router = Router();
@@ -123,8 +123,8 @@ router.post("/novels/:novelId/writing-loop", async (req, res) => {
 /**
  * POST /novels/:novelId/consistency-check
  *
- * 运行一致性校验（consistency-checker -> verdict）。SSE 流式进度 + 结果。
- * 失败时返回报告，供用户手动修订章节后重跑。
+ * 一致性校验 + 修复闭环（consistency-checker -> verdict -> 未过则按报告定向
+ * 修复 -> 复检）。SSE 流式进度 + 结果；未达满分时按策略给警告，报告供手工修订。
  */
 router.post("/novels/:novelId/consistency-check", async (req, res) => {
   const { novelId } = req.params;
@@ -147,11 +147,16 @@ router.post("/novels/:novelId/consistency-check", async (req, res) => {
 
   try {
     send({ type: "start" });
-    const result = await runConsistencyCheck(novelDir, agentModels, (p) =>
+    const result = await runConsistencyLoop(novelDir, agentModels, (p) =>
       send({ type: "progress", ...p }),
     );
     send({ type: "result", result });
-    send({ type: "done", passed: result.passed });
+    send({
+      type: "done",
+      passed: result.passed,
+      outcome: result.outcome,
+      warnings: result.warnings,
+    });
   } catch (err: any) {
     send({ type: "error", error: err?.message ?? "一致性校验失败" });
   } finally {

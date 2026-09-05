@@ -8,6 +8,7 @@ import { foreshadowStats, assembleWritingSpace } from "../services/entity.servic
 import { getChapterSummary } from "../services/summary-chain.service.js";
 import { readSummariesBefore } from "../services/chapter-summary-store.js";
 import { getEntity } from "../services/entity-store.js";
+import { listChapterFiles } from "../utils/chapter-files.js";
 import type { FictiaTool, ToolContext } from "./types.js";
 
 export function createNarrativeStateTools(ctx: ToolContext): FictiaTool[] {
@@ -17,10 +18,24 @@ export function createNarrativeStateTools(ctx: ToolContext): FictiaTool[] {
       label: "伏笔统计",
       tier: "readonly",
       description:
-        "获取伏笔闭合统计：总数/各状态数/闭合率/未决伏笔清单。审核、写章前查伏笔进度用。",
+        "获取伏笔闭合统计：总数/各状态数/闭合率/到期超期清单/未决伏笔清单。审核、写章前查伏笔进度用。",
       parameters: Type.Object({}),
       async execute() {
-        const stats = foreshadowStats(ctx.novelId);
+        // 当前章号：算「到期/超期未回收」（写到计划回收章还没收 → 治「埋了忘收」）
+        let currentChapter: number | undefined;
+        try {
+          const chapters = await listChapterFiles(ctx.novelDir);
+          if (chapters.length > 0) currentChapter = chapters[chapters.length - 1].number;
+        } catch {
+          // 章节扫描失败不阻塞统计
+        }
+        const stats = foreshadowStats(ctx.novelId, currentChapter);
+        const overdueText = stats.overdue
+          .map(
+            (f) =>
+              `- [${f.id}] ${f.name}（计划第 ${f.plannedChapter} 章回收，已写到第 ${currentChapter} 章仍未回收）`,
+          )
+          .join("\n");
         const text = `伏笔统计：
 总数: ${stats.total}
 已埋设(planted): ${stats.planted}
@@ -28,6 +43,9 @@ export function createNarrativeStateTools(ctx: ToolContext): FictiaTool[] {
 已回收(resolved): ${stats.resolved}
 悬置(suspended): ${stats.suspended}
 闭合率: ${(stats.closureRate * 100).toFixed(1)}%
+
+⚠ 到期/超期未回收（优先处理，应在近期章节安排回收或明确推进）:
+${overdueText || "（无）"}
 
 未决伏笔:
 ${stats.open.map((f) => `- [${f.id}] ${f.name} (${f.state})${f.desc ? ": " + f.desc : ""}`).join("\n") || "（无）"}`;
