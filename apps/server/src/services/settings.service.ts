@@ -10,6 +10,9 @@ const now = () => new Date().toISOString();
 /** 流程控制默认值：单次会话工具轮数（0=不限）+ 审核-修复轮数。 */
 export const DEFAULT_AGENT_MAX_TURNS = 30;
 export const DEFAULT_REVIEW_FIX_ROUNDS = 3;
+/** 向量切块默认参数（与 chunker.ts env 兜底一致）。 */
+export const DEFAULT_CHUNK_CHARS = 600;
+export const DEFAULT_CHUNK_OVERLAP = 60;
 
 function getSettingValue(key: string): string | undefined {
   const row = db
@@ -73,6 +76,16 @@ export const settingsService = {
     const severeHardFail = Math.max(1, Math.floor(num("reviewSevereHardFail", DEFAULT_REVIEW_POLICY.severeHardFail)));
     reviewPolicy.severeHardFail = severeHardFail;
 
+    // ===== 向量切块参数 =====
+    const embeddingChunkChars = Math.max(
+      128,
+      Math.floor(num("embeddingChunkChars", DEFAULT_CHUNK_CHARS)),
+    );
+    const embeddingChunkOverlap = Math.min(
+      Math.floor(embeddingChunkChars / 2),
+      Math.max(0, Math.floor(num("embeddingChunkOverlap", DEFAULT_CHUNK_OVERLAP))),
+    );
+
     let chatModel: AgentModelAssignment = { ...DEFAULT_CHAT_MODEL };
     const chatModelRaw = getSettingValue("chatModel");
     if (chatModelRaw) {
@@ -103,6 +116,7 @@ export const settingsService = {
       agentModels, chatPersona, chatModel, systemModel, manualConfirm,
       embeddingProvider, embeddingModelDir, embeddingApiKey,
       agentMaxTurns, reviewFixRounds, reviewPolicy,
+      embeddingChunkChars, embeddingChunkOverlap,
     };
   },
 
@@ -120,6 +134,8 @@ export const settingsService = {
       reviewFixRounds: number;
       reviewPassGrade: "A" | "B" | "C";
       reviewSevereHardFail: number;
+      embeddingChunkChars: number;
+      embeddingChunkOverlap: number;
     }>,
   ) {
     if (data.agentModels !== undefined) setSettingValue("agentModels", JSON.stringify(data.agentModels));
@@ -139,6 +155,12 @@ export const settingsService = {
     if (data.reviewPassGrade !== undefined) setSettingValue("reviewPassGrade", data.reviewPassGrade);
     if (data.reviewSevereHardFail !== undefined) {
       setSettingValue("reviewSevereHardFail", String(Math.max(1, Math.floor(data.reviewSevereHardFail))));
+    }
+    if (data.embeddingChunkChars !== undefined) {
+      setSettingValue("embeddingChunkChars", String(Math.max(128, Math.floor(data.embeddingChunkChars))));
+    }
+    if (data.embeddingChunkOverlap !== undefined) {
+      setSettingValue("embeddingChunkOverlap", String(Math.max(0, Math.floor(data.embeddingChunkOverlap))));
     }
 
     return this.get();
@@ -163,6 +185,16 @@ export const settingsService = {
   /** 审核通过策略（警告通过/硬失败阈值）。 */
   getReviewPolicy(): ReviewPolicy {
     return this.get().reviewPolicy;
+  },
+
+  /** 向量切块单块最大字符数（>=128）。 */
+  getEmbeddingChunkChars(): number {
+    return this.get().embeddingChunkChars;
+  },
+
+  /** 向量切块相邻块重叠字符数（[0, chars/2]）。 */
+  getEmbeddingChunkOverlap(): number {
+    return this.get().embeddingChunkOverlap;
   },
 
   /** bge-m3 本地模型目录（空=远程下载 Xenova/bge-m3）。 */

@@ -335,6 +335,13 @@ export class WritingLoopService {
           ? `第 ${chapterNumber} 章通过（${reviewRound} 轮审核），实体状态更新 ${entitiesUpdated} 条，摘要=${summarySource ?? "无"}`
           : `第 ${chapterNumber} 章警告通过（${reviewRound} 轮审核未满分），实体状态更新 ${entitiesUpdated} 条——建议人工复核`,
       });
+      // 写完自动索引本章向量（semantic_search 保持覆盖最新内容）；失败不阻塞
+      try {
+        const { indexChapterAfterWrite } = await import("./vector-index.service.js");
+        await indexChapterAfterWrite(this.novelId, chapterNumber);
+      } catch {
+        // 自动索引失败不阻塞写作
+      }
       try {
         const orch = getOrCreateOrchestrator(this.novelId, this.novelDir);
         await orch.init();

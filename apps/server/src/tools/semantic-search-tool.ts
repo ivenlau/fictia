@@ -7,7 +7,9 @@ import { Type } from "@earendil-works/pi-ai";
 import {
   queryVectors,
   collectionStats,
-  getIndexProvider,
+  getIndexMeta,
+  indexMetaMatches,
+  type VectorIndexMeta,
   type VectorCollection,
 } from "../services/vector-store.js";
 import { embedOne } from "../utils/embedding.js";
@@ -38,16 +40,24 @@ export function createSemanticSearchTool(ctx: ToolContext): FictiaTool[] {
         if (indexedCount === 0) {
           throw new Error("向量索引为空，请先在前端「知识库」面板建立索引后再使用语义检索。");
         }
-        // 索引一致性校验
+        // 索引配置指纹校验：provider/模型/切块参数任一变化都要求重建
         const provider = settingsService.getEmbeddingProvider();
-        const indexedProvider = getIndexProvider(ctx.novelId);
-        if (indexedProvider && indexedProvider !== provider) {
+        const modelDir = settingsService.getEmbeddingModelDir() || undefined;
+        const dtype = (process.env.EMBEDDING_DTYPE as string | undefined) ?? "fp32";
+        const expectedMeta: VectorIndexMeta = {
+          version: 2,
+          provider,
+          modelDir,
+          dtype,
+          chunkChars: settingsService.getEmbeddingChunkChars(),
+          chunkOverlap: settingsService.getEmbeddingChunkOverlap(),
+        };
+        if (!indexMetaMatches(getIndexMeta(ctx.novelId), expectedMeta)) {
           throw new Error(
-            `索引(provider=${indexedProvider})与当前 embedding 配置(${provider})不一致，请重新建立索引。`,
+            "向量索引与当前 embedding 配置（provider/模型/切块参数）不一致，请先在前端「知识库」面板重建索引。",
           );
         }
         const glmKey = settingsService.getEmbeddingGlmKey();
-        const modelDir = settingsService.getEmbeddingModelDir();
         const k = (top_k as number) ?? 3;
         const queryVec = await embedOne(query as string, provider, glmKey, modelDir);
 

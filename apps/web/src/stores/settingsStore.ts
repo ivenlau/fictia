@@ -14,6 +14,8 @@ interface SettingsState {
   agentMaxTurns: number;
   reviewFixRounds: number;
   reviewPolicy: ReviewPolicy;
+  embeddingChunkChars: number;
+  embeddingChunkOverlap: number;
   setProviders: (providers: ProviderInfo[]) => void;
   upsertProvider: (provider: ProviderInfo) => void;
   removeProvider: (id: string) => void;
@@ -27,6 +29,8 @@ interface SettingsState {
   setAgentMaxTurns: (n: number) => void;
   setReviewFixRounds: (n: number) => void;
   setReviewPolicy: (p: ReviewPolicy) => void;
+  setEmbeddingChunkChars: (n: number) => void;
+  setEmbeddingChunkOverlap: (n: number) => void;
   loadSettings: (settings: {
     agentModels: Record<AgentType, AgentModelAssignment>;
     chatPersona: string;
@@ -38,6 +42,8 @@ interface SettingsState {
     agentMaxTurns: number;
     reviewFixRounds: number;
     reviewPolicy: ReviewPolicy;
+    embeddingChunkChars: number;
+    embeddingChunkOverlap: number;
   }) => void;
 }
 
@@ -53,6 +59,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   agentMaxTurns: 30,
   reviewFixRounds: 3,
   reviewPolicy: { passGrade: "B", severeHardFail: 3 },
+  embeddingChunkChars: 600,
+  embeddingChunkOverlap: 60,
 
   setProviders: (providers) => set({ providers }),
 
@@ -84,6 +92,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setAgentMaxTurns: (n) => set({ agentMaxTurns: n }),
   setReviewFixRounds: (n) => set({ reviewFixRounds: n }),
   setReviewPolicy: (p) => set({ reviewPolicy: p }),
+  setEmbeddingChunkChars: (n) => set({ embeddingChunkChars: n }),
+  setEmbeddingChunkOverlap: (n) => set({ embeddingChunkOverlap: n }),
 
   loadSettings: (settings) => set(settings),
 }));

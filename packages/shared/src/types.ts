@@ -291,6 +291,10 @@ export interface Settings {
   reviewFixRounds: number;
   /** 审核通过策略。 */
   reviewPolicy: ReviewPolicy;
+  /** 向量切块单块最大字符数（>=128）。变更后需重建索引。 */
+  embeddingChunkChars: number;
+  /** 向量切块相邻块重叠字符数（[0, chars/2]）。变更后需重建索引。 */
+  embeddingChunkOverlap: number;
 }
 
 export interface ChatMessage {

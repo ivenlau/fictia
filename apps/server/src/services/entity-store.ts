@@ -28,6 +28,7 @@ function getDb(novelId: string): Database.Database {
   const novelDir = fileService.getNovelDir(novelId);
   fs.mkdirSync(path.join(novelDir, ".fictia"), { recursive: true });
   const db = new Database(path.join(novelDir, ".fictia", "entities.db"));
+  db.pragma("journal_mode = WAL");
   db.exec(
     `CREATE TABLE IF NOT EXISTS entities (
       collection TEXT NOT NULL,

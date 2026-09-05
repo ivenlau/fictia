@@ -17,8 +17,14 @@ interface IndexManagerProps {
 export function IndexManager({ novelId }: IndexManagerProps) {
   const [vectorStats, setVectorStats] = useState<CollectionStats | null>(null);
   const [entityStats, setEntityStats] = useState<CollectionStats | null>(null);
-  const [indexProvider, setIndexProvider] = useState<string | null>(null);
+  const [indexMeta, setIndexMeta] = useState<{
+    provider: string;
+    chunkChars: number;
+    chunkOverlap: number;
+  } | null>(null);
   const [embeddingProvider, setEmbeddingProvider] = useState<"glm" | "bge-m3">("glm");
+  const [chunkChars, setChunkChars] = useState(600);
+  const [chunkOverlap, setChunkOverlap] = useState(60);
   const [vectorIndexing, setVectorIndexing] = useState(false);
   const [entityIndexing, setEntityIndexing] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
@@ -33,7 +39,15 @@ export function IndexManager({ novelId }: IndexManagerProps) {
         knowledgeApi.entityStatus(novelId),
       ]);
       setVectorStats(v.collections);
-      setIndexProvider(v.indexProvider ?? null);
+      setIndexMeta(
+        v.indexMeta
+          ? {
+              provider: v.indexMeta.provider,
+              chunkChars: v.indexMeta.chunkChars,
+              chunkOverlap: v.indexMeta.chunkOverlap,
+            }
+          : null,
+      );
       setEntityStats(e.collections);
     } catch {
       // 忽略：状态查询失败不阻塞 UI
@@ -44,7 +58,11 @@ export function IndexManager({ novelId }: IndexManagerProps) {
     refresh();
     settingsApi
       .get()
-      .then((s) => setEmbeddingProvider(s.embeddingProvider))
+      .then((s) => {
+        setEmbeddingProvider(s.embeddingProvider);
+        setChunkChars(s.embeddingChunkChars ?? 600);
+        setChunkOverlap(s.embeddingChunkOverlap ?? 60);
+      })
       .catch(() => {});
   }, [refresh]);
 
@@ -61,24 +79,41 @@ export function IndexManager({ novelId }: IndexManagerProps) {
     [embeddingProvider, busy],
   );
 
-  const handleVectorIndex = useCallback(async () => {
-    setVectorIndexing(true);
-    setEvents([]);
-    setError(null);
+  /** 保存切块参数（下次索引生效；参数变化会自动触发全量重建）。 */
+  const handleSaveChunkParams = useCallback(async () => {
     try {
-      await runVectorIndex(novelId, (ev: VectorIndexEvent) => {
-        if (ev.type === "progress" && ev.message)
-          setEvents((p) => [...p, String(ev.message)]);
-        if (ev.type === "error")
-          setError(String(ev.error ?? "索引失败"));
-      });
-      await refresh();
+      await settingsApi.update({ embeddingChunkChars: chunkChars, embeddingChunkOverlap: chunkOverlap });
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "索引失败");
-    } finally {
-      setVectorIndexing(false);
+      setError(err instanceof Error ? err.message : "保存切块参数失败");
     }
-  }, [novelId, refresh]);
+  }, [chunkChars, chunkOverlap]);
+
+  const runIndex = useCallback(
+    async (force: boolean) => {
+      setVectorIndexing(true);
+      setEvents([]);
+      setError(null);
+      try {
+        await runVectorIndex(
+          novelId,
+          (ev: VectorIndexEvent) => {
+            if (ev.type === "progress" && ev.message)
+              setEvents((p) => [...p, String(ev.message)]);
+            if (ev.type === "error")
+              setError(String(ev.error ?? "索引失败"));
+          },
+          { force },
+        );
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "索引失败");
+      } finally {
+        setVectorIndexing(false);
+      }
+    },
+    [novelId, refresh],
+  );
 
   const handleEntityIndex = useCallback(async () => {
     setEntityIndexing(true);
@@ -92,6 +127,9 @@ export function IndexManager({ novelId }: IndexManagerProps) {
       setEntityIndexing(false);
     }
   }, [novelId, refresh]);
+
+  const paramsMismatch =
+    !!indexMeta && (indexMeta.provider !== embeddingProvider || indexMeta.chunkChars !== chunkChars || indexMeta.chunkOverlap !== chunkOverlap);
 
   return (
     <div className="px-3 py-2 border-b border-subtle">
@@ -120,18 +158,56 @@ export function IndexManager({ novelId }: IndexManagerProps) {
         <div className="flex items-center gap-1 mt-1 font-caption text-[10px] text-fg-muted">
           <span>当前: {embeddingProvider === "glm" ? "GLM" : "bge-m3"}</span>
           <span>·</span>
-          <span>已索引: {indexProvider ?? "无"}</span>
+          <span>
+            已索引:{" "}
+            {indexMeta
+              ? `${indexMeta.provider === "glm" ? "GLM" : "bge-m3"}（块 ${indexMeta.chunkChars}/叠 ${indexMeta.chunkOverlap}）`
+              : "无"}
+          </span>
         </div>
-        {indexProvider && indexProvider !== embeddingProvider && (
+        {paramsMismatch && (
           <p className="font-caption text-[10px] text-amber-600 mt-1">
-            ⚠ 索引({indexProvider})与当前({embeddingProvider})不一致，请重新全量索引
+            ⚠ 索引配置与当前设置不一致，下次索引将自动全量重建
           </p>
         )}
       </div>
 
+      {/* 切块参数 */}
+      <div className="mb-2 flex items-center gap-1.5">
+        <label className="flex items-center gap-1 font-caption text-[10px] text-fg-muted">
+          块大小
+          <input
+            type="number"
+            min={128}
+            max={2000}
+            value={chunkChars}
+            onChange={(e) => setChunkChars(Math.max(128, Math.floor(Number(e.target.value) || 600)))}
+            className="w-14 rounded border border-subtle bg-surface-card px-1 py-0.5 text-[10px] text-fg-primary"
+          />
+        </label>
+        <label className="flex items-center gap-1 font-caption text-[10px] text-fg-muted">
+          重叠
+          <input
+            type="number"
+            min={0}
+            max={300}
+            value={chunkOverlap}
+            onChange={(e) => setChunkOverlap(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+            className="w-12 rounded border border-subtle bg-surface-card px-1 py-0.5 text-[10px] text-fg-primary"
+          />
+        </label>
+        <button
+          onClick={handleSaveChunkParams}
+          disabled={busy}
+          className="rounded border border-subtle px-1.5 py-0.5 font-caption text-[10px] text-fg-secondary transition-colors hover:bg-surface-secondary disabled:opacity-40"
+        >
+          保存
+        </button>
+      </div>
+
       <div className="grid grid-cols-3 gap-1.5 mb-2">
         <button
-          onClick={handleVectorIndex}
+          onClick={() => runIndex(false)}
           disabled={busy}
           className="flex items-center justify-center gap-1 rounded-md bg-accent px-2 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -140,7 +216,16 @@ export function IndexManager({ novelId }: IndexManagerProps) {
           ) : (
             <Zap size={12} />
           )}
-          全量索引
+          增量索引
+        </button>
+        <button
+          onClick={() => runIndex(true)}
+          disabled={busy}
+          title="忽略文件指纹，全部重新嵌入（切换 embedding 或调整切块参数后使用）"
+          className="flex items-center justify-center gap-1 rounded-md border border-subtle bg-surface-card px-2 py-1.5 font-body text-[11px] font-medium text-fg-primary transition-colors hover:bg-surface-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Layers size={12} />
+          全量重建
         </button>
         <button
           onClick={handleEntityIndex}
@@ -153,14 +238,6 @@ export function IndexManager({ novelId }: IndexManagerProps) {
             <Database size={12} />
           )}
           实体索引
-        </button>
-        <button
-          disabled
-          title="敬请期待（后端尚未实现增量索引）"
-          className="flex items-center justify-center gap-1 rounded-md border border-subtle bg-surface-card px-2 py-1.5 font-body text-[11px] font-medium text-fg-muted opacity-50 cursor-not-allowed"
-        >
-          <Layers size={12} />
-          增量索引
         </button>
       </div>
 

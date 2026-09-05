@@ -10,7 +10,6 @@ import { generateChapterSummary } from "../services/summary-chain.service.js";
 import { indexAllEntities } from "../services/entity.service.js";
 import { entityStats } from "../services/entity-store.js";
 import { indexAll } from "../services/vector-index.service.js";
-import { settingsService } from "../services/settings.service.js";
 import type { FictiaTool, ToolContext } from "./types.js";
 
 export function createTriggerTools(ctx: ToolContext): FictiaTool[] {
@@ -54,16 +53,22 @@ export function createTriggerTools(ctx: ToolContext): FictiaTool[] {
       label: "重建向量索引",
       tier: "write",
       description:
-        "重建向量索引（章节/设定/世界观/大纲），供 semantic_search 使用。bge-m3 首次加载约 2.2GB 模型，耗时较长。",
-      parameters: Type.Object({}),
-      async execute() {
-        const provider = settingsService.getEmbeddingProvider();
-        const glmKey = settingsService.getEmbeddingGlmKey();
-        const modelDir = settingsService.getEmbeddingModelDir();
-        const result = await indexAll(ctx.novelId, provider, glmKey, modelDir);
-        const text = `向量索引重建完成:\n${Object.entries(result.indexed)
-          .map(([k, v]) => `- ${k}: ${v} 块`)
-          .join("\n")}`;
+        "重建向量索引（章节/设定/世界观/大纲），供 semantic_search 使用。默认增量（内容未变的文件跳过嵌入）。bge-m3 首次加载约 2.2GB 模型，耗时较长。",
+      parameters: Type.Object({
+        force: Type.Optional(
+          Type.Boolean({ description: "强制全量重建（默认 false，仅 embedding/切块配置变化时才需要）" }),
+        ),
+      }),
+      async execute(_id, { force }) {
+        const result = await indexAll(ctx.novelId, { force: force === true });
+        const mode = result.fullRebuild ? "全量重建" : "增量";
+        const lines = Object.entries(result.indexed)
+          .map(([k, v]) => {
+            const skip = result.skipped?.[k] ?? 0;
+            return `- ${k}: ${v} 块（跳过未变化 ${skip} 文件）`;
+          })
+          .join("\n");
+        const text = `向量索引完成（${mode}）:\n${lines}`;
         return { content: [{ type: "text", text }], details: result };
       },
     },

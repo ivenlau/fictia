@@ -30,7 +30,7 @@ export type EntityCollection =
   | "events"
   | "easter_eggs";
 
-/** 实际会被索引的向量 collection（notes/sources 后端暂未索引）。 */
+/** 实际会被索引的向量 collection（notes/sources 无子系统，后端 P3 需要时再加回）。 */
 export const INDEXED_VECTOR_COLLECTIONS: VectorCollection[] = [
   "chapters",
   "design",
@@ -68,14 +68,25 @@ export interface CollectionStats {
   [collection: string]: number;
 }
 
+export interface VectorIndexMetaInfo {
+  version: number;
+  provider: string;
+  modelDir?: string;
+  dtype?: string;
+  chunkChars: number;
+  chunkOverlap: number;
+}
+
 export interface VectorStatusResponse {
   novelId: string;
   collections: CollectionStats;
-  indexProvider?: string | null;
+  indexMeta?: VectorIndexMetaInfo | null;
 }
 
 export interface VectorIndexResult {
   indexed: Record<string, number>;
+  skipped?: Record<string, number>;
+  fullRebuild?: boolean;
 }
 
 export interface Entity {
@@ -217,19 +228,20 @@ export const knowledgeApi = {
     ),
 };
 
-// ---------- SSE: 向量全量索引 ----------
+// ---------- SSE: 向量索引（默认增量，force=true 全量重建）----------
 
 export type VectorIndexEvent = WritingLoopEvent;
 
 export async function runVectorIndex(
   novelId: string,
   onEvent: (e: VectorIndexEvent) => void,
+  options?: { force?: boolean },
   signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/novels/${novelId}/vector/index`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ force: options?.force ?? false }),
     signal,
   });
   if (!res.ok) {
