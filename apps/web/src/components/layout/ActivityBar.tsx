@@ -20,8 +20,8 @@ interface ActivityItem {
 }
 
 const items: ActivityItem[] = [
-  { icon: FolderTree, panel: "explorer", label: "Explorer" },
-  { icon: Search, panel: "search", label: "Search" },
+  { icon: FolderTree, panel: "explorer", label: "资源管理" },
+  { icon: Search, panel: "search", label: "搜索" },
   { icon: Bug, panel: "debug", label: "调试" },
   { icon: Bot, panel: "agent", label: "Agent" },
   { icon: Wrench, panel: "tools", label: "自定义工具" },
@@ -31,45 +31,52 @@ const items: ActivityItem[] = [
 
 export function ActivityBar() {
   const activePanel = useUIStore((s) => s.activePanel);
+  const explorerVisible = useUIStore((s) => s.explorerVisible);
   const setActivePanel = useUIStore((s) => s.setActivePanel);
-  const setShowSettings = useUIStore((s) => s.setShowSettings);
+  const openSettings = useUIStore((s) => s.openSettings);
   const setShowNewNovel = useUIStore((s) => s.setShowNewNovel);
 
   return (
-    <aside className="w-14 flex flex-col items-center py-2 gap-1 bg-surface-card border-r border-subtle shrink-0">
+    <aside className="w-14 flex flex-col items-center py-3 gap-1.5 bg-surface-secondary border-r border-subtle shrink-0">
       <button
         onClick={() => setShowNewNovel(true)}
-        className="w-9 h-9 flex items-center justify-center rounded-md text-accent mb-1 hover:bg-accent-bg transition-colors"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-subtle bg-surface-card text-fg-muted transition-colors hover:border-strong hover:bg-surface-elevated hover:text-fg-primary"
         title="新建小说"
       >
-        <SquarePen size={20} />
+        <SquarePen size={17} />
       </button>
 
-      <div className="w-6 border-t border-subtle my-1" />
+      <div className="my-1.5 h-px w-6 bg-strong" />
 
-      {items.map((item) => (
-        <button
-          key={item.panel}
-          onClick={() => setActivePanel(item.panel)}
-          title={item.label}
-          className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors ${
-            activePanel === item.panel
-              ? "bg-accent-bg text-accent"
-              : "text-fg-muted hover:bg-surface-secondary hover:text-fg-primary"
-          }`}
-        >
-          <item.icon size={18} />
-        </button>
-      ))}
+      {items.map((item) => {
+        const isActive = activePanel === item.panel && explorerVisible;
+        return (
+          <button
+            key={item.panel}
+            onClick={() => setActivePanel(item.panel)}
+            title={item.label}
+            className={`group relative flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-150 ${
+              isActive
+                ? "bg-surface-elevated border border-strong text-accent shadow-glow"
+                : "border border-transparent text-fg-muted hover:bg-surface-elevated/70 hover:text-fg-secondary"
+            }`}
+          >
+            <item.icon size={17} />
+            {isActive && (
+              <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r bg-accent" />
+            )}
+          </button>
+        );
+      })}
 
       <div className="flex-1" />
 
       <button
-        onClick={() => setShowSettings(true)}
-        title="Settings"
-        className="w-9 h-9 flex items-center justify-center rounded-md text-fg-muted hover:bg-surface-secondary hover:text-fg-primary transition-colors"
+        onClick={() => openSettings()}
+        title="设置"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-elevated hover:text-fg-primary"
       >
-        <Settings size={18} />
+        <Settings size={17} />
       </button>
     </aside>
   );

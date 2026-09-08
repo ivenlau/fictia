@@ -162,7 +162,7 @@ export function CustomToolEditorModal({
             <button
               onClick={onGenerate}
               disabled={busy || !genDesc.trim()}
-              className="shrink-0 rounded-md bg-accent px-3 py-1.5 font-caption text-[11px] font-medium text-white hover:bg-accent-deep disabled:opacity-40"
+              className="shrink-0 rounded-md bg-accent px-3 py-1.5 font-caption text-[11px] font-medium text-accent-ink hover:bg-accent-light disabled:opacity-40"
             >
               生成
             </button>
@@ -215,7 +215,7 @@ export function CustomToolEditorModal({
                   if (k === "js") setKind({ kind: "js", code: "" });
                 }}
                 className={`rounded-md px-3 py-1 font-caption text-[11px] font-medium ${
-                  def.kind.kind === k ? "bg-accent text-white" : "bg-surface-muted text-fg-secondary hover:bg-surface-secondary"
+                  def.kind.kind === k ? "bg-accent text-accent-ink" : "bg-surface-muted text-fg-secondary hover:bg-surface-secondary"
                 }`}
               >
                 {k}
@@ -275,7 +275,7 @@ export function CustomToolEditorModal({
                       const on = ((def.kind as any).tools ?? []).includes(t);
                       return (
                         <button key={t} onClick={() => toggleLlmTool(t)} type="button"
-                          className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${on ? "bg-accent text-white" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}>
+                          className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${on ? "bg-accent text-accent-ink" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}>
                           {t}
                         </button>
                       );
@@ -289,7 +289,7 @@ export function CustomToolEditorModal({
                           const on = ((def.kind as any).tools ?? []).includes(t.name);
                           return (
                             <button key={t.id} onClick={() => toggleLlmTool(t.name)} type="button"
-                              className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${on ? "bg-accent text-white" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}>
+                              className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${on ? "bg-accent text-accent-ink" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}>
                               {t.name}
                             </button>
                           );
@@ -393,13 +393,13 @@ export function CustomToolEditorModal({
           {testResult && <pre className="mt-2 whitespace-pre-wrap font-caption text-[11px] text-fg-secondary">{testResult}</pre>}
         </div>
 
-        {error && <p className="mt-3 font-caption text-[11px] text-red-500">{error}</p>}
+        {error && <p className="mt-3 font-caption text-[11px] text-error">{error}</p>}
 
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md px-3 py-1.5 font-caption text-xs text-fg-secondary hover:bg-surface-secondary">
             取消
           </button>
-          <button onClick={onSave} disabled={busy} className="rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-white hover:bg-accent-deep disabled:opacity-40">
+          <button onClick={onSave} disabled={busy} className="rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-accent-ink hover:bg-accent-light disabled:opacity-40">
             保存
           </button>
         </div>

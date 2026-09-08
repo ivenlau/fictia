@@ -101,7 +101,7 @@ export function ProblemsPanel({ feedback, onAdopt, onIgnore }: ProblemsPanelProp
                 onClick={() => setFilter(opt.value)}
                 className={`rounded px-2 py-0.5 font-caption text-xs transition-colors ${
                   filter === opt.value
-                    ? "bg-accent text-white"
+                    ? "bg-accent text-accent-ink"
                     : "text-fg-muted hover:bg-surface-secondary"
                 }`}
               >

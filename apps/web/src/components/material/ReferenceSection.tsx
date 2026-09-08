@@ -377,7 +377,7 @@ export function ReferenceSection({ novelId }: { novelId: string }) {
               <button
                 onClick={submit}
                 disabled={submitting}
-                className="flex items-center gap-1.5 font-body text-[11px] px-3 py-1.5 rounded-md bg-accent text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+                className="flex items-center gap-1.5 font-body text-[11px] px-3 py-1.5 rounded-md bg-accent text-accent-ink disabled:opacity-40 hover:opacity-90 transition-opacity"
               >
                 {submitting ? <Loader2 size={12} className="animate-spin" /> : <BookMarked size={12} />}
                 {submitting ? "解析中（约 1-2 分钟）…" : "提交并解析"}

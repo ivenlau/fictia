@@ -2,32 +2,50 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 /**
- * 可复用的 Markdown 渲染器（紧凑版样式，适配侧边栏/弹窗）。
- * 样式与 ChapterReading 同源，缩字号以适合素材库面板宽度。
+ * 暗色 Markdown 渲染（素材预览 / 体裁卡等）。
+ * 注意：react-markdown v9 不再接受 className，必须包一层 wrapper。
  */
-const PROSE_CLASS =
-  "prose prose-sm max-w-none font-body text-fg-primary leading-[1.7] " +
-  "[&>h1]:font-heading [&>h1]:text-base [&>h1]:font-bold [&>h1]:mb-3 " +
-  "[&>h2]:font-heading [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:mb-2 [&>h2]:mt-4 " +
-  "[&>h3]:font-heading [&>h3]:text-[13px] [&>h3]:font-semibold [&>h3]:mb-1.5 " +
-  "[&>p]:mb-3 [&>p]:text-[13px] " +
-  "[&>blockquote]:border-l-2 [&>blockquote]:border-accent/40 [&>blockquote]:pl-3 [&>blockquote]:italic [&>blockquote]:text-fg-secondary " +
-  "[&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-3 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:mb-3 " +
-  "[&>li]:mb-1 [&>li]:text-[13px] " +
-  "[&>code]:font-caption [&>code]:text-xs [&>code]:bg-surface-muted [&>code]:px-1 [&>code]:py-0.5 [&>code]:rounded " +
-  "[&>pre]:bg-surface-muted [&>pre]:p-2 [&>pre]:rounded [&>pre]:text-xs [&>pre]:overflow-x-auto " +
-  "[&>hr]:border-subtle [&>hr]:my-4 " +
-  "[&_table]:w-full [&_table]:border-collapse [&_table]:my-3 [&_table]:text-xs " +
-  "[&_thead]:bg-surface-muted/50 " +
-  "[&_th]:border [&_th]:border-subtle [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold " +
-  "[&_td]:border [&_td]:border-subtle [&_td]:px-2 [&_td]:py-1 [&_td]:align-top";
+const WRAPPER_CLASS = [
+  "md-view",
+  "max-w-none",
+  "font-body",
+  "text-[13.5px]",
+  "leading-[1.8]",
+  "text-fg-secondary",
+  "[&_h1]:mb-3 [&_h1]:mt-1 [&_h1]:font-display [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-fg-primary",
+  "[&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:font-display [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-fg-primary",
+  "[&_h3]:mb-1.5 [&_h3]:mt-4 [&_h3]:font-display [&_h3]:text-[13px] [&_h3]:font-semibold [&_h3]:text-fg-primary",
+  "[&_h4]:mb-1 [&_h4]:mt-3 [&_h4]:font-semibold [&_h4]:text-[12px] [&_h4]:text-fg-primary",
+  "[&_p]:mb-3 [&_p]:text-fg-secondary",
+  "[&_strong]:text-fg-primary [&_strong]:font-semibold",
+  "[&_em]:text-fg-secondary",
+  "[&_a]:text-cyan [&_a]:underline [&_a]:underline-offset-2",
+  "[&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1",
+  "[&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1",
+  "[&_li]:text-fg-secondary",
+  "[&_li>ul]:mt-1 [&_li>ol]:mt-1",
+  "[&_blockquote]:mb-3 [&_blockquote]:border-l-2 [&_blockquote]:border-accent/50 [&_blockquote]:bg-accent/5 [&_blockquote]:py-1.5 [&_blockquote]:pl-3 [&_blockquote]:pr-2 [&_blockquote]:text-fg-muted [&_blockquote]:italic",
+  "[&_code]:rounded [&_code]:bg-surface-elevated [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-caption [&_code]:text-[12px] [&_code]:text-accent",
+  "[&_pre]:mb-3 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-subtle [&_pre]:bg-surface-inset [&_pre]:p-3",
+  "[&_pre>code]:bg-transparent [&_pre>code]:p-0 [&_pre>code]:text-fg-secondary",
+  "[&_hr]:my-4 [&_hr]:border-subtle",
+  "[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs",
+  "[&_thead]:bg-surface-elevated",
+  "[&_th]:border [&_th]:border-subtle [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_th]:text-fg-primary",
+  "[&_td]:border [&_td]:border-subtle [&_td]:px-2 [&_td]:py-1.5 [&_td]:align-top [&_td]:text-fg-secondary",
+  "[&_tr:nth-child(even)]:bg-surface-inset/40",
+].join(" ");
 
-export function MarkdownView({ children, className }: { children: string; className?: string }) {
+export function MarkdownView({
+  children,
+  className = "",
+}: {
+  children: string;
+  className?: string;
+}) {
   return (
-    <div className={className}>
-      <Markdown remarkPlugins={[remarkGfm]} className={PROSE_CLASS}>
-        {children}
-      </Markdown>
+    <div className={`${WRAPPER_CLASS} ${className}`}>
+      <Markdown remarkPlugins={[remarkGfm]}>{children}</Markdown>
     </div>
   );
 }

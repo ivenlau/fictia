@@ -39,7 +39,7 @@ export function AiGenerateButton({
         type="button"
         onClick={() => mutation.mutate({ kind, fields, current })}
         disabled={disabled || mutation.isPending}
-        className="flex items-center gap-1 rounded-md border border-subtle bg-surface-card px-2 py-1 font-caption text-[11px] text-fg-secondary transition-colors hover:bg-surface-secondary hover:text-fg-primary disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex items-center gap-1 rounded-md border border-accent/30 bg-accent/8 px-2 py-1 font-caption text-[11px] text-accent transition-all hover:border-accent/50 hover:bg-accent/15 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
         title="根据已填信息用 AI 生成/更新正文"
       >
         {mutation.isPending ? (

@@ -56,7 +56,7 @@ export function CustomToolsPanel() {
           </button>
           <button
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1 rounded bg-accent px-2 py-1 font-caption text-[11px] font-medium text-white hover:bg-accent-deep"
+            className="flex items-center gap-1 rounded bg-accent px-2 py-1 font-caption text-[11px] font-medium text-accent-ink hover:bg-accent-light"
           >
             <Plus size={12} /> 新建
           </button>
@@ -83,14 +83,14 @@ export function CustomToolsPanel() {
               <div className="flex shrink-0 items-center gap-1">
                 <button
                   onClick={() => toggleEnabled(t)}
-                  className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${t.enabled ? "bg-green-500/15 text-green-600" : "bg-surface-muted text-fg-muted"}`}
+                  className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${t.enabled ? "bg-success/15 text-success" : "bg-surface-muted text-fg-muted"}`}
                 >
                   {t.enabled ? "启用" : "禁用"}
                 </button>
                 <button onClick={() => setEditing(t)} className="p-1 rounded text-fg-muted hover:bg-surface-secondary hover:text-fg-primary" title="编辑">
                   <Pencil size={12} />
                 </button>
-                <button onClick={() => remove(t)} className="p-1 rounded text-fg-muted hover:bg-red-500/15 hover:text-red-500" title="删除">
+                <button onClick={() => remove(t)} className="p-1 rounded text-fg-muted hover:bg-error/15 hover:text-error" title="删除">
                   <Trash2 size={12} />
                 </button>
               </div>

@@ -57,7 +57,7 @@ export function AutopilotDialog({ startChapter, maxChapter, onClose, onConfirm }
           </div>
           <button
             onClick={() => onConfirm({ startChapter, endChapter })}
-            className="w-full rounded-md bg-accent text-white py-1.5 text-xs hover:bg-accent/90 transition-colors"
+            className="w-full rounded-md bg-accent text-accent-ink py-1.5 text-xs hover:bg-accent/90 transition-colors"
           >
             开始自动驾驶
           </button>

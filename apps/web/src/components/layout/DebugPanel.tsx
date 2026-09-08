@@ -290,7 +290,7 @@ export function DebugPanel() {
               </button>
               <button
                 onClick={confirmDelete}
-                className="flex items-center gap-1.5 rounded-md bg-error px-4 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-error/90"
+                className="flex items-center gap-1.5 rounded-md bg-error px-4 py-2 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-error/90"
               >
                 <Trash2 size={14} />
                 {confirmTarget.kind === "one" ? "删除" : "清空"}

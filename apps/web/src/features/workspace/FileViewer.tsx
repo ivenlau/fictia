@@ -361,7 +361,7 @@ export function FileViewer({ fileId }: FileViewerProps) {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50"
+                  className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50"
                 >
                   {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                   保存
@@ -403,7 +403,7 @@ export function FileViewer({ fileId }: FileViewerProps) {
               {selectionPos && selectedText && (
                 <button
                   onClick={() => handleOpenRewrite(selectedText)}
-                  className="fixed z-50 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white shadow-lg transition-colors hover:bg-accent-deep"
+                  className="fixed z-50 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink shadow-lg transition-colors hover:bg-accent-light"
                   style={{ left: selectionPos.x, top: selectionPos.y, transform: "translate(-50%, -100%)" }}
                 >
                   <Wand2 size={12} />

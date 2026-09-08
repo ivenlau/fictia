@@ -344,7 +344,7 @@ function ProviderCard({
                 />
                 <button
                   onClick={addModel}
-                  className="rounded bg-accent px-2 py-1 font-caption text-[11px] text-white hover:bg-accent-deep"
+                  className="rounded bg-accent px-2 py-1 font-caption text-[11px] text-accent-ink hover:bg-accent-light"
                 >
                   添加
                 </button>
@@ -412,7 +412,7 @@ function ProviderCard({
                       <button
                         onClick={() => saveEditModel(m.id)}
                         disabled={savingEdit}
-                        className="flex items-center gap-1 rounded bg-accent px-2 py-1 font-caption text-[11px] text-white hover:bg-accent-deep disabled:opacity-50"
+                        className="flex items-center gap-1 rounded bg-accent px-2 py-1 font-caption text-[11px] text-accent-ink hover:bg-accent-light disabled:opacity-50"
                       >
                         {savingEdit ? <Loader2 size={11} className="animate-spin" /> : null}
                         保存
@@ -523,7 +523,7 @@ function CustomProviderForm({
         <button
           onClick={submit}
           disabled={creating}
-          className="rounded bg-accent px-3 py-1 font-caption text-xs text-white hover:bg-accent-deep disabled:opacity-50"
+          className="rounded bg-accent px-3 py-1 font-caption text-xs text-accent-ink hover:bg-accent-light disabled:opacity-50"
         >
           {creating ? "创建中..." : "创建"}
         </button>

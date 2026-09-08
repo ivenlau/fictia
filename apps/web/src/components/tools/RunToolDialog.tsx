@@ -40,7 +40,7 @@ function DocValueToggle({ value, onChange }: { value: DocValue; onChange: (v: Do
           key={k}
           type="button"
           onClick={() => onChange(k)}
-          className={`rounded px-2 py-0.5 font-caption text-[10px] ${value === k ? "bg-accent text-white" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}
+          className={`rounded px-2 py-0.5 font-caption text-[10px] ${value === k ? "bg-accent text-accent-ink" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}
         >
           {k === "path" ? "路径" : "正文"}
         </button>
@@ -138,9 +138,9 @@ export function RunToolDialog({
         {result ? (
           /* ===== 结果视图 ===== */
           <div className="space-y-3">
-            <div className={`rounded-md border p-3 ${result.ok ? "border-green-500/40 bg-green-500/5" : "border-red-500/40 bg-red-500/5"}`}>
+            <div className={`rounded-md border p-3 ${result.ok ? "border-success/40 bg-success/8" : "border-error/40 bg-error/8"}`}>
               <div className="mb-1 flex items-center gap-2 font-caption text-[11px] font-medium">
-                {result.ok ? <span className="text-green-600">✓ 执行完成{result.durationMs ? ` · ${result.durationMs}ms` : ""}</span> : <span className="text-red-500">✗ 执行失败</span>}
+                {result.ok ? <span className="text-success">✓ 执行完成{result.durationMs ? ` · ${result.durationMs}ms` : ""}</span> : <span className="text-error">✗ 执行失败</span>}
               </div>
               <pre className="whitespace-pre-wrap break-words font-caption text-[11px] text-fg-primary max-h-72 overflow-y-auto">
                 {result.ok ? result.output || "（无输出）" : result.error || "未知错误"}
@@ -150,7 +150,7 @@ export function RunToolDialog({
               <button onClick={() => setResult(null)} className="rounded-md px-3 py-1.5 font-caption text-xs text-fg-secondary hover:bg-surface-secondary">
                 重新执行
               </button>
-              <button onClick={onClose} className="rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-white hover:bg-accent-deep">
+              <button onClick={onClose} className="rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-accent-ink hover:bg-accent-light">
                 关闭
               </button>
             </div>
@@ -170,7 +170,7 @@ export function RunToolDialog({
                     <span className="font-caption text-[11px] font-medium text-fg-primary">
                       {name}
                       <span className="ml-1 text-fg-muted">({schema.type || "any"})</span>
-                      {required && <span className="ml-1 text-red-500">*</span>}
+                      {required && <span className="ml-1 text-error">*</span>}
                     </span>
                     {schema.description && <span className="font-caption text-[10px] text-fg-muted truncate ml-2">{schema.description}</span>}
                   </div>
@@ -183,7 +183,7 @@ export function RunToolDialog({
                       <button
                         key={opt.k}
                         onClick={() => setMatch(name, { type: opt.k } as Partial<ParamMatch>)}
-                        className={`rounded px-2 py-0.5 font-caption text-[10px] ${m.type === opt.k ? "bg-accent text-white" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}
+                        className={`rounded px-2 py-0.5 font-caption text-[10px] ${m.type === opt.k ? "bg-accent text-accent-ink" : "bg-surface-card text-fg-secondary hover:bg-surface-secondary"}`}
                       >
                         {opt.label}
                       </button>
@@ -223,7 +223,7 @@ export function RunToolDialog({
               );
             })}
 
-            {error && <p className="font-caption text-[11px] text-red-500">{error}</p>}
+            {error && <p className="font-caption text-[11px] text-error">{error}</p>}
 
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={onClose} className="rounded-md px-3 py-1.5 font-caption text-xs text-fg-secondary hover:bg-surface-secondary">
@@ -232,7 +232,7 @@ export function RunToolDialog({
               <button
                 onClick={onRun}
                 disabled={busy}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-white hover:bg-accent-deep disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-accent-ink hover:bg-accent-light disabled:opacity-40"
               >
                 {busy ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
                 执行

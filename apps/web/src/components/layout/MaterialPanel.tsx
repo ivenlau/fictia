@@ -58,7 +58,7 @@ export function MaterialPanel() {
   const resizeHandle = (
     <div
       onMouseDown={handleResizeStart}
-      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/30 transition-colors z-10"
+      className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize transition-colors hover:bg-accent/40"
     />
   );
 
@@ -80,8 +80,8 @@ export function MaterialPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full relative">
-      <div className="px-3 pt-3 pb-1">
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <div className="shrink-0 px-3 pb-1 pt-3">
         <p className="font-caption text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
           素材库
         </p>
@@ -90,7 +90,7 @@ export function MaterialPanel() {
         )}
       </div>
 
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-subtle">
+      <div className="flex items-center gap-1 border-b border-subtle px-3 py-2">
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = tab === t.key;
@@ -111,13 +111,13 @@ export function MaterialPanel() {
         })}
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {tab === "genre" ? (
           <GenreCardSection novelId={novelId} />
         ) : tab === "craft" ? (
           <CraftSection novelId={novelId} />
         ) : tab === "prompt" ? (
-          <div className="flex flex-col h-full overflow-y-auto">
+          <div className="flex h-full flex-col overflow-y-auto">
             <PreferencesSection novelId={novelId} />
             <UserMaterialsManager novelId={novelId} type="prompt-snippet" />
           </div>

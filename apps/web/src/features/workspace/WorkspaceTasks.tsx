@@ -198,7 +198,7 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
         {!isRunning && (
           <button
             onClick={handleStartPipeline}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-accent-deep"
+            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink transition-colors hover:bg-accent-light"
           >
             <Zap size={13} />
             开始 Pipeline
@@ -207,7 +207,7 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
         {isRunning && !isPaused && (
           <button
             onClick={handlePausePipeline}
-            className="flex items-center gap-1.5 rounded-md bg-warning/90 px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-warning"
+            className="flex items-center gap-1.5 rounded-md bg-warning/90 px-3 py-1.5 font-body text-xs font-medium text-accent-ink transition-colors hover:bg-warning"
           >
             <Pause size={13} />
             暂停
@@ -216,7 +216,7 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
         {isRunning && isPaused && (
           <button
             onClick={handleResumePipeline}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-accent-deep"
+            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink transition-colors hover:bg-accent-light"
           >
             <Play size={13} />
             继续
@@ -550,7 +550,7 @@ function RerunModal({
           </button>
           <button
             onClick={() => onConfirm(directive)}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-accent-deep"
+            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light"
           >
             <RotateCcw size={14} />
             重新执行

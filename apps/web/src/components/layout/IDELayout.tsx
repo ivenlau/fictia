@@ -28,16 +28,32 @@ export function IDELayout({ children }: IDELayoutProps) {
   const explorerVisible = useUIStore((s) => s.explorerVisible);
   const explorerWidth = useUIStore((s) => s.explorerWidth);
 
-  const showSidePanel = explorerVisible && (activePanel === "search" || activePanel === "agent" || activePanel === "explorer" || activePanel === "debug" || activePanel === "knowledge" || activePanel === "material" || activePanel === "tools");
+  const showSidePanel =
+    explorerVisible &&
+    (activePanel === "search" ||
+      activePanel === "agent" ||
+      activePanel === "explorer" ||
+      activePanel === "debug" ||
+      activePanel === "knowledge" ||
+      activePanel === "material" ||
+      activePanel === "tools");
 
   const novelName = activeFile?.novelTitle ?? "Fictia";
 
-  // Ensure overview tab exists
   const tabsWithOverview = useMemo(() => {
     const hasOverview = openFiles.some((f) => f.type === "overview");
     if (!hasOverview && openFiles.length > 0) {
-      // Add a virtual overview tab
-      return [{ id: "__overview__", type: "overview" as const, label: "概览", path: "", novelId: openFiles[0]?.novelId, novelTitle: openFiles[0]?.novelTitle }, ...openFiles];
+      return [
+        {
+          id: "__overview__",
+          type: "overview" as const,
+          label: "概览",
+          path: "",
+          novelId: openFiles[0]?.novelId,
+          novelTitle: openFiles[0]?.novelTitle,
+        },
+        ...openFiles,
+      ];
     }
     if (openFiles.length === 0) {
       return [{ id: "__overview__", type: "overview" as const, label: "概览", path: "" }];
@@ -45,26 +61,39 @@ export function IDELayout({ children }: IDELayoutProps) {
     return openFiles;
   }, [openFiles]);
 
-  // Determine which tab to show
   const activeTabId = activeFileId ?? "__overview__";
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-surface-primary text-fg-primary">
+    <div className="flex h-screen flex-col overflow-hidden bg-surface-primary text-fg-primary">
       <TopBar path={novelName} />
 
       <div className="flex flex-1 overflow-hidden">
         <ActivityBar />
         {showSidePanel && (
           <aside
-            className="flex flex-col bg-surface-card border-r border-subtle shrink-0 overflow-hidden"
+            className="panel-enter flex shrink-0 flex-col overflow-hidden border-r border-subtle bg-surface-secondary"
             style={{ width: explorerWidth }}
           >
-            {activePanel === "knowledge" ? <KnowledgePanel /> : activePanel === "material" ? <MaterialPanel /> : activePanel === "search" ? <SearchPanel /> : activePanel === "agent" ? <ChatPanel /> : activePanel === "debug" ? <DebugPanel /> : activePanel === "tools" ? <CustomToolsPanel /> : <Explorer />}
+            {activePanel === "knowledge" ? (
+              <KnowledgePanel />
+            ) : activePanel === "material" ? (
+              <MaterialPanel />
+            ) : activePanel === "search" ? (
+              <SearchPanel />
+            ) : activePanel === "agent" ? (
+              <ChatPanel />
+            ) : activePanel === "debug" ? (
+              <DebugPanel />
+            ) : activePanel === "tools" ? (
+              <CustomToolsPanel />
+            ) : (
+              <Explorer />
+            )}
           </aside>
         )}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden">
           <EditorTabs />
-          <main className="flex-1 flex flex-col overflow-hidden relative">
+          <main className="relative flex flex-1 flex-col overflow-hidden bg-surface-primary">
             {tabsWithOverview.map((file) => {
               const isActive = file.id === activeTabId;
               return (
@@ -85,12 +114,7 @@ export function IDELayout({ children }: IDELayoutProps) {
         </div>
       </div>
 
-      <StatusBar
-        novelName={novelName}
-        branch="main"
-        node=""
-        aiStatus="AI Ready"
-      />
+      <StatusBar novelName={novelName} branch="main" node="" aiStatus="AI Ready" />
     </div>
   );
 }

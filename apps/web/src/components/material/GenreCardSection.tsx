@@ -98,31 +98,31 @@ export function GenreCardSection({ novelId }: { novelId: string }) {
           return (
             <div
               key={card.key}
-              className={`group rounded-md border px-3 py-2 cursor-pointer transition-colors ${
+              className={`group cursor-pointer rounded-lg border px-3 py-2.5 transition-all duration-150 ${
                 selected
-                  ? "border-accent/60 bg-accent-bg"
-                  : "border-subtle hover:border-accent/40 hover:bg-surface-secondary"
+                  ? "border-accent/60 bg-accent/10 shadow-glow"
+                  : "border-subtle bg-surface-card hover-lift hover:border-strong hover:bg-surface-elevated"
               }`}
               onClick={() => setPreview(card)}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-body text-xs font-medium text-fg-primary truncate">
+                <span className="truncate font-body text-[13px] font-semibold text-fg-primary">
                   {card.name}
                 </span>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex shrink-0 items-center gap-1">
                   {selected && (
                     <span className="flex items-center gap-0.5 text-accent" title="当前选中">
                       <Check size={12} />
                     </span>
                   )}
-                  <Eye
-                    size={12}
-                    className="text-fg-muted opacity-0 group-hover:opacity-100 transition-opacity"
-                  />
+                  <span className="flex items-center gap-1 rounded-md bg-surface-inset px-1.5 py-0.5 font-caption text-[10px] text-fg-muted opacity-0 transition-opacity group-hover:opacity-100">
+                    <Eye size={11} />
+                    预览
+                  </span>
                 </div>
               </div>
               {card.description && (
-                <p className="font-caption text-[10px] text-fg-muted mt-0.5 line-clamp-2">
+                <p className="mt-1 line-clamp-2 font-body text-[11px] leading-relaxed text-fg-muted">
                   {card.description}
                 </p>
               )}
@@ -146,7 +146,7 @@ export function GenreCardSection({ novelId }: { novelId: string }) {
                 disabled={saving}
                 onClick={() => void clone(preview.key)}
                 title="克隆一份本作可编辑副本（不改动内置）"
-                className="flex items-center gap-1 font-body text-xs px-3 py-1.5 rounded-md border border-subtle text-fg-secondary hover:bg-surface-secondary transition-colors"
+                className="flex items-center gap-1 rounded-md border border-subtle bg-surface-card px-3 py-1.5 font-body text-xs text-fg-secondary transition-colors hover:border-strong hover:bg-surface-elevated hover:text-fg-primary"
               >
                 <Copy size={12} />
                 克隆为本作卡
@@ -157,7 +157,7 @@ export function GenreCardSection({ novelId }: { novelId: string }) {
                   void select(preview.key);
                   setPreview(null);
                 }}
-                className="font-body text-xs px-3 py-1.5 rounded-md bg-accent text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+                className="rounded-md bg-accent px-3 py-1.5 font-body text-xs font-semibold text-accent-ink transition-all hover:bg-accent-light active:scale-[0.97] disabled:opacity-40"
               >
                 {preview.key === genreCard ? "已选为本作体裁" : "设为本作体裁"}
               </button>

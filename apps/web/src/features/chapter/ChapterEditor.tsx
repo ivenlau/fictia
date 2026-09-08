@@ -508,16 +508,16 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-subtle bg-surface-card px-4 py-2.5 shrink-0">
+      <div className="flex items-center justify-between gap-3 border-b border-subtle bg-surface-secondary px-4 py-2.5 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="min-w-0">
-            <h2 className="font-heading text-sm font-semibold text-fg-primary truncate">
+            <h2 className="font-display text-sm font-semibold text-fg-primary truncate">
               {chapterTitle && /^第\d+章/.test(chapterTitle)
                 ? chapterTitle
                 : `第${chapterNumber}章${chapterTitle ? ` ${chapterTitle}` : ""}`}
             </h2>
             <p className="font-caption text-[11px] text-fg-muted">
-              {wordCount} 字 · v{version}
+              {wordCount.toLocaleString()} 字 · v{version}
             </p>
           </div>
         </div>
@@ -526,7 +526,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
           <button
             onClick={handleWrite}
             disabled={isAnyWriting}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-semibold text-accent-ink transition-all hover:bg-accent-light active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isThisWriting ? (
               <Loader2 size={13} className="animate-spin" />
@@ -674,7 +674,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
               {selectionPos && selectedText && (
                 <button
                   onClick={() => handleOpenRewrite(selectedText)}
-                  className="fixed z-50 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white shadow-lg transition-colors hover:bg-accent-deep"
+                  className="fixed z-50 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink shadow-lg transition-colors hover:bg-accent-light"
                   style={{ left: selectionPos.x, top: selectionPos.y, transform: "translate(-50%, -100%)" }}
                 >
                   <Wand2 size={12} />

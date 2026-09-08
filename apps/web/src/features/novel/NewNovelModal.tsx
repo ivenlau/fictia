@@ -97,11 +97,11 @@ export function NewNovelModal() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-[3px] animate-fade-in"
       onClick={() => setShowNewNovel(false)}
     >
       <div
-        className="relative flex h-[70vh] w-[1100px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-subtle bg-surface-primary shadow-2xl"
+        className="relative flex h-[70vh] w-[1100px] max-w-[95vw] flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-primary shadow-panel animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-subtle px-5 py-3">
@@ -143,7 +143,7 @@ export function NewNovelModal() {
                     onClick={() => handleGenreSelect(g)}
                     className={`rounded-md px-2.5 py-1 font-caption text-xs transition-colors ${
                       genre === g
-                        ? "bg-accent text-white"
+                        ? "bg-accent text-accent-ink"
                         : "bg-surface-muted text-fg-secondary hover:bg-surface-secondary"
                     }`}
                   >
@@ -287,7 +287,7 @@ export function NewNovelModal() {
             <button
               onClick={handleSubmit}
               disabled={!isValid || createNovel.isPending}
-              className="flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 font-body text-sm font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createNovel.isPending ? (
                 <Loader2 size={14} className="animate-spin" />

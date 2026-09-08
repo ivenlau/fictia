@@ -84,8 +84,11 @@ export function Explorer() {
   return (
     <div className="flex flex-col h-full relative">
       {/* Header */}
-      <div className="px-3 pt-3 pb-1">
-        <p className="font-caption text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
+      <div className="border-b border-subtle px-3 pb-2 pt-3">
+        <p className="font-display text-[12px] font-semibold tracking-wide text-fg-primary">
+          资源管理
+        </p>
+        <p className="mt-0.5 font-caption text-[10px] uppercase tracking-[0.12em] text-fg-muted">
           EXPLORER
         </p>
       </div>

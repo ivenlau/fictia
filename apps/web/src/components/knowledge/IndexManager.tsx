@@ -209,7 +209,7 @@ export function IndexManager({ novelId }: IndexManagerProps) {
         <button
           onClick={() => runIndex(false)}
           disabled={busy}
-          className="flex items-center justify-center gap-1 rounded-md bg-accent px-2 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-1 rounded-md bg-accent px-2 py-1.5 font-body text-[11px] font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {vectorIndexing ? (
             <Loader2 size={12} className="animate-spin" />

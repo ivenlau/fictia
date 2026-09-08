@@ -126,7 +126,7 @@ export function EditNovelModal({ novel, onClose }: EditNovelModalProps) {
                     onClick={() => handleGenreSelect(g)}
                     className={`rounded-md px-2.5 py-1 font-caption text-xs transition-colors ${
                       genre === g
-                        ? "bg-accent text-white"
+                        ? "bg-accent text-accent-ink"
                         : "bg-surface-muted text-fg-secondary hover:bg-surface-secondary"
                     }`}
                   >
@@ -249,7 +249,7 @@ export function EditNovelModal({ novel, onClose }: EditNovelModalProps) {
             <button
               onClick={handleSubmit}
               disabled={!isValid || updateNovel.isPending}
-              className="flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 font-body text-sm font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {updateNovel.isPending ? (
                 <Loader2 size={14} className="animate-spin" />
