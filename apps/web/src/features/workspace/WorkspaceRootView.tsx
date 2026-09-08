@@ -36,6 +36,7 @@ import { runAutopilot } from "@/api/writing-loop";
 import { exportMarkdown, exportEpub, exportTxt } from "@/utils/export";
 import { WorkspaceTasks } from "./WorkspaceTasks";
 import { countWords } from "@/lib/markdown";
+import { Modal, ModalShell, ModalButton } from "@/components/ui/Modal";
 import type { WorkspaceFile } from "@fictia/shared";
 import { STAGE_ORDER, STAGE_LABELS } from "@fictia/shared";
 
@@ -293,7 +294,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
                 <button
                   onClick={() => setShowExportMenu((v) => !v)}
                   disabled={!allChaptersWritten}
-                  className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-semibold text-accent-ink transition-all active:scale-[0.97] hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="btn-press flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-semibold text-accent-ink transition-all hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
                   title={allChaptersWritten ? "导出小说" : "所有章节生成完毕后可导出"}
                 >
                   <Download size={13} />
@@ -373,7 +374,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
             <button
               onClick={() => setShowAutopilot(true)}
               disabled={allChaptersWritten || autopilotRunning}
-              className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-semibold text-accent-ink transition-all active:scale-[0.97] hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+              className="btn-press flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-semibold text-accent-ink transition-all hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {autopilotRunning ? <Loader2 size={12} className="animate-spin" /> : <FastForward size={12} />}
               {autopilotRunning ? "自动驾驶..." : "自动驾驶"}
@@ -389,15 +390,20 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
           {/* Chapter List */}
           {chapterFiles.length > 0 ? (
             <div className="space-y-2">
-              {chapterFiles.map((ch) => (
-                <FileChapterCard
+              {chapterFiles.map((ch, idx) => (
+                <div
                   key={ch.path}
-                  chapter={ch}
-                  novelId={novelId}
-                  novelTitle={novel.title}
-                  disabled={autopilotRunning}
-                  onRefresh={refreshFiles}
-                />
+                  className="stagger-child"
+                  style={{ ["--stagger-i" as string]: Math.min(idx, 10) }}
+                >
+                  <FileChapterCard
+                    chapter={ch}
+                    novelId={novelId}
+                    novelTitle={novel.title}
+                    disabled={autopilotRunning}
+                    onRefresh={refreshFiles}
+                  />
+                </div>
               ))}
             </div>
           ) : (
@@ -427,101 +433,61 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
       )}
 
       {/* Reset Confirmation */}
-      {showResetConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowResetConfirm(false)}
-        >
-          <div
-            className="w-[400px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-heading text-base font-bold text-fg-primary mb-2">
-              重置小说
-            </h3>
-            <p className="font-body text-sm text-fg-secondary mb-3">
-              选择重置起点：将从该阶段起清空产出（含后续所有阶段），前面已确认的阶段保留。
-            </p>
-            <select
-              value={resetFromStage}
-              onChange={(e) => setResetFromStage(e.target.value)}
-              className="w-full rounded-md border border-subtle bg-surface-card px-3 py-2 font-body text-sm text-fg-primary mb-3 focus:outline-none focus:border-accent"
-            >
-              <option value="all">重置全部（恢复新建状态）</option>
-              {STAGE_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  从「{(STAGE_LABELS as Record<string, string>)[s]}」开始重置
-                </option>
-              ))}
-            </select>
-            <p className="font-body text-xs text-fg-muted mb-5">
-              {resetFromStage === "all"
-                ? "清空所有 Agent 产出、章节、聊天记录，恢复到新建状态（保留基本信息）。"
-                : `将删除「${(STAGE_LABELS as Record<string, string>)[resetFromStage]}」及其后所有阶段的产出；前面阶段与聊天记录保留。`}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleReset}
-                disabled={resetNovel.isPending}
-                className="flex items-center gap-1.5 rounded-md bg-warning px-4 py-2 font-body text-sm font-semibold text-accent-ink transition-colors hover:bg-warning/90 disabled:opacity-50"
-              >
+      <Modal open={showResetConfirm} onClose={() => setShowResetConfirm(false)} maxWidthClass="w-full max-w-[400px]">
+        <ModalShell
+          title="重置小说"
+          description="选择重置起点：将从该阶段起清空产出（含后续所有阶段），前面已确认的阶段保留。"
+          footer={
+            <>
+              <ModalButton onClick={() => setShowResetConfirm(false)}>取消</ModalButton>
+              <ModalButton tone="warning" onClick={handleReset} disabled={resetNovel.isPending}>
                 {resetNovel.isPending ? (
-                  <Loader2 size={14} className="animate-spin" />
+                  <span className="inline-flex items-center gap-1.5">
+                    <Loader2 size={14} className="animate-spin" />
+                    确认重置
+                  </span>
                 ) : (
-                  <RotateCcw size={14} />
+                  "确认重置"
                 )}
-                确认重置
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </ModalButton>
+            </>
+          }
+        >
+          <select
+            value={resetFromStage}
+            onChange={(e) => setResetFromStage(e.target.value)}
+            className="w-full rounded-md border border-subtle bg-surface-card px-3 py-2 font-body text-sm text-fg-primary mb-3 focus:outline-none focus:border-accent"
+          >
+            <option value="all">重置全部（恢复新建状态）</option>
+            {STAGE_ORDER.map((s) => (
+              <option key={s} value={s}>
+                从「{(STAGE_LABELS as Record<string, string>)[s]}」开始重置
+              </option>
+            ))}
+          </select>
+          <p className="font-body text-xs text-fg-muted mb-5">
+            {resetFromStage === "all"
+              ? "清空所有 Agent 产出、章节、聊天记录，恢复到新建状态（保留基本信息）。"
+              : `将删除「${(STAGE_LABELS as Record<string, string>)[resetFromStage]}」及其后所有阶段的产出；前面阶段与聊天记录保留。`}
+          </p>
+        </ModalShell>
+      </Modal>
 
       {/* Delete Confirmation */}
-      {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowDeleteConfirm(false)}
-        >
-          <div
-            className="w-[400px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-heading text-base font-bold text-fg-primary mb-2">
-              确认删除
-            </h3>
-            <p className="font-body text-sm text-fg-secondary mb-5">
-              确定要删除小说「{novel.title}」吗？此操作不可撤销，所有章节和文档将被永久删除。
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteNovel.isPending}
-                className="flex items-center gap-1.5 rounded-md bg-error px-4 py-2 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-error/90 disabled:opacity-50"
-              >
-                {deleteNovel.isPending ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Trash2 size={14} />
-                )}
-                确认删除
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} maxWidthClass="w-full max-w-[400px]">
+        <ModalShell
+          title="确认删除"
+          description={`确定要删除小说「${novel.title}」吗？此操作不可撤销，所有章节和文档将被永久删除。`}
+          footer={
+            <>
+              <ModalButton onClick={() => setShowDeleteConfirm(false)}>取消</ModalButton>
+              <ModalButton tone="danger" onClick={handleDelete} disabled={deleteNovel.isPending}>
+                {deleteNovel.isPending ? "删除中..." : "确认删除"}
+              </ModalButton>
+            </>
+          }
+        />
+      </Modal>
     </div>
   );
 }
@@ -543,8 +509,20 @@ function FileChapterCard({
   const setWritingChapter = useAgentStore((s) => s.setWritingChapter);
   const openFile = useEditorStore((s) => s.openFile);
   const [showRerunModal, setShowRerunModal] = useState(false);
+  const [justFinished, setJustFinished] = useState(false);
   const isThisWriting = writingChapterId === chapter.path;
   const isAnyWriting = writingChapterId !== null || !!disabled;
+  const prevWriting = useRef(isThisWriting);
+
+  useEffect(() => {
+    if (prevWriting.current && !isThisWriting && chapter.hasContent) {
+      setJustFinished(true);
+      window.dispatchEvent(new CustomEvent("fictia:success"));
+      const t = window.setTimeout(() => setJustFinished(false), 600);
+      return () => window.clearTimeout(t);
+    }
+    prevWriting.current = isThisWriting;
+  }, [isThisWriting, chapter.hasContent]);
 
   const handleGenerate = useCallback(async (directive?: string) => {
     setWritingChapter(chapter.path);
@@ -585,8 +563,23 @@ function FileChapterCard({
     <>
       <div
         onClick={handleOpen}
-        className="group rounded-lg border border-subtle bg-surface-card p-3.5 text-left transition-colors hover:border-accent/40 cursor-pointer"
+        className={`group relative overflow-hidden rounded-lg border bg-surface-card p-3.5 text-left transition-colors cursor-pointer ${
+          isThisWriting
+            ? "border-accent/45 shadow-glow"
+            : "border-subtle hover:border-accent/40"
+        }`}
       >
+        {isThisWriting && (
+          <div className="ink-progress ink-progress-indeterminate absolute inset-x-0 bottom-0" aria-hidden>
+            <i />
+          </div>
+        )}
+        {justFinished && (
+          <span
+            className="pointer-events-none absolute inset-0 rounded-lg shadow-[0_0_0_1px_rgb(var(--c-success)/0.45),0_0_18px_rgb(var(--c-success)/0.2)]"
+            aria-hidden
+          />
+        )}
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent mt-0.5">
             <BookOpen size={15} />
@@ -607,7 +600,12 @@ function FileChapterCard({
                 </>
               ) : (
                 <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-caption bg-warning/15 text-warning">
-                  待生成
+                  {isThisWriting ? "落墨中" : "待生成"}
+                </span>
+              )}
+              {isThisWriting && (
+                <span className="font-caption text-[10px] text-accent animate-pulse-soft">
+                  Agent 正在书写…
                 </span>
               )}
             </div>
@@ -617,7 +615,7 @@ function FileChapterCard({
               <button
                 onClick={(e) => { e.stopPropagation(); handleOpen(); }}
                 disabled={isAnyWriting}
-                className="flex items-center gap-1 rounded-md border border-subtle px-2.5 py-1.5 font-body text-[11px] text-fg-secondary transition-colors hover:bg-surface-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-press flex items-center gap-1 rounded-md border border-subtle px-2.5 py-1.5 font-body text-[11px] text-fg-secondary transition-colors hover:bg-surface-muted disabled:opacity-50 disabled:cursor-not-allowed"
                 title="查看章节"
               >
                 <Eye size={12} />
@@ -634,7 +632,7 @@ function FileChapterCard({
                 }
               }}
               disabled={isAnyWriting}
-              className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-press flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 font-body text-[11px] font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
               title={chapter.hasContent ? "重新生成章节" : "生成章节内容"}
             >
               {isThisWriting ? (
@@ -674,53 +672,43 @@ function ChapterRerunModal({
   onCancel: () => void;
 }) {
   const [directive, setDirective] = useState("");
+  const [open, setOpen] = useState(true);
+
+  const close = () => {
+    setOpen(false);
+    window.setTimeout(onCancel, 140);
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="w-[440px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+    <Modal open={open} onClose={close} maxWidthClass="w-full max-w-[440px]">
+      <ModalShell
+        title={`重新生成「${chapterLabel}」`}
+        description="输入自定义指令可以引导 agent 按照你的要求重新生成。留空则直接重新生成。"
+        footer={
+          <>
+            <ModalButton onClick={close}>取消</ModalButton>
+            <ModalButton tone="primary" onClick={() => onConfirm(directive)}>
+              重新生成
+            </ModalButton>
+          </>
+        }
       >
-        <h3 className="font-heading text-base font-bold text-fg-primary mb-1">
-          重新生成「{chapterLabel}」
-        </h3>
-        <p className="font-body text-sm text-fg-secondary mb-4">
-          输入自定义指令可以引导 agent 按照你的要求重新生成。留空则直接重新生成。
-        </p>
         <textarea
           value={directive}
           onChange={(e) => setDirective(e.target.value)}
           placeholder="例如：请增加更多的环境描写和心理活动..."
           rows={3}
-          className="w-full rounded-lg border border-subtle bg-surface-primary px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted/50 focus:border-accent focus:outline-none resize-none"
+          className="w-full rounded-lg border border-subtle bg-surface-primary px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted/50 focus:border-accent focus:outline-none resize-none mb-2"
         />
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={onCancel}
-            className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => onConfirm(directive)}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light"
-          >
-            <RefreshCw size={14} />
-            重新生成
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalShell>
+    </Modal>
   );
 }
 
 function WelcomeState({ onCreateNovel }: { onCreateNovel: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4">
-      <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-accent-bg text-accent">
+      <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-accent-bg text-accent animate-float-soft">
         <BookOpen size={28} />
       </div>
       <div className="text-center">
@@ -733,7 +721,7 @@ function WelcomeState({ onCreateNovel }: { onCreateNovel: () => void }) {
       </div>
       <button
         onClick={onCreateNovel}
-        className="mt-2 flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light"
+        className="btn-press mt-2 flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light"
       >
         <Plus size={16} />
         创建新小说

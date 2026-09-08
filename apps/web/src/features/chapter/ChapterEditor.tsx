@@ -526,7 +526,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
           <button
             onClick={handleWrite}
             disabled={isAnyWriting}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-semibold text-accent-ink transition-all hover:bg-accent-light active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-press flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-semibold text-accent-ink transition-all hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isThisWriting ? (
               <Loader2 size={13} className="animate-spin" />
@@ -535,7 +535,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             ) : (
               <PenLine size={13} />
             )}
-            {isThisWriting ? "生成中..." : wordCount > 0 ? "重新生成" : "生成"}
+            {isThisWriting ? "落墨中..." : wordCount > 0 ? "重新生成" : "生成"}
           </button>
           {!isFileMode && (
             <button
@@ -638,6 +638,12 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
         </div>
       </div>
 
+      {isThisWriting && (
+        <div className="ink-progress ink-progress-indeterminate shrink-0" aria-hidden>
+          <i />
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto p-4 lg:p-6">
         <div className="mx-auto max-w-3xl space-y-6">
           {chapterSummary && (
@@ -669,7 +675,12 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             </div>
           )}
           {viewMode === "preview" ? (
-            <div ref={contentRef} onMouseUp={handleTextSelection} className="relative">
+            <div
+              key="preview"
+              ref={contentRef}
+              onMouseUp={handleTextSelection}
+              className="relative crossfade-swap"
+            >
               <ChapterReading content={content} />
               {selectionPos && selectedText && (
                 <button
@@ -684,9 +695,10 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             </div>
           ) : (
             <textarea
+              key="edit"
               value={content}
               onChange={handleContentChange}
-              className="min-h-[70vh] w-full resize-none rounded-lg border border-subtle bg-surface-card p-6 font-body text-sm text-fg-primary leading-[1.85] focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20"
+              className="crossfade-swap min-h-[70vh] w-full resize-none rounded-lg border border-subtle bg-surface-card p-6 font-body text-sm text-fg-primary leading-[1.85] focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20"
               placeholder="开始写作..."
             />
           )}

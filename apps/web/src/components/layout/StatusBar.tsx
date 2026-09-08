@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { GitBranch, Bot, FileText } from "lucide-react";
 
 interface StatusBarProps {
@@ -7,14 +8,33 @@ interface StatusBarProps {
   aiStatus: string;
 }
 
+/** 全局成功波纹：window.dispatchEvent(new CustomEvent("fictia:success")) */
 export function StatusBar({
   novelName,
   branch,
   node,
   aiStatus,
 }: StatusBarProps) {
+  const [sweep, setSweep] = useState(false);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const on = () => {
+      setSweep(false);
+      requestAnimationFrame(() => setSweep(true));
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setSweep(false), 500);
+    };
+    window.addEventListener("fictia:success", on);
+    return () => {
+      window.removeEventListener("fictia:success", on);
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   return (
-    <footer className="h-7 flex items-center justify-between px-3 bg-surface-ink border-t border-subtle text-fg-secondary shrink-0 font-caption text-[11px]">
+    <footer className="relative h-7 flex items-center justify-between overflow-hidden px-3 bg-surface-ink border-t border-subtle text-fg-secondary shrink-0 font-caption text-[11px]">
+      {sweep && <span className="success-sweep pointer-events-none absolute inset-0 z-10" />}
       <div className="flex items-center gap-3">
         <span className="font-medium text-fg-primary">{novelName}</span>
         <span className="flex items-center gap-1 opacity-80">

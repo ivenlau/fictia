@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 type Size = "default" | "small";
@@ -8,6 +9,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
   children: ReactNode;
   className?: string;
+  loading?: boolean;
 }
 
 const variantClasses: Record<Variant, string> = {
@@ -34,19 +36,25 @@ export function Button({
   children,
   className = "",
   disabled,
+  loading,
   ...rest
 }: ButtonProps) {
+  const iconSize = size === "small" ? 11 : 13;
   return (
     <button
-      disabled={disabled}
-      className={`inline-flex items-center justify-center gap-1.5 font-caption font-medium transition-all duration-150 ease-out-expo ${
+      disabled={disabled || loading}
+      className={`btn-press inline-flex items-center justify-center gap-1.5 font-caption font-medium ease-out-expo ${
         variantClasses[variant]
       } ${sizeClasses[size]} ${
-        disabled ? "opacity-40 cursor-not-allowed pointer-events-none" : "active:scale-[0.97]"
+        disabled || loading ? "opacity-40 cursor-not-allowed pointer-events-none" : ""
       } ${className}`}
       {...rest}
     >
-      {children}
+      {loading ? (
+        <Loader2 size={iconSize} className="animate-spin shrink-0" />
+      ) : (
+        children
+      )}
     </button>
   );
 }

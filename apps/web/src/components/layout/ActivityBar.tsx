@@ -55,7 +55,7 @@ export function ActivityBar() {
             key={item.panel}
             onClick={() => setActivePanel(item.panel)}
             title={item.label}
-            className={`group relative flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-150 ${
+            className={`group relative flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-fast ease-out-expo ${
               isActive
                 ? "bg-surface-elevated border border-strong text-accent shadow-glow"
                 : "border border-transparent text-fg-muted hover:bg-surface-elevated/70 hover:text-fg-secondary"

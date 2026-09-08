@@ -21,6 +21,7 @@ import { useChatStream } from "../../hooks/useChatStream";
 import { chatApi } from "../../api/chat";
 import { novelsApi } from "../../api/novels";
 import { MemoryButton } from "../chat/MemoryButton";
+import { InkCaret, ThinkingDots } from "../ui/InkCaret";
 import { MEMORY_PATH, type ChatMessage } from "@fictia/shared";
 
 export function ChatPanel() {
@@ -196,10 +197,7 @@ export function ChatPanel() {
         <PendingConfirmation />
 
         {isStreaming && messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].content === "" && (
-          <div className="flex items-center gap-2 text-fg-muted">
-            <Loader2 size={14} className="animate-spin" />
-            <span className="font-caption text-xs">思考中...</span>
-          </div>
+          <ThinkingDots label="思考中..." />
         )}
 
         <div ref={messagesEndRef} />
@@ -242,7 +240,7 @@ export function ChatPanel() {
           <button
             onClick={handleSend}
             disabled={!input.trim() || isStreaming}
-            className="absolute right-2 bottom-2 rounded-md bg-accent p-1.5 text-accent-ink transition-all hover:bg-accent-light active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-press absolute right-2 bottom-2 rounded-md bg-accent p-1.5 text-accent-ink transition-all hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isStreaming ? (
               <Loader2 size={14} className="animate-spin" />
@@ -264,6 +262,7 @@ export function ChatPanel() {
 
 function ChatMessageItem({ message, isLast }: { message: ChatMessage; isLast: boolean }) {
   const isUser = message.role === "user";
+  const isStreamingLast = useChatStore((s) => s.isStreaming) && isLast && !isUser && !!message.content;
 
   return (
     <div className={`flex gap-2 ${isUser ? "flex-row-reverse" : ""}`}>
@@ -288,6 +287,7 @@ function ChatMessageItem({ message, isLast }: { message: ChatMessage; isLast: bo
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content || (isLast ? "..." : "")}
             </ReactMarkdown>
+            {isStreamingLast && <InkCaret />}
           </div>
         )}
       </div>

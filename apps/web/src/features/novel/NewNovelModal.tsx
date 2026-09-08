@@ -287,7 +287,7 @@ export function NewNovelModal() {
             <button
               onClick={handleSubmit}
               disabled={!isValid || createNovel.isPending}
-              className="flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-press flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createNovel.isPending ? (
                 <Loader2 size={14} className="animate-spin" />

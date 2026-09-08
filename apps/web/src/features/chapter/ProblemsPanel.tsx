@@ -57,11 +57,20 @@ type FilterType = "all" | string;
 export function ProblemsPanel({ feedback, onAdopt, onIgnore }: ProblemsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [absorbingId, setAbsorbingId] = useState<string | null>(null);
 
   const filtered = useMemo(
     () => (filter === "all" ? feedback : feedback.filter((f) => f.reviewerType === filter)),
     [feedback, filter],
   );
+
+  const handleAdopt = (id: string) => {
+    setAbsorbingId(id);
+    window.setTimeout(() => {
+      onAdopt(id);
+      setAbsorbingId(null);
+    }, 280);
+  };
 
   const filterOptions: { value: FilterType; label: string }[] = [
     { value: "all", label: "全部" },
@@ -117,12 +126,16 @@ export function ProblemsPanel({ feedback, onAdopt, onIgnore }: ProblemsPanelProp
               </div>
             ) : (
               <ul className="divide-y divide-subtle/50">
-                {filtered.map((item) => {
+                {filtered.map((item, idx) => {
                   const SevIcon = severityIcons[item.severity];
+                  const isAbsorbing = absorbingId === item.id;
                   return (
                     <li
                       key={item.id}
-                      className="flex items-start gap-3 px-4 py-3"
+                      className={`flex items-start gap-3 px-4 py-3 origin-top ${
+                        isAbsorbing ? "animate-pen-absorb" : "stagger-child"
+                      }`}
+                      style={isAbsorbing ? undefined : { ["--stagger-i" as string]: Math.min(idx, 8) }}
                     >
                       <div
                         className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded ${severityBg[item.severity]}`}
@@ -154,8 +167,8 @@ export function ProblemsPanel({ feedback, onAdopt, onIgnore }: ProblemsPanelProp
                         {item.status === "pending" && (
                           <div className="mt-2 flex items-center gap-2">
                             <button
-                              onClick={() => onAdopt(item.id)}
-                              className="rounded bg-success/10 px-2 py-0.5 font-caption text-xs text-success transition-colors hover:bg-success/20"
+                              onClick={() => handleAdopt(item.id)}
+                              className="btn-press rounded bg-success/10 px-2 py-0.5 font-caption text-xs text-success transition-colors hover:bg-success/20"
                             >
                               采纳
                             </button>

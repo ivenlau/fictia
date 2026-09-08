@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Search,
@@ -34,6 +34,7 @@ import {
 import { pipelinesApi } from "@/api/pipelines";
 import { runWritingLoop, runDesignLoop } from "@/api/writing-loop";
 import { novelsApi } from "@/api/novels";
+import { Modal, ModalShell, ModalButton } from "@/components/ui/Modal";
 import type { WorkspaceFile } from "@fictia/shared";
 
 const agentIcons: Record<AgentType, React.ElementType> = {
@@ -246,20 +247,25 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
             {phase.label}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            {phase.stages.map((stageName) => {
+            {phase.stages.map((stageName, idx) => {
               const stage = stages.find((s) => s.name === stageName);
               if (!stage) return null;
               return (
-                <AgentCard
+                <div
                   key={stageName}
-                  stage={stage}
-                  enabled={isStageEnabled(stage, stages)}
-                  pipelineRunning={isRunning}
-                  onRun={handleRunStage}
-                  onOpenFile={handleOpenAgentFile}
-                  onRefresh={refreshStatus}
-                  onForceConfirm={handleForceConfirm}
-                />
+                  className="stagger-child"
+                  style={{ ["--stagger-i" as string]: Math.min(idx, 8) }}
+                >
+                  <AgentCard
+                    stage={stage}
+                    enabled={isStageEnabled(stage, stages)}
+                    pipelineRunning={isRunning}
+                    onRun={handleRunStage}
+                    onOpenFile={handleOpenAgentFile}
+                    onRefresh={refreshStatus}
+                    onForceConfirm={handleForceConfirm}
+                  />
+                </div>
               );
             })}
           </div>
@@ -267,35 +273,22 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
       ))}
 
       {/* Error Modal */}
-      {errorModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setErrorModal(null)}
-        >
-          <div
-            className="w-[400px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-heading text-base font-bold text-error mb-2">
-              执行失败
-            </h3>
-            <p className="font-body text-sm text-fg-secondary mb-1">
-              阶段「{errorModal.stage}」执行过程中出现错误：
-            </p>
-            <p className="font-body text-sm text-fg-primary bg-surface-muted rounded-lg p-3 break-all">
-              {errorModal.message}
-            </p>
-            <div className="flex justify-end mt-4">
-              <button
-                onClick={() => setErrorModal(null)}
-                className="rounded-md bg-surface-card border border-subtle px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-              >
-                知道了
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal open={!!errorModal} onClose={() => setErrorModal(null)} maxWidthClass="w-full max-w-[400px]">
+        {errorModal && (
+          <ModalShell
+            title="执行失败"
+            description={
+              <>
+                <p className="mb-1">阶段「{errorModal.stage}」执行过程中出现错误：</p>
+                <p className="font-body text-sm text-fg-primary bg-surface-muted rounded-lg p-3 break-all">
+                  {errorModal.message}
+                </p>
+              </>
+            }
+            footer={<ModalButton onClick={() => setErrorModal(null)}>知道了</ModalButton>}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -325,6 +318,8 @@ function AgentCard({
   const [isExecuting, setIsExecuting] = useState(false);
   const [isForceConfirming, setIsForceConfirming] = useState(false);
   const [showRerunModal, setShowRerunModal] = useState(false);
+  const [justStamped, setJustStamped] = useState(false);
+  const [flyFrom, setFlyFrom] = useState<DOMRect | null>(null);
 
   const Icon = agentIcons[stage.agentType] ?? Search;
   const isDone = stage.status === "confirmed";
@@ -332,6 +327,26 @@ function AgentCard({
   const isFailed = stage.status === "failed";
   const isNeedsUpdate = stage.status === "needs_update";
   const canRun = enabled && !pipelineRunning && !isRunning && !isExecuting;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const prevStatus = useRef(stage.status);
+
+  useEffect(() => {
+    if (prevStatus.current === stage.status) return;
+    const was = prevStatus.current;
+    prevStatus.current = stage.status;
+    if (stage.status === "confirmed" && was !== "confirmed") {
+      setJustStamped(true);
+      window.dispatchEvent(new CustomEvent("fictia:success"));
+      const t = window.setTimeout(() => setJustStamped(false), 700);
+      return () => window.clearTimeout(t);
+    }
+  }, [stage.status]);
+
+  const handleOpenFileAnimated = useCallback(() => {
+    if (cardRef.current) setFlyFrom(cardRef.current.getBoundingClientRect());
+    onOpenFile(stage.agentType);
+    window.setTimeout(() => setFlyFrom(null), 360);
+  }, [onOpenFile, stage.agentType]);
 
   const handleRun = useCallback(async () => {
     setIsExecuting(true);
@@ -369,7 +384,8 @@ function AgentCard({
   return (
     <>
       <div
-        className={`group rounded-lg border p-3 text-left transition-colors ${
+        ref={cardRef}
+        className={`group relative rounded-lg border p-3 text-left transition-colors ${
           !enabled && !isRunning && !isDone
             ? "border-subtle/50 bg-surface-card/50 opacity-40"
             : isRunning || isExecuting
@@ -383,6 +399,23 @@ function AgentCard({
                     : "border-subtle bg-surface-card hover:border-accent/30"
         }`}
       >
+        {isDone && (
+          <span
+            className={`pointer-events-none absolute right-1.5 top-1.5 rounded border border-success/50 bg-success/15 px-1 py-0.5 font-caption text-[9px] font-semibold text-success ${
+              justStamped ? "stamp-badge" : ""
+            }`}
+            aria-hidden
+          >
+            已定稿
+          </span>
+        )}
+        {flyFrom && (
+          <span
+            className="pointer-events-none fixed z-[80] h-2 w-2 rounded-full bg-accent shadow-glow animate-fly-in"
+            style={{ left: flyFrom.left + flyFrom.width / 2, top: flyFrom.top + flyFrom.height / 2 }}
+            aria-hidden
+          />
+        )}
         <div className="flex items-start gap-2.5">
           {/* Icon */}
           <div
@@ -436,7 +469,7 @@ function AgentCard({
             {isDone && (
               <>
                 <button
-                  onClick={() => onOpenFile(stage.agentType)}
+                  onClick={handleOpenFileAnimated}
                   className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
                   title="查看文档"
                 >
@@ -518,45 +551,35 @@ function RerunModal({
   onCancel: () => void;
 }) {
   const [directive, setDirective] = useState("");
+  const [open, setOpen] = useState(true);
+
+  const close = () => {
+    setOpen(false);
+    window.setTimeout(onCancel, 140);
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="w-[440px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+    <Modal open={open} onClose={close} maxWidthClass="w-full max-w-[440px]">
+      <ModalShell
+        title={`重新执行「${stageLabel}」`}
+        description="输入自定义指令可以引导 agent 按照你的要求重新执行。留空则直接重新执行。"
+        footer={
+          <>
+            <ModalButton onClick={close}>取消</ModalButton>
+            <ModalButton tone="primary" onClick={() => onConfirm(directive)}>
+              重新执行
+            </ModalButton>
+          </>
+        }
       >
-        <h3 className="font-heading text-base font-bold text-fg-primary mb-1">
-          重新执行「{stageLabel}」
-        </h3>
-        <p className="font-body text-sm text-fg-secondary mb-4">
-          输入自定义指令可以引导 agent 按照你的要求重新执行。留空则直接重新执行。
-        </p>
         <textarea
           value={directive}
           onChange={(e) => setDirective(e.target.value)}
           placeholder="例如：请更侧重分析悬疑元素的读者期待..."
           rows={3}
-          className="w-full rounded-lg border border-subtle bg-surface-primary px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted/50 focus:border-accent focus:outline-none resize-none"
+          className="w-full rounded-lg border border-subtle bg-surface-primary px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted/50 focus:border-accent focus:outline-none resize-none mb-2"
         />
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={onCancel}
-            className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => onConfirm(directive)}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light"
-          >
-            <RotateCcw size={14} />
-            重新执行
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalShell>
+    </Modal>
   );
 }

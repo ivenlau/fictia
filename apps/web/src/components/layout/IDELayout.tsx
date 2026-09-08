@@ -71,24 +71,26 @@ export function IDELayout({ children }: IDELayoutProps) {
         <ActivityBar />
         {showSidePanel && (
           <aside
-            className="panel-enter flex shrink-0 flex-col overflow-hidden border-r border-subtle bg-surface-secondary"
+            className="panel-enter flex shrink-0 flex-col overflow-hidden border-r border-subtle bg-surface-secondary transition-[width] duration-base ease-out-expo"
             style={{ width: explorerWidth }}
           >
-            {activePanel === "knowledge" ? (
-              <KnowledgePanel />
-            ) : activePanel === "material" ? (
-              <MaterialPanel />
-            ) : activePanel === "search" ? (
-              <SearchPanel />
-            ) : activePanel === "agent" ? (
-              <ChatPanel />
-            ) : activePanel === "debug" ? (
-              <DebugPanel />
-            ) : activePanel === "tools" ? (
-              <CustomToolsPanel />
-            ) : (
-              <Explorer />
-            )}
+            <div key={activePanel} className="panel-swap flex min-h-0 flex-1 flex-col overflow-hidden">
+              {activePanel === "knowledge" ? (
+                <KnowledgePanel />
+              ) : activePanel === "material" ? (
+                <MaterialPanel />
+              ) : activePanel === "search" ? (
+                <SearchPanel />
+              ) : activePanel === "agent" ? (
+                <ChatPanel />
+              ) : activePanel === "debug" ? (
+                <DebugPanel />
+              ) : activePanel === "tools" ? (
+                <CustomToolsPanel />
+              ) : (
+                <Explorer />
+              )}
+            </div>
           </aside>
         )}
         <div className="flex flex-1 flex-col overflow-hidden">
