@@ -40,7 +40,7 @@ const severityBg: Record<FeedbackSeverity, string> = {
 
 const statusColors: Record<string, string> = {
   pending: "bg-surface-muted text-fg-muted",
-  adopted: "bg-success/15 text-success",
+  adopted: "bg-accent-bg text-accent",
   ignored: "bg-fg-muted/10 text-fg-muted",
   resolved: "bg-info/15 text-info",
 };
@@ -168,7 +168,7 @@ export function ProblemsPanel({ feedback, onAdopt, onIgnore }: ProblemsPanelProp
                           <div className="mt-2 flex items-center gap-2">
                             <button
                               onClick={() => handleAdopt(item.id)}
-                              className="btn-press rounded bg-success/10 px-2 py-0.5 font-caption text-xs text-success transition-colors hover:bg-success/20"
+                              className="btn-press rounded bg-accent-bg px-2 py-0.5 font-caption text-xs text-accent transition-colors hover:bg-accent-bg/80"
                             >
                               采纳
                             </button>

@@ -255,8 +255,13 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
     if (text && text.length > 0 && contentRef.current) {
       const range = sel!.getRangeAt(0);
       const rect = range.getBoundingClientRect();
+      const container = contentRef.current.getBoundingClientRect();
       setSelectedText(text);
-      setSelectionPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+      // 用内容区坐标 + absolute，避免 fixed 盖住左侧调试面板
+      setSelectionPos({
+        x: rect.left + rect.width / 2 - container.left + contentRef.current.scrollLeft,
+        y: rect.top - 8 - container.top + contentRef.current.scrollTop,
+      });
     } else {
       setSelectedText(null);
       setSelectionPos(null);
@@ -685,7 +690,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
               {selectionPos && selectedText && (
                 <button
                   onClick={() => handleOpenRewrite(selectedText)}
-                  className="fixed z-50 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink shadow-lg transition-colors hover:bg-accent-light"
+                  className="absolute z-20 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink shadow-lg transition-colors hover:bg-accent-light"
                   style={{ left: selectionPos.x, top: selectionPos.y, transform: "translate(-50%, -100%)" }}
                 >
                   <Wand2 size={12} />
@@ -800,7 +805,7 @@ function FileReviewPanel({
   };
   const statusColor: Record<string, string> = {
     pending: "bg-surface-muted text-fg-muted",
-    applied: "bg-success/15 text-success",
+    applied: "bg-accent-bg text-accent",
     ignored: "bg-fg-muted/10 text-fg-muted",
   };
   const statusLabel: Record<string, string> = {
@@ -878,7 +883,7 @@ function FileReviewPanel({
                               <button
                                 onClick={() => handleApply(item)}
                                 disabled={applyingId === item.id}
-                                className="rounded bg-success/10 px-2 py-0.5 font-caption text-xs text-success transition-colors hover:bg-success/20 disabled:opacity-50"
+                                className="rounded bg-accent-bg px-2 py-0.5 font-caption text-xs text-accent transition-colors hover:bg-accent-bg/80 disabled:opacity-50"
                               >
                                 {applyingId === item.id ? "采纳中..." : "采纳"}
                               </button>

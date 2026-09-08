@@ -71,7 +71,7 @@ export function IDELayout({ children }: IDELayoutProps) {
         <ActivityBar />
         {showSidePanel && (
           <aside
-            className="panel-enter flex shrink-0 flex-col overflow-hidden border-r border-subtle bg-surface-secondary transition-[width] duration-base ease-out-expo"
+            className="panel-enter relative z-30 flex shrink-0 flex-col overflow-hidden border-r border-subtle bg-surface-secondary transition-[width] duration-base ease-out-expo"
             style={{ width: explorerWidth }}
           >
             <div key={activePanel} className="panel-swap flex min-h-0 flex-1 flex-col overflow-hidden">

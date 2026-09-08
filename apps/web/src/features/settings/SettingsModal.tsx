@@ -64,7 +64,7 @@ export function SettingsModal() {
         <header className="flex items-center justify-between border-b border-subtle px-5 py-3">
           <h2 className="font-heading text-base font-bold text-fg-primary">设置</h2>
           <div className="flex items-center gap-2">
-            {saved && <span className="font-caption text-xs text-success">已保存</span>}
+            {saved && <span className="font-caption text-xs text-accent">已保存</span>}
             <button
               onClick={handleSave}
               disabled={saving}

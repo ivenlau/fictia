@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Loader2,
@@ -93,7 +94,7 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
         {status === "pending" ? "等待中" : "运行中"}
       </span>
     ) : status === "completed" ? (
-      <span className="flex items-center gap-1 font-caption text-[11px] text-success">
+      <span className="flex items-center gap-1 font-caption text-[11px] text-accent">
         <CheckCircle2 size={12} />
         已完成
       </span>
@@ -109,8 +110,12 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
       </span>
     );
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+  // portal 到 body：侧栏 transform/overflow 会困住 fixed，导致调试详情盖不住主页/文档
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         className="relative flex flex-col h-[78vh] w-[960px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -188,7 +193,8 @@ export function AgentRunDetailModal({ outputId, agentLabel, onClose, onDelete }:
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -314,7 +320,7 @@ function ToolCallView({ tc }: { tc: AgentToolCallTrace }) {
         {tc.isError ? (
           <span className="inline-block rounded bg-error/15 px-1 py-0.5 font-caption text-[9px] text-error">错误</span>
         ) : (
-          <span className="inline-block rounded bg-success/15 px-1 py-0.5 font-caption text-[9px] text-success">成功</span>
+          <span className="inline-block rounded bg-accent-bg px-1 py-0.5 font-caption text-[9px] text-accent">成功</span>
         )}
         {tc.durationMs != null && (
           <span className="font-caption text-[10px] text-fg-muted ml-auto shrink-0">{formatMs(tc.durationMs)}</span>
@@ -395,7 +401,7 @@ function TodoPanel({ snapshot }: { snapshot?: TodoSnapshot }) {
         {snapshot.items.map((it) => {
           const mark = it.status === "done" ? "✓" : it.status === "in_progress" ? "▶" : "○";
           const color =
-            it.status === "done" ? "text-success" : it.status === "in_progress" ? "text-accent" : "text-fg-muted";
+            it.status === "done" ? "text-accent" : it.status === "in_progress" ? "text-accent" : "text-fg-muted";
           return (
             <div
               key={it.id}

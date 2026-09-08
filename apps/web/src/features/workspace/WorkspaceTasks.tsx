@@ -35,6 +35,7 @@ import { pipelinesApi } from "@/api/pipelines";
 import { runWritingLoop, runDesignLoop } from "@/api/writing-loop";
 import { novelsApi } from "@/api/novels";
 import { Modal, ModalShell, ModalButton } from "@/components/ui/Modal";
+import { agentColor } from "@/lib/agentColors";
 import type { WorkspaceFile } from "@fictia/shared";
 
 const agentIcons: Record<AgentType, React.ElementType> = {
@@ -322,6 +323,7 @@ function AgentCard({
   const [flyFrom, setFlyFrom] = useState<DOMRect | null>(null);
 
   const Icon = agentIcons[stage.agentType] ?? Search;
+  const tint = agentColor(stage.agentType);
   const isDone = stage.status === "confirmed";
   const isRunning = stage.status === "in_progress";
   const isFailed = stage.status === "failed";
@@ -391,7 +393,7 @@ function AgentCard({
             : isRunning || isExecuting
               ? "border-accent/40 bg-accent-bg/20"
               : isDone
-                ? "border-success/30 bg-surface-card hover:border-success/50"
+                ? "border-accent/40 bg-surface-card hover:border-accent/60"
                 : isFailed
                   ? "border-error/30 bg-error/5"
                   : isNeedsUpdate
@@ -399,16 +401,6 @@ function AgentCard({
                     : "border-subtle bg-surface-card hover:border-accent/30"
         }`}
       >
-        {isDone && (
-          <span
-            className={`pointer-events-none absolute right-1.5 top-1.5 rounded border border-success/50 bg-success/15 px-1 py-0.5 font-caption text-[9px] font-semibold text-success ${
-              justStamped ? "stamp-badge" : ""
-            }`}
-            aria-hidden
-          >
-            已定稿
-          </span>
-        )}
         {flyFrom && (
           <span
             className="pointer-events-none fixed z-[80] h-2 w-2 rounded-full bg-accent shadow-glow animate-fly-in"
@@ -417,20 +409,16 @@ function AgentCard({
           />
         )}
         <div className="flex items-start gap-2.5">
-          {/* Icon */}
+          {/* Icon — 身份色按 Agent 类型；运行中覆盖为 spinner */}
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
-              isDone
-                ? "bg-success/15 text-success"
+              !enabled && !isRunning && !isDone && !isFailed
+                ? "bg-surface-muted/50 text-fg-muted/50"
                 : isRunning || isExecuting
                   ? "bg-accent-bg text-accent"
                   : isFailed
                     ? "bg-error/15 text-error"
-                    : isNeedsUpdate
-                      ? "bg-warning/15 text-warning"
-                      : enabled
-                        ? "bg-surface-muted text-fg-muted"
-                        : "bg-surface-muted/50 text-fg-muted/50"
+                    : `${tint.bg} ${tint.text}`
             }`}
           >
             {isRunning || isExecuting ? (
@@ -444,13 +432,13 @@ function AgentCard({
 
           {/* Content */}
           <div className="min-w-0 flex-1">
-            <p className="font-body text-sm text-fg-primary truncate">
+            <p className="min-w-0 truncate font-body text-sm text-fg-primary">
               {stage.label}
             </p>
             <p
               className={`font-caption text-[11px] mt-0.5 ${
                 isDone
-                  ? "text-success"
+                  ? "text-accent"
                   : isRunning || isExecuting
                     ? "text-accent"
                     : isFailed
@@ -464,64 +452,75 @@ function AgentCard({
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1 shrink-0">
-            {isDone && (
-              <>
-                <button
-                  onClick={handleOpenFileAnimated}
-                  className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
-                  title="查看文档"
-                >
-                  <FileText size={13} />
-                </button>
-                <button
-                  onClick={() => setShowRerunModal(true)}
-                  className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
-                  title="重新执行"
-                >
-                  <RotateCcw size={13} />
-                </button>
-              </>
-            )}
-            {isFailed && (
-              <>
+          {/* Actions — 顶按钮 / 底「已定稿」，右缘对齐 */}
+          <div className="flex shrink-0 flex-col items-end gap-1 self-stretch">
+            <div className="flex items-center gap-1">
+              {isDone && (
+                <>
+                  <button
+                    onClick={handleOpenFileAnimated}
+                    className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
+                    title="查看文档"
+                  >
+                    <FileText size={13} />
+                  </button>
+                  <button
+                    onClick={() => setShowRerunModal(true)}
+                    className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
+                    title="重新执行"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                </>
+              )}
+              {isFailed && (
+                <>
+                  <button
+                    onClick={handleRun}
+                    disabled={isForceConfirming}
+                    className="rounded p-1 text-error transition-colors hover:bg-error/10"
+                    title="重试"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                  <button
+                    onClick={handleForceConfirm}
+                    disabled={isForceConfirming}
+                    className="flex items-center gap-0.5 rounded px-1 text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
+                    title="核心产物已在时，跳过审核结论强制确认，放行后续阶段"
+                  >
+                    <CheckCircle size={13} />
+                    <span className="font-caption text-[10px]">按产物继续</span>
+                  </button>
+                </>
+              )}
+              {!isDone && !isRunning && !isFailed && !isNeedsUpdate && canRun && (
                 <button
                   onClick={handleRun}
-                  disabled={isForceConfirming}
-                  className="rounded p-1 text-error transition-colors hover:bg-error/10"
-                  title="重试"
+                  className="rounded p-1 text-fg-muted transition-colors hover:bg-accent-bg hover:text-accent"
+                  title="执行此阶段"
                 >
-                  <RotateCcw size={13} />
+                  <Play size={14} />
                 </button>
+              )}
+              {isNeedsUpdate && canRun && (
                 <button
-                  onClick={handleForceConfirm}
-                  disabled={isForceConfirming}
-                  className="flex items-center gap-0.5 rounded px-1 text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
-                  title="核心产物已在时，跳过审核结论强制确认，放行后续阶段"
+                  onClick={handleRun}
+                  className="rounded p-1 text-warning transition-colors hover:bg-warning/10"
+                  title="重新执行"
                 >
-                  <CheckCircle size={13} />
-                  <span className="font-caption text-[10px]">按产物继续</span>
+                  <Play size={14} />
                 </button>
-              </>
-            )}
-            {!isDone && !isRunning && !isFailed && !isNeedsUpdate && canRun && (
-              <button
-                onClick={handleRun}
-                className="rounded p-1 text-fg-muted transition-colors hover:bg-accent-bg hover:text-accent"
-                title="执行此阶段"
+              )}
+            </div>
+            {isDone && (
+              <span
+                className={`mt-auto rounded border border-accent/40 bg-accent-bg px-1 py-0.5 font-caption text-[9px] font-semibold text-accent ${
+                  justStamped ? "stamp-badge" : ""
+                }`}
               >
-                <Play size={14} />
-              </button>
-            )}
-            {isNeedsUpdate && canRun && (
-              <button
-                onClick={handleRun}
-                className="rounded p-1 text-warning transition-colors hover:bg-warning/10"
-                title="重新执行"
-              >
-                <Play size={14} />
-              </button>
+                已定稿
+              </span>
             )}
           </div>
         </div>

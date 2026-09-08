@@ -138,9 +138,9 @@ export function RunToolDialog({
         {result ? (
           /* ===== 结果视图 ===== */
           <div className="space-y-3">
-            <div className={`rounded-md border p-3 ${result.ok ? "border-success/40 bg-success/8" : "border-error/40 bg-error/8"}`}>
+            <div className={`rounded-md border p-3 ${result.ok ? "border-accent/40 bg-accent-bg/40" : "border-error/40 bg-error/8"}`}>
               <div className="mb-1 flex items-center gap-2 font-caption text-[11px] font-medium">
-                {result.ok ? <span className="text-success">✓ 执行完成{result.durationMs ? ` · ${result.durationMs}ms` : ""}</span> : <span className="text-error">✗ 执行失败</span>}
+                {result.ok ? <span className="text-accent">✓ 执行完成{result.durationMs ? ` · ${result.durationMs}ms` : ""}</span> : <span className="text-error">✗ 执行失败</span>}
               </div>
               <pre className="whitespace-pre-wrap break-words font-caption text-[11px] text-fg-primary max-h-72 overflow-y-auto">
                 {result.ok ? result.output || "（无输出）" : result.error || "未知错误"}

@@ -37,6 +37,7 @@ import { exportMarkdown, exportEpub, exportTxt } from "@/utils/export";
 import { WorkspaceTasks } from "./WorkspaceTasks";
 import { countWords } from "@/lib/markdown";
 import { Modal, ModalShell, ModalButton } from "@/components/ui/Modal";
+import { agentColor } from "@/lib/agentColors";
 import type { WorkspaceFile } from "@fictia/shared";
 import { STAGE_ORDER, STAGE_LABELS } from "@fictia/shared";
 
@@ -380,7 +381,7 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
               {autopilotRunning ? "自动驾驶..." : "自动驾驶"}
             </button>
             {allChaptersWritten && (
-              <span className="flex items-center gap-1 font-caption text-xs text-success">
+              <span className="flex items-center gap-1 font-caption text-xs text-accent">
                 <CheckCircle2 size={13} />
                 全部完成
               </span>
@@ -581,7 +582,15 @@ function FileChapterCard({
           />
         )}
         <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent mt-0.5">
+          <div
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md mt-0.5 ${
+              isThisWriting
+                ? "bg-accent-bg text-accent"
+                : chapter.hasContent
+                  ? `${agentColor("chapter-writer").bg} ${agentColor("chapter-writer").text}`
+                  : "bg-surface-muted text-fg-muted"
+            }`}
+          >
             <BookOpen size={15} />
           </div>
           <div className="min-w-0 flex-1">
@@ -594,7 +603,7 @@ function FileChapterCard({
                   <span className="font-caption text-[11px] text-fg-muted">
                     {chapter.wordCount} 字
                   </span>
-                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-caption bg-success/15 text-success">
+                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-caption bg-accent-bg text-accent">
                     已完成
                   </span>
                 </>

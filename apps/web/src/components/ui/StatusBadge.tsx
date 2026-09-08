@@ -8,7 +8,7 @@ interface StatusBadgeProps {
 }
 
 const dotClasses: Record<Status, string> = {
-  completed: "bg-success shadow-[0_0_8px_rgb(var(--c-success)/0.55)]",
+  completed: "bg-accent shadow-[0_0_8px_rgb(var(--c-accent)/0.55)]",
   running: "bg-warning animate-status-glow animate-pulse-soft",
   failed: "bg-error shadow-[0_0_8px_rgb(var(--c-rose)/0.5)]",
   idle: "bg-fg-muted",
@@ -45,7 +45,7 @@ export function StatusBadge({ status, label }: StatusBadgeProps) {
       <span className="relative inline-flex">
         <span className={`h-1.5 w-1.5 rounded-full ${dotClasses[status]}`} />
         {burst && status === "completed" && (
-          <span className="absolute inset-0 h-1.5 w-1.5 rounded-full bg-success animate-success-burst" />
+          <span className="absolute inset-0 h-1.5 w-1.5 rounded-full bg-accent animate-success-burst" />
         )}
       </span>
       {label}

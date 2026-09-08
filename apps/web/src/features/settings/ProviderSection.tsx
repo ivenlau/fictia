@@ -223,7 +223,7 @@ function ProviderCard({
         {expanded ? <ChevronDown size={14} className="text-fg-muted" /> : <ChevronRight size={14} className="text-fg-muted" />}
         <span className="flex-1 font-body text-sm font-medium text-fg-primary">{provider.name}</span>
         {hasKey ? (
-          <span className="flex items-center gap-1 font-caption text-[11px] text-success">
+          <span className="flex items-center gap-1 font-caption text-[11px] text-accent">
             <CheckCircle2 size={11} /> 已配置
           </span>
         ) : (
@@ -282,7 +282,7 @@ function ProviderCard({
               </button>
             </div>
             {testResult === "ok" && (
-              <p className="mt-1 flex items-center gap-1 font-caption text-[11px] text-success">
+              <p className="mt-1 flex items-center gap-1 font-caption text-[11px] text-accent">
                 <CheckCircle2 size={11} /> 连接正常
               </p>
             )}

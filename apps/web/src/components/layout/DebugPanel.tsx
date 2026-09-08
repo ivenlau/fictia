@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   Search,
   Palette,
@@ -24,6 +25,7 @@ import { useAgentOutputs, useDeleteAgentOutput, useClearAgentOutputs } from "@/h
 import { useChapters } from "@/hooks/useNovel";
 import { useEditorStore } from "@/stores/editorStore";
 import { useUIStore } from "@/stores/uiStore";
+import { agentColor } from "@/lib/agentColors";
 import { AgentRunDetailModal } from "./AgentRunDetailModal";
 
 const agentIcons: Record<AgentType, React.ElementType> = {
@@ -42,7 +44,7 @@ const agentIcons: Record<AgentType, React.ElementType> = {
 };
 
 const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
-  completed: { icon: CheckCircle2, color: "text-success", bg: "bg-success/15", label: "完成" },
+  completed: { icon: CheckCircle2, color: "text-accent", bg: "bg-accent-bg", label: "完成" },
   running: { icon: Loader2, color: "text-accent", bg: "bg-accent-bg", label: "运行中" },
   pending: { icon: Clock, color: "text-fg-muted", bg: "bg-surface-muted", label: "等待中" },
   failed: { icon: XCircle, color: "text-error", bg: "bg-error/15", label: "失败" },
@@ -172,6 +174,24 @@ export function DebugPanel() {
               const agentType = output.agentType as AgentType;
               const Icon = agentIcons[agentType] ?? Search;
               const cfg = statusConfig[output.status] ?? statusConfig.pending;
+              const tint = agentColor(agentType);
+              // 状态色只驱动角标；运行图标底色用 Agent 身份色
+              const iconBg =
+                output.status === "running"
+                  ? "bg-accent-bg"
+                  : output.status === "failed"
+                    ? "bg-error/15"
+                    : output.status === "completed"
+                      ? tint.bg
+                      : cfg.bg;
+              const iconColor =
+                output.status === "running"
+                  ? "text-accent"
+                  : output.status === "failed"
+                    ? "text-error"
+                    : output.status === "completed"
+                      ? tint.text
+                      : cfg.color;
 
               let subtitle = "";
               if (output.agentType === "chapter-writer" && output.chapterId) {
@@ -192,11 +212,11 @@ export function DebugPanel() {
                   className="group flex w-full items-start gap-2.5 rounded px-2 py-2 text-left transition-colors hover:bg-surface-muted/50 cursor-pointer"
                   onClick={() => setDetail({ outputId: output.id, agentLabel: label })}
                 >
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded mt-0.5 ${cfg.bg}`}>
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded mt-0.5 ${iconBg}`}>
                     {output.status === "running" ? (
-                      <Loader2 size={14} className={`${cfg.color} animate-spin`} />
+                      <Loader2 size={14} className={`${iconColor} animate-spin`} />
                     ) : (
-                      <Icon size={14} className={cfg.color} />
+                      <Icon size={14} className={iconColor} />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -266,39 +286,41 @@ export function DebugPanel() {
         />
       )}
 
-      {confirmTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setConfirmTarget(null)}
-        >
+      {confirmTarget &&
+        createPortal(
           <div
-            className="w-[400px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={() => setConfirmTarget(null)}
           >
-            <h3 className="font-heading text-base font-bold text-fg-primary mb-2">确认删除</h3>
-            <p className="font-body text-sm text-fg-secondary mb-5">
-              {confirmTarget.kind === "one"
-                ? `确定删除这条「${confirmTarget.label}」运行记录吗？相关输出与调试 trace 将一并删除。`
-                : `确定清空全部 ${confirmTarget.count} 条运行记录吗？此操作不可撤销。`}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setConfirmTarget(null)}
-                className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="flex items-center gap-1.5 rounded-md bg-error px-4 py-2 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-error/90"
-              >
-                <Trash2 size={14} />
-                {confirmTarget.kind === "one" ? "删除" : "清空"}
-              </button>
+            <div
+              className="w-[400px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="font-heading text-base font-bold text-fg-primary mb-2">确认删除</h3>
+              <p className="font-body text-sm text-fg-secondary mb-5">
+                {confirmTarget.kind === "one"
+                  ? `确定删除这条「${confirmTarget.label}」运行记录吗？相关输出与调试 trace 将一并删除。`
+                  : `确定清空全部 ${confirmTarget.count} 条运行记录吗？此操作不可撤销。`}
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmTarget(null)}
+                  className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="flex items-center gap-1.5 rounded-md bg-error px-4 py-2 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-error/90"
+                >
+                  <Trash2 size={14} />
+                  {confirmTarget.kind === "one" ? "删除" : "清空"}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -195,8 +195,13 @@ export function FileViewer({ fileId }: FileViewerProps) {
     if (text && text.length > 0 && contentRef.current) {
       const range = sel!.getRangeAt(0);
       const rect = range.getBoundingClientRect();
+      const container = contentRef.current.getBoundingClientRect();
       setSelectedText(text);
-      setSelectionPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+      // 用内容区坐标 + absolute，避免 fixed 盖住左侧调试面板
+      setSelectionPos({
+        x: rect.left + rect.width / 2 - container.left + contentRef.current.scrollLeft,
+        y: rect.top - 8 - container.top + contentRef.current.scrollTop,
+      });
     } else {
       setSelectedText(null);
       setSelectionPos(null);
@@ -268,7 +273,7 @@ export function FileViewer({ fileId }: FileViewerProps) {
 
         {/* Status indicators */}
         {saveSuccess && (
-          <span className="flex items-center gap-1 font-caption text-xs text-success">
+          <span className="flex items-center gap-1 font-caption text-xs text-accent">
             <CheckCircle2 size={12} />
             已保存
           </span>
@@ -403,7 +408,7 @@ export function FileViewer({ fileId }: FileViewerProps) {
               {selectionPos && selectedText && (
                 <button
                   onClick={() => handleOpenRewrite(selectedText)}
-                  className="fixed z-50 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink shadow-lg transition-colors hover:bg-accent-light"
+                  className="absolute z-20 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink shadow-lg transition-colors hover:bg-accent-light"
                   style={{ left: selectionPos.x, top: selectionPos.y, transform: "translate(-50%, -100%)" }}
                 >
                   <Wand2 size={12} />

@@ -83,7 +83,7 @@ export function CustomToolsPanel() {
               <div className="flex shrink-0 items-center gap-1">
                 <button
                   onClick={() => toggleEnabled(t)}
-                  className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${t.enabled ? "bg-success/15 text-success" : "bg-surface-muted text-fg-muted"}`}
+                  className={`rounded px-1.5 py-0.5 font-caption text-[10px] ${t.enabled ? "bg-accent-bg text-accent" : "bg-surface-muted text-fg-muted"}`}
                 >
                   {t.enabled ? "启用" : "禁用"}
                 </button>

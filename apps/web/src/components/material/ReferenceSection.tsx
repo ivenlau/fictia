@@ -28,7 +28,7 @@ const STATUS_LABEL: Record<ParseStatus, string> = {
 const STATUS_COLOR: Record<ParseStatus, string> = {
   pending: "text-fg-muted bg-surface-secondary",
   parsing: "text-accent bg-accent/10",
-  done: "text-success bg-success/10",
+  done: "text-accent bg-accent-bg",
   failed: "text-error bg-error/10",
 };
 const FORMAT_LABEL: Record<SourceFormat, string> = {

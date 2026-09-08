@@ -113,7 +113,7 @@ export function PreferencesSection({ novelId }: { novelId: string }) {
             保存
           </button>
           {saved && (
-            <span className="font-caption text-[10px] text-success">已保存</span>
+            <span className="font-caption text-[10px] text-accent">已保存</span>
           )}
         </div>
       </div>
