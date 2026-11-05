@@ -177,7 +177,7 @@ export function MaterialEditorModal({
           <button
             onClick={save}
             disabled={saving || (isCreate && !validKey)}
-            className="font-body text-xs px-3 py-1.5 rounded-md bg-accent text-white disabled:opacity-40 hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            className="font-body text-xs px-3 py-1.5 rounded-md bg-accent text-accent-ink disabled:opacity-40 hover:opacity-90 transition-opacity flex items-center gap-1.5"
           >
             {saving && <Loader2 size={12} className="animate-spin" />}
             保存

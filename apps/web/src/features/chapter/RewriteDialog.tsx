@@ -93,7 +93,7 @@ export function RewriteDialog({ chapterId, filePath, novelId, selectedText, onCl
           </div>
 
           {error && (
-            <p className="rounded-md bg-red-500/10 px-3 py-2 font-caption text-xs text-red-400">{error}</p>
+            <p className="rounded-md bg-error/10 px-3 py-2 font-caption text-xs text-error">{error}</p>
           )}
         </div>
 
@@ -108,7 +108,7 @@ export function RewriteDialog({ chapterId, filePath, novelId, selectedText, onCl
           <button
             onClick={handleRewrite}
             disabled={!instruction.trim() || isRewriting}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-1.5 font-body text-xs font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isRewriting ? (
               <>

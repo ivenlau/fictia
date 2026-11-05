@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Search,
@@ -34,6 +34,8 @@ import {
 import { pipelinesApi } from "@/api/pipelines";
 import { runWritingLoop, runDesignLoop } from "@/api/writing-loop";
 import { novelsApi } from "@/api/novels";
+import { Modal, ModalShell, ModalButton } from "@/components/ui/Modal";
+import { agentColor } from "@/lib/agentColors";
 import type { WorkspaceFile } from "@fictia/shared";
 
 const agentIcons: Record<AgentType, React.ElementType> = {
@@ -198,7 +200,7 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
         {!isRunning && (
           <button
             onClick={handleStartPipeline}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-accent-deep"
+            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink transition-colors hover:bg-accent-light"
           >
             <Zap size={13} />
             开始 Pipeline
@@ -207,7 +209,7 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
         {isRunning && !isPaused && (
           <button
             onClick={handlePausePipeline}
-            className="flex items-center gap-1.5 rounded-md bg-warning/90 px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-warning"
+            className="flex items-center gap-1.5 rounded-md bg-warning/90 px-3 py-1.5 font-body text-xs font-medium text-accent-ink transition-colors hover:bg-warning"
           >
             <Pause size={13} />
             暂停
@@ -216,7 +218,7 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
         {isRunning && isPaused && (
           <button
             onClick={handleResumePipeline}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-accent-deep"
+            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink transition-colors hover:bg-accent-light"
           >
             <Play size={13} />
             继续
@@ -246,20 +248,25 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
             {phase.label}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            {phase.stages.map((stageName) => {
+            {phase.stages.map((stageName, idx) => {
               const stage = stages.find((s) => s.name === stageName);
               if (!stage) return null;
               return (
-                <AgentCard
+                <div
                   key={stageName}
-                  stage={stage}
-                  enabled={isStageEnabled(stage, stages)}
-                  pipelineRunning={isRunning}
-                  onRun={handleRunStage}
-                  onOpenFile={handleOpenAgentFile}
-                  onRefresh={refreshStatus}
-                  onForceConfirm={handleForceConfirm}
-                />
+                  className="stagger-child"
+                  style={{ ["--stagger-i" as string]: Math.min(idx, 8) }}
+                >
+                  <AgentCard
+                    stage={stage}
+                    enabled={isStageEnabled(stage, stages)}
+                    pipelineRunning={isRunning}
+                    onRun={handleRunStage}
+                    onOpenFile={handleOpenAgentFile}
+                    onRefresh={refreshStatus}
+                    onForceConfirm={handleForceConfirm}
+                  />
+                </div>
               );
             })}
           </div>
@@ -267,35 +274,22 @@ export function WorkspaceTasks({ novelId, novelTitle }: WorkspaceTasksProps) {
       ))}
 
       {/* Error Modal */}
-      {errorModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setErrorModal(null)}
-        >
-          <div
-            className="w-[400px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-heading text-base font-bold text-error mb-2">
-              执行失败
-            </h3>
-            <p className="font-body text-sm text-fg-secondary mb-1">
-              阶段「{errorModal.stage}」执行过程中出现错误：
-            </p>
-            <p className="font-body text-sm text-fg-primary bg-surface-muted rounded-lg p-3 break-all">
-              {errorModal.message}
-            </p>
-            <div className="flex justify-end mt-4">
-              <button
-                onClick={() => setErrorModal(null)}
-                className="rounded-md bg-surface-card border border-subtle px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-              >
-                知道了
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal open={!!errorModal} onClose={() => setErrorModal(null)} maxWidthClass="w-full max-w-[400px]">
+        {errorModal && (
+          <ModalShell
+            title="执行失败"
+            description={
+              <>
+                <p className="mb-1">阶段「{errorModal.stage}」执行过程中出现错误：</p>
+                <p className="font-body text-sm text-fg-primary bg-surface-muted rounded-lg p-3 break-all">
+                  {errorModal.message}
+                </p>
+              </>
+            }
+            footer={<ModalButton onClick={() => setErrorModal(null)}>知道了</ModalButton>}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -325,13 +319,36 @@ function AgentCard({
   const [isExecuting, setIsExecuting] = useState(false);
   const [isForceConfirming, setIsForceConfirming] = useState(false);
   const [showRerunModal, setShowRerunModal] = useState(false);
+  const [justStamped, setJustStamped] = useState(false);
+  const [flyFrom, setFlyFrom] = useState<DOMRect | null>(null);
 
   const Icon = agentIcons[stage.agentType] ?? Search;
+  const tint = agentColor(stage.agentType);
   const isDone = stage.status === "confirmed";
   const isRunning = stage.status === "in_progress";
   const isFailed = stage.status === "failed";
   const isNeedsUpdate = stage.status === "needs_update";
   const canRun = enabled && !pipelineRunning && !isRunning && !isExecuting;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const prevStatus = useRef(stage.status);
+
+  useEffect(() => {
+    if (prevStatus.current === stage.status) return;
+    const was = prevStatus.current;
+    prevStatus.current = stage.status;
+    if (stage.status === "confirmed" && was !== "confirmed") {
+      setJustStamped(true);
+      window.dispatchEvent(new CustomEvent("fictia:success"));
+      const t = window.setTimeout(() => setJustStamped(false), 700);
+      return () => window.clearTimeout(t);
+    }
+  }, [stage.status]);
+
+  const handleOpenFileAnimated = useCallback(() => {
+    if (cardRef.current) setFlyFrom(cardRef.current.getBoundingClientRect());
+    onOpenFile(stage.agentType);
+    window.setTimeout(() => setFlyFrom(null), 360);
+  }, [onOpenFile, stage.agentType]);
 
   const handleRun = useCallback(async () => {
     setIsExecuting(true);
@@ -369,13 +386,14 @@ function AgentCard({
   return (
     <>
       <div
-        className={`group rounded-lg border p-3 text-left transition-colors ${
+        ref={cardRef}
+        className={`group relative rounded-lg border p-3 text-left transition-colors ${
           !enabled && !isRunning && !isDone
             ? "border-subtle/50 bg-surface-card/50 opacity-40"
             : isRunning || isExecuting
               ? "border-accent/40 bg-accent-bg/20"
               : isDone
-                ? "border-success/30 bg-surface-card hover:border-success/50"
+                ? "border-accent/40 bg-surface-card hover:border-accent/60"
                 : isFailed
                   ? "border-error/30 bg-error/5"
                   : isNeedsUpdate
@@ -383,21 +401,24 @@ function AgentCard({
                     : "border-subtle bg-surface-card hover:border-accent/30"
         }`}
       >
+        {flyFrom && (
+          <span
+            className="pointer-events-none fixed z-[80] h-2 w-2 rounded-full bg-accent shadow-glow animate-fly-in"
+            style={{ left: flyFrom.left + flyFrom.width / 2, top: flyFrom.top + flyFrom.height / 2 }}
+            aria-hidden
+          />
+        )}
         <div className="flex items-start gap-2.5">
-          {/* Icon */}
+          {/* Icon — 身份色按 Agent 类型；运行中覆盖为 spinner */}
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
-              isDone
-                ? "bg-success/15 text-success"
+              !enabled && !isRunning && !isDone && !isFailed
+                ? "bg-surface-muted/50 text-fg-muted/50"
                 : isRunning || isExecuting
                   ? "bg-accent-bg text-accent"
                   : isFailed
                     ? "bg-error/15 text-error"
-                    : isNeedsUpdate
-                      ? "bg-warning/15 text-warning"
-                      : enabled
-                        ? "bg-surface-muted text-fg-muted"
-                        : "bg-surface-muted/50 text-fg-muted/50"
+                    : `${tint.bg} ${tint.text}`
             }`}
           >
             {isRunning || isExecuting ? (
@@ -411,13 +432,13 @@ function AgentCard({
 
           {/* Content */}
           <div className="min-w-0 flex-1">
-            <p className="font-body text-sm text-fg-primary truncate">
+            <p className="min-w-0 truncate font-body text-sm text-fg-primary">
               {stage.label}
             </p>
             <p
               className={`font-caption text-[11px] mt-0.5 ${
                 isDone
-                  ? "text-success"
+                  ? "text-accent"
                   : isRunning || isExecuting
                     ? "text-accent"
                     : isFailed
@@ -431,64 +452,75 @@ function AgentCard({
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1 shrink-0">
-            {isDone && (
-              <>
-                <button
-                  onClick={() => onOpenFile(stage.agentType)}
-                  className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
-                  title="查看文档"
-                >
-                  <FileText size={13} />
-                </button>
-                <button
-                  onClick={() => setShowRerunModal(true)}
-                  className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
-                  title="重新执行"
-                >
-                  <RotateCcw size={13} />
-                </button>
-              </>
-            )}
-            {isFailed && (
-              <>
+          {/* Actions — 顶按钮 / 底「已定稿」，右缘对齐 */}
+          <div className="flex shrink-0 flex-col items-end gap-1 self-stretch">
+            <div className="flex items-center gap-1">
+              {isDone && (
+                <>
+                  <button
+                    onClick={handleOpenFileAnimated}
+                    className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
+                    title="查看文档"
+                  >
+                    <FileText size={13} />
+                  </button>
+                  <button
+                    onClick={() => setShowRerunModal(true)}
+                    className="rounded p-1 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary"
+                    title="重新执行"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                </>
+              )}
+              {isFailed && (
+                <>
+                  <button
+                    onClick={handleRun}
+                    disabled={isForceConfirming}
+                    className="rounded p-1 text-error transition-colors hover:bg-error/10"
+                    title="重试"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                  <button
+                    onClick={handleForceConfirm}
+                    disabled={isForceConfirming}
+                    className="flex items-center gap-0.5 rounded px-1 text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
+                    title="核心产物已在时，跳过审核结论强制确认，放行后续阶段"
+                  >
+                    <CheckCircle size={13} />
+                    <span className="font-caption text-[10px]">按产物继续</span>
+                  </button>
+                </>
+              )}
+              {!isDone && !isRunning && !isFailed && !isNeedsUpdate && canRun && (
                 <button
                   onClick={handleRun}
-                  disabled={isForceConfirming}
-                  className="rounded p-1 text-error transition-colors hover:bg-error/10"
-                  title="重试"
+                  className="rounded p-1 text-fg-muted transition-colors hover:bg-accent-bg hover:text-accent"
+                  title="执行此阶段"
                 >
-                  <RotateCcw size={13} />
+                  <Play size={14} />
                 </button>
+              )}
+              {isNeedsUpdate && canRun && (
                 <button
-                  onClick={handleForceConfirm}
-                  disabled={isForceConfirming}
-                  className="flex items-center gap-0.5 rounded px-1 text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
-                  title="核心产物已在时，跳过审核结论强制确认，放行后续阶段"
+                  onClick={handleRun}
+                  className="rounded p-1 text-warning transition-colors hover:bg-warning/10"
+                  title="重新执行"
                 >
-                  <CheckCircle size={13} />
-                  <span className="font-caption text-[10px]">按产物继续</span>
+                  <Play size={14} />
                 </button>
-              </>
-            )}
-            {!isDone && !isRunning && !isFailed && !isNeedsUpdate && canRun && (
-              <button
-                onClick={handleRun}
-                className="rounded p-1 text-fg-muted transition-colors hover:bg-accent-bg hover:text-accent"
-                title="执行此阶段"
+              )}
+            </div>
+            {isDone && (
+              <span
+                className={`mt-auto rounded border border-accent/40 bg-accent-bg px-1 py-0.5 font-caption text-[9px] font-semibold text-accent ${
+                  justStamped ? "stamp-badge" : ""
+                }`}
               >
-                <Play size={14} />
-              </button>
-            )}
-            {isNeedsUpdate && canRun && (
-              <button
-                onClick={handleRun}
-                className="rounded p-1 text-warning transition-colors hover:bg-warning/10"
-                title="重新执行"
-              >
-                <Play size={14} />
-              </button>
+                已定稿
+              </span>
             )}
           </div>
         </div>
@@ -518,45 +550,35 @@ function RerunModal({
   onCancel: () => void;
 }) {
   const [directive, setDirective] = useState("");
+  const [open, setOpen] = useState(true);
+
+  const close = () => {
+    setOpen(false);
+    window.setTimeout(onCancel, 140);
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="w-[440px] max-w-[95vw] rounded-xl border border-subtle bg-surface-primary p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+    <Modal open={open} onClose={close} maxWidthClass="w-full max-w-[440px]">
+      <ModalShell
+        title={`重新执行「${stageLabel}」`}
+        description="输入自定义指令可以引导 agent 按照你的要求重新执行。留空则直接重新执行。"
+        footer={
+          <>
+            <ModalButton onClick={close}>取消</ModalButton>
+            <ModalButton tone="primary" onClick={() => onConfirm(directive)}>
+              重新执行
+            </ModalButton>
+          </>
+        }
       >
-        <h3 className="font-heading text-base font-bold text-fg-primary mb-1">
-          重新执行「{stageLabel}」
-        </h3>
-        <p className="font-body text-sm text-fg-secondary mb-4">
-          输入自定义指令可以引导 agent 按照你的要求重新执行。留空则直接重新执行。
-        </p>
         <textarea
           value={directive}
           onChange={(e) => setDirective(e.target.value)}
           placeholder="例如：请更侧重分析悬疑元素的读者期待..."
           rows={3}
-          className="w-full rounded-lg border border-subtle bg-surface-primary px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted/50 focus:border-accent focus:outline-none resize-none"
+          className="w-full rounded-lg border border-subtle bg-surface-primary px-3 py-2 font-body text-sm text-fg-primary placeholder:text-fg-muted/50 focus:border-accent focus:outline-none resize-none mb-2"
         />
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={onCancel}
-            className="rounded-md border border-subtle bg-surface-card px-4 py-2 font-body text-sm text-fg-secondary hover:bg-surface-muted transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => onConfirm(directive)}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-accent-deep"
-          >
-            <RotateCcw size={14} />
-            重新执行
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalShell>
+    </Modal>
   );
 }

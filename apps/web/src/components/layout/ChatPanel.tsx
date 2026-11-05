@@ -14,13 +14,14 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useChatStore } from "../../stores/chatStore";
 import { SnippetPicker } from "../material/SnippetPicker";
-import { useEditorStore } from "../../stores/editorStore";
+import { useNovelStore } from "../../stores/novelStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useChatStream } from "../../hooks/useChatStream";
 import { chatApi } from "../../api/chat";
 import { novelsApi } from "../../api/novels";
 import { MemoryButton } from "../chat/MemoryButton";
+import { InkCaret, ThinkingDots } from "../ui/InkCaret";
 import { MEMORY_PATH, type ChatMessage } from "@fictia/shared";
 
 export function ChatPanel() {
@@ -70,10 +71,8 @@ export function ChatPanel() {
   );
   const { streamChat } = useChatStream();
 
-  // Get current novelId from active file
-  const activeFileId = useEditorStore((s) => s.activeFileId);
-  const openFiles = useEditorStore((s) => s.openFiles);
-  const activeNovelId = openFiles.find((f) => f.id === activeFileId)?.novelId;
+  // 当前选中项目（资源按项目维度加载）
+  const activeNovelId = useNovelStore((s) => s.currentNovelId) ?? undefined;
 
   // Load chat history on mount and when novelId changes
   useEffect(() => {
@@ -149,18 +148,22 @@ export function ChatPanel() {
   return (
     <div className="flex flex-col h-full relative">
       {/* Header */}
-      <div className="px-3 pt-3 pb-2 border-b border-subtle">
+      <div className="px-3 pt-3 pb-2 border-b border-subtle bg-surface-secondary/40">
         <div className="flex items-center justify-between mb-2">
-          <p className="font-caption text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
+          <p className="font-display text-[12px] font-semibold tracking-wide text-fg-primary">
             AI 助手
           </p>
+          <span className="font-caption text-[10px] text-fg-muted">/clear · /memory</span>
         </div>
         <button
           onClick={() => openSettings("assistant")}
-          className="w-full flex items-center justify-between rounded-md border border-subtle bg-surface-card px-2.5 py-1.5 text-xs text-fg-secondary hover:border-accent/40 transition-colors"
+          className="w-full flex items-center justify-between rounded-md border border-subtle bg-surface-card px-2.5 py-1.5 text-[11px] font-caption text-fg-secondary transition-colors hover:border-accent/40 hover:text-fg-primary"
           title="在设置中修改对话模型与人格"
         >
-          <span className="truncate">{currentModelLabel}</span>
+          <span className="flex items-center gap-1.5 truncate">
+            <span className="h-1.5 w-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(87,217,163,0.55)]" />
+            {currentModelLabel}
+          </span>
           <Settings size={12} className="shrink-0 ml-1 text-fg-muted" />
         </button>
       </div>
@@ -179,7 +182,9 @@ export function ChatPanel() {
         )}
 
         {messages.map((msg, i) => (
-          <ChatMessageItem key={msg.id ?? i} message={msg} isLast={i === messages.length - 1} />
+          <div key={msg.id ?? i} className="animate-fade-in-up">
+            <ChatMessageItem message={msg} isLast={i === messages.length - 1} />
+          </div>
         ))}
 
         {/* Tool calls display */}
@@ -190,10 +195,7 @@ export function ChatPanel() {
         <PendingConfirmation />
 
         {isStreaming && messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].content === "" && (
-          <div className="flex items-center gap-2 text-fg-muted">
-            <Loader2 size={14} className="animate-spin" />
-            <span className="font-caption text-xs">思考中...</span>
-          </div>
+          <ThinkingDots label="思考中..." />
         )}
 
         <div ref={messagesEndRef} />
@@ -230,13 +232,13 @@ export function ChatPanel() {
             onKeyDown={handleKeyDown}
             placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
             rows={2}
-            className="w-full rounded-md border border-subtle bg-surface-card pl-3 pr-10 py-2 font-body text-xs text-fg-primary placeholder:text-fg-muted focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 resize-none"
+            className="w-full rounded-lg border border-subtle bg-surface-inset pl-3 pr-10 py-2 font-body text-xs text-fg-primary placeholder:text-fg-muted/70 transition-colors focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none"
             disabled={isStreaming}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isStreaming}
-            className="absolute right-2 bottom-2 p-1.5 rounded-md bg-accent text-white hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="btn-press absolute right-2 bottom-2 rounded-md bg-accent p-1.5 text-accent-ink transition-all hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isStreaming ? (
               <Loader2 size={14} className="animate-spin" />
@@ -258,25 +260,22 @@ export function ChatPanel() {
 
 function ChatMessageItem({ message, isLast }: { message: ChatMessage; isLast: boolean }) {
   const isUser = message.role === "user";
+  const isStreamingLast = useChatStore((s) => s.isStreaming) && isLast && !isUser && !!message.content;
 
   return (
     <div className={`flex gap-2 ${isUser ? "flex-row-reverse" : ""}`}>
       <div
-        className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-          isUser ? "bg-accent/10" : "bg-surface-muted"
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+          isUser ? "bg-accent/15 text-accent" : "bg-surface-elevated text-cyan"
         }`}
       >
-        {isUser ? (
-          <User size={12} className="text-accent" />
-        ) : (
-          <Bot size={12} className="text-fg-muted" />
-        )}
+        {isUser ? <User size={12} /> : <Bot size={12} />}
       </div>
       <div
-        className={`flex-1 rounded-lg px-2.5 py-2 text-xs leading-relaxed ${
+        className={`flex-1 rounded-xl border px-3 py-2 text-xs leading-relaxed ${
           isUser
-            ? "bg-accent/10 text-fg-primary"
-            : "bg-surface-muted/30 text-fg-primary"
+            ? "border-accent/25 bg-accent/10 text-fg-primary"
+            : "border-subtle bg-surface-inset text-fg-primary"
         }`}
       >
         {isUser ? (
@@ -286,6 +285,7 @@ function ChatMessageItem({ message, isLast }: { message: ChatMessage; isLast: bo
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content || (isLast ? "..." : "")}
             </ReactMarkdown>
+            {isStreamingLast && <InkCaret />}
           </div>
         )}
       </div>
@@ -368,8 +368,8 @@ function PendingConfirmation() {
   };
 
   return (
-    <div className="ml-8 rounded border border-yellow-500/40 bg-yellow-500/5 px-2 py-1.5">
-      <p className="font-caption text-[10px] font-semibold text-yellow-700 flex items-center gap-1">
+    <div className="ml-8 rounded border border-warning/40 bg-warning/8 px-2 py-1.5">
+      <p className="font-caption text-[10px] font-semibold text-warning flex items-center gap-1">
         <Wrench size={10} /> 需确认工具调用: {pending.tool}
       </p>
       <p className="font-caption text-[10px] text-fg-muted truncate mt-0.5">
@@ -379,7 +379,7 @@ function PendingConfirmation() {
       <div className="flex gap-1.5 mt-1">
         <button
           onClick={() => confirm(true)}
-          className="px-2 py-0.5 rounded bg-accent text-white text-[10px] hover:bg-accent/90 transition-colors"
+          className="rounded bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-ink transition-colors hover:bg-accent-light"
         >
           批准
         </button>

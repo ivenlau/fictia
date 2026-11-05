@@ -21,29 +21,36 @@ export function MaterialPreviewModal({
 }: MaterialPreviewModalProps) {
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="bg-surface-card border border-subtle rounded-lg w-[1280px] max-w-[92vw] max-h-[85vh] flex flex-col">
-        <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b border-subtle">
+      <div className="flex max-h-[82vh] h-[min(82vh,900px)] w-[min(920px,92vw)] flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card shadow-panel">
+        <div className="flex items-start justify-between gap-3 border-b border-subtle bg-surface-secondary/60 px-6 py-4">
           <div className="min-w-0">
-            <h2 className="font-heading text-base font-semibold text-fg-primary truncate">{title}</h2>
+            <h2 className="truncate font-display text-lg font-bold text-fg-primary">
+              {title}
+            </h2>
             {description && (
-              <p className="font-body text-xs text-fg-muted mt-1">{description}</p>
+              <p className="mt-1 line-clamp-2 font-body text-xs leading-relaxed text-fg-muted">
+                {description}
+              </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 text-fg-muted hover:text-fg-primary transition-colors"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-elevated hover:text-fg-primary"
             title="关闭"
+            aria-label="关闭"
           >
             <X size={16} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <MarkdownView>{content}</MarkdownView>
+        <div className="flex-1 overflow-y-auto bg-surface-inset/40 px-6 py-5">
+          <div className="mx-auto max-w-[720px] rounded-xl border border-subtle bg-surface-card p-6 shadow-card">
+            <MarkdownView>{content}</MarkdownView>
+          </div>
         </div>
 
         {footer && (
-          <div className="px-5 py-3 border-t border-subtle flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 border-t border-subtle bg-surface-secondary/60 px-6 py-3">
             {footer}
           </div>
         )}

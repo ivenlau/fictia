@@ -9,7 +9,7 @@ import {
 const STATE_META: Record<ForeshadowState, { label: string; chip: string }> = {
   planted: { label: "已埋设", chip: "bg-amber-500/15 text-amber-300" },
   strengthened: { label: "已推进", chip: "bg-sky-500/15 text-sky-300" },
-  resolved: { label: "已回收", chip: "bg-emerald-500/15 text-emerald-300" },
+  resolved: { label: "已回收", chip: "bg-accent-bg text-accent" },
   suspended: { label: "悬置", chip: "bg-fg-muted/15 text-fg-muted" },
 };
 
@@ -95,7 +95,7 @@ export function ForeshadowingDashboard({ novelId }: { novelId: string }) {
             </div>
             <div className="mt-2 h-1.5 rounded-full bg-surface-muted overflow-hidden">
               <div
-                className="h-full bg-emerald-500/70 transition-all"
+                className="h-full bg-accent/70 transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>

@@ -19,7 +19,7 @@ export function WorkspaceMeta({ novel }: WorkspaceMetaProps) {
     researching: "bg-info/15 text-info",
     writing: "bg-accent/15 text-accent",
     reviewing: "bg-accent-rose/15 text-accent-rose",
-    completed: "bg-success/15 text-success",
+    completed: "bg-accent-bg text-accent",
   };
 
   return (

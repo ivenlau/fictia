@@ -64,11 +64,11 @@ export function SettingsModal() {
         <header className="flex items-center justify-between border-b border-subtle px-5 py-3">
           <h2 className="font-heading text-base font-bold text-fg-primary">设置</h2>
           <div className="flex items-center gap-2">
-            {saved && <span className="font-caption text-xs text-success">已保存</span>}
+            {saved && <span className="font-caption text-xs text-accent">已保存</span>}
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-1.5 font-caption text-xs font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-60"
             >
               {saving && <Loader2 size={12} className="animate-spin" />}
               保存

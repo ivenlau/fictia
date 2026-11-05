@@ -65,7 +65,7 @@ export function GraphSection({ novelId }: GraphSectionProps) {
           <button
             onClick={() => setShowGraph(true)}
             disabled={!hasGraph}
-            className="flex items-center gap-1 rounded-md bg-accent px-2 py-1.5 font-body text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 rounded-md bg-accent px-2 py-1.5 font-body text-[11px] font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Network size={12} />
             查看图谱

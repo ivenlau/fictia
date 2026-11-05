@@ -11,7 +11,7 @@ const statusConfig: Record<
   StepStatus,
   { icon: React.ElementType; color: string }
 > = {
-  done: { icon: Check, color: "text-success" },
+  done: { icon: Check, color: "text-accent" },
   active: { icon: Loader2, color: "text-accent" },
   pending: { icon: Circle, color: "text-fg-muted" },
 };

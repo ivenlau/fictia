@@ -18,7 +18,7 @@ export function Input({
   className = "",
 }: InputProps) {
   const baseClasses =
-    "w-full bg-surface-card border border-subtle rounded-md px-3 py-2 text-[13px] font-body text-fg-primary placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-accent transition-shadow";
+    "w-full rounded-md border border-subtle bg-surface-inset px-3 py-2 text-[13px] font-body text-fg-primary placeholder:text-fg-muted/70 transition-colors focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/40";
 
   return (
     <label className={`flex flex-col gap-1.5 ${className}`}>

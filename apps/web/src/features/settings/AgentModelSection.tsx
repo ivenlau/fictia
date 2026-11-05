@@ -139,7 +139,7 @@ export function AgentModelSection() {
             <button
               onClick={applyUniform}
               disabled={!uniformModel}
-              className="rounded-md bg-accent px-2.5 py-1 font-caption text-[11px] font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-40"
+              className="rounded-md bg-accent px-2.5 py-1 font-caption text-[11px] font-medium text-accent-ink transition-colors hover:bg-accent-light disabled:opacity-40"
             >
               应用到全部
             </button>

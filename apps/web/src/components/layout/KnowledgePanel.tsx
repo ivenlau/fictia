@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Library, Search as SearchIcon, Users, Network, Eye } from "lucide-react";
-import { useEditorStore } from "@/stores/editorStore";
+import { useNovelStore } from "@/stores/novelStore";
 import { useUIStore } from "@/stores/uiStore";
 import { IndexManager } from "@/components/knowledge/IndexManager";
 import { KnowledgeSearch } from "@/components/knowledge/KnowledgeSearch";
@@ -21,11 +21,10 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
 export function KnowledgePanel() {
   const [tab, setTab] = useState<Tab>("search");
   const [foreshadowView, setForeshadowView] = useState<"dashboard" | "preview">("dashboard");
-  const openFiles = useEditorStore((s) => s.openFiles);
-  const activeFileId = useEditorStore((s) => s.activeFileId);
-  const activeFile = openFiles.find((f) => f.id === activeFileId);
-  const novelId = activeFile?.novelId;
-  const novelTitle = activeFile?.novelTitle;
+  const currentNovelId = useNovelStore((s) => s.currentNovelId);
+  const currentNovel = useNovelStore((s) => s.currentNovel);
+  const novelId = currentNovelId ?? undefined;
+  const novelTitle = currentNovel?.title;
 
   const explorerWidth = useUIStore((s) => s.explorerWidth);
   const setExplorerWidth = useUIStore((s) => s.setExplorerWidth);

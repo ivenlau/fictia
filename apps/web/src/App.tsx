@@ -8,12 +8,19 @@ import { useUIStore } from "./stores/uiStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { settingsApi } from "./api/settings";
 import { providersApi } from "./api/providers";
+import { applyTheme } from "./styles/themes";
 
 export default function App() {
   const showSettings = useUIStore((s) => s.showSettings);
   const showNewNovel = useUIStore((s) => s.showNewNovel);
+  const theme = useUIStore((s) => s.theme);
+  const customColors = useUIStore((s) => s.customColors);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const setProviders = useSettingsStore((s) => s.setProviders);
+
+  useEffect(() => {
+    applyTheme(theme, customColors);
+  }, [theme, customColors]);
 
   useEffect(() => {
     settingsApi.get().then(loadSettings).catch(() => {});
@@ -24,8 +31,8 @@ export default function App() {
     <>
       <IDELayout>
         <Routes>
-          <Route path="/" element={<Navigate to="/novel" replace />} />
-          <Route path="/novel" element={<></>} />
+          <Route path="/" element={<></>} />
+          <Route path="/novel" element={<Navigate to="/" replace />} />
           <Route path="/novel/:novelId/chapter/:chapterId" element={<ChapterEditor />} />
         </Routes>
       </IDELayout>

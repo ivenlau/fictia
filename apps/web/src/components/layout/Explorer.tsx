@@ -1,58 +1,65 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ChevronRight,
   ChevronDown,
   FolderOpen,
-  Folder,
   FileText,
   BookOpen,
+  Library,
 } from "lucide-react";
 import { useNovelStore } from "../../stores/novelStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useUIStore } from "../../stores/uiStore";
 import { novelsApi } from "../../api/novels";
-import { useNovels } from "../../hooks/useNovel";
-import { chaptersApi } from "../../api/chapters";
+import { useChapters } from "../../hooks/useNovel";
 import { FileTree } from "../../features/explorer/FileTree";
-import type { WorkspaceFile, Chapter } from "@fictia/shared";
+import type { WorkspaceFile } from "@fictia/shared";
 
-interface NovelData {
-  files: WorkspaceFile[];
-  chapters: Chapter[];
-}
-
+/** 资源管理器：只加载当前选中项目 */
 export function Explorer() {
-  const openFile = useEditorStore((s) => s.openFile);
   const openFiles = useEditorStore((s) => s.openFiles);
   const activeFileId = useEditorStore((s) => s.activeFileId);
   const setActiveFile = useEditorStore((s) => s.setActiveFile);
   const explorerWidth = useUIStore((s) => s.explorerWidth);
   const setExplorerWidth = useUIStore((s) => s.setExplorerWidth);
 
-  const activeNovelId = openFiles.find((f) => f.id === activeFileId)?.novelId;
+  const currentNovelId = useNovelStore((s) => s.currentNovelId);
+  const currentNovel = useNovelStore((s) => s.currentNovel);
+  const novels = useNovelStore((s) => s.novels);
+  const enterProject = useNovelStore((s) => s.enterProject);
 
-  const { data: novels = [] } = useNovels();
-  const [novelData, setNovelData] = useState<Record<string, NovelData>>({});
+  const novelTitle =
+    currentNovel?.title ?? novels.find((n) => n.id === currentNovelId)?.title ?? "当前项目";
+
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  const toggle = useCallback(
-    (key: string) => {
-      setExpanded((prev) => {
-        const next = { ...prev, [key]: !prev[key] };
-        if (next[key] && !novelData[key]) {
-          Promise.all([
-            novelsApi.getFiles(key),
-            chaptersApi.list(key),
-          ]).then(([files, chapters]) => {
-            setNovelData((d) => ({ ...d, [key]: { files, chapters } }));
-          }).catch(() => {});
-        }
-        return next;
+  const { data: chapters = [] } = useChapters(currentNovelId ?? undefined);
+
+  // 只加载当前项目的工作区文件
+  useEffect(() => {
+    if (!currentNovelId) {
+      setFiles([]);
+      return;
+    }
+    let cancelled = false;
+    novelsApi
+      .getFiles(currentNovelId)
+      .then((data) => {
+        if (!cancelled) setFiles(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFiles([]);
       });
-    },
-    [novelData],
-  );
+    return () => {
+      cancelled = true;
+    };
+  }, [currentNovelId]);
+
+  const toggle = useCallback((key: string) => {
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -81,16 +88,26 @@ export function Explorer() {
     [explorerWidth, setExplorerWidth],
   );
 
+  const handleOpenProject = useCallback(() => {
+    if (!currentNovel) {
+      const found = novels.find((n) => n.id === currentNovelId);
+      if (found) enterProject(found);
+      return;
+    }
+    enterProject(currentNovel);
+  }, [currentNovel, currentNovelId, novels, enterProject]);
+
   return (
     <div className="flex flex-col h-full relative">
-      {/* Header */}
-      <div className="px-3 pt-3 pb-1">
-        <p className="font-caption text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
+      <div className="border-b border-subtle px-3 pb-2 pt-3">
+        <p className="font-display text-[12px] font-semibold tracking-wide text-fg-primary">
+          资源管理
+        </p>
+        <p className="mt-0.5 font-caption text-[10px] uppercase tracking-[0.12em] text-fg-muted">
           EXPLORER
         </p>
       </div>
 
-      {/* Open Editors */}
       {openFiles.length > 0 && (
         <div className="px-2 pt-1">
           <button
@@ -111,11 +128,7 @@ export function Explorer() {
               {openFiles.map((f) => {
                 const isActive = f.id === activeFileId;
                 const Icon =
-                  f.type === "chapter"
-                    ? BookOpen
-                    : f.type === "overview"
-                      ? BookOpen
-                      : FileText;
+                  f.type === "chapter" || f.type === "overview" ? BookOpen : FileText;
                 return (
                   <button
                     key={f.id}
@@ -127,9 +140,7 @@ export function Explorer() {
                     }`}
                   >
                     <Icon size={14} className={isActive ? "text-accent" : ""} />
-                    <span className="font-caption text-xs truncate">
-                      {f.label}
-                    </span>
+                    <span className="font-caption text-xs truncate">{f.label}</span>
                   </button>
                 );
               })}
@@ -138,77 +149,34 @@ export function Explorer() {
         </div>
       )}
 
-      {/* Novel Tree */}
       <div className="flex-1 overflow-y-auto px-2 pt-2 pb-3">
-        <button
-          onClick={() => toggle("__novels")}
-          className="flex items-center gap-1 w-full text-left px-1 py-1"
-        >
-          {expanded.__novels !== false ? (
-            <ChevronDown size={12} className="text-fg-muted" />
-          ) : (
-            <ChevronRight size={12} className="text-fg-muted" />
-          )}
-          <span className="font-caption text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
-            NOVELS
-          </span>
-        </button>
-
-        {expanded.__novels !== false && (
-          <div className="space-y-0.5">
-            {novels.map((novel) => {
-              const isNovelExpanded = !!expanded[novel.id];
-              const isActive = novel.id === activeNovelId;
-              const data = novelData[novel.id];
-
-              return (
-                <div key={novel.id}>
-                  {/* Novel folder */}
-                  <button
-                    onClick={() => {
-                      toggle(novel.id);
-                      openFile({
-                        id: `overview_${novel.id}`,
-                        path: novel.title,
-                        type: "overview",
-                        label: novel.title,
-                        novelId: novel.id,
-                        novelTitle: novel.title,
-                      });
-                    }}
-                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left ${
-                      activeNovelId === novel.id ? "bg-accent-bg/50" : "hover:bg-surface-muted/50"
-                    }`}
-                  >
-                    {isNovelExpanded ? (
-                      <ChevronDown size={12} className="text-fg-muted" />
-                    ) : (
-                      <ChevronRight size={12} className="text-fg-muted" />
-                    )}
-                    {isNovelExpanded ? (
-                      <FolderOpen size={14} className="text-accent" />
-                    ) : (
-                      <Folder size={14} className="text-accent" />
-                    )}
-                    <span className="font-caption text-xs font-semibold text-fg-primary truncate">
-                      {novel.title}
-                    </span>
-                  </button>
-
-                  {/* Unified file tree */}
-                  {isNovelExpanded && data && (
-                    <div className="ml-2">
-                      <FileTree files={data.files} chapters={data.chapters} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        {!currentNovelId ? (
+          <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+            <Library size={22} className="mb-2 text-fg-muted/40" />
+            <p className="font-caption text-[11px] text-fg-muted">未选择项目</p>
+            <p className="mt-1 font-caption text-[10px] text-fg-muted/70">
+              在「概览」页或顶栏切换器中进入一个小说项目
+            </p>
           </div>
+        ) : (
+          <>
+            <button
+              onClick={handleOpenProject}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-surface-muted/50"
+              title="打开项目主页"
+            >
+              <FolderOpen size={14} className="text-accent" />
+              <span className="font-caption text-xs font-semibold text-fg-primary truncate">
+                {novelTitle}
+              </span>
+            </button>
+            <div className="ml-1 mt-0.5">
+              <FileTree files={files} chapters={chapters} />
+            </div>
+          </>
         )}
       </div>
 
-      {/* Resize handle */}
       <div
         onMouseDown={handleResizeStart}
         className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/30 transition-colors z-10"

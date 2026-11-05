@@ -255,8 +255,13 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
     if (text && text.length > 0 && contentRef.current) {
       const range = sel!.getRangeAt(0);
       const rect = range.getBoundingClientRect();
+      const container = contentRef.current.getBoundingClientRect();
       setSelectedText(text);
-      setSelectionPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+      // 用内容区坐标 + absolute，避免 fixed 盖住左侧调试面板
+      setSelectionPos({
+        x: rect.left + rect.width / 2 - container.left + contentRef.current.scrollLeft,
+        y: rect.top - 8 - container.top + contentRef.current.scrollTop,
+      });
     } else {
       setSelectedText(null);
       setSelectionPos(null);
@@ -508,16 +513,16 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-subtle bg-surface-card px-4 py-2.5 shrink-0">
+      <div className="flex items-center justify-between gap-3 border-b border-subtle bg-surface-secondary px-4 py-2.5 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="min-w-0">
-            <h2 className="font-heading text-sm font-semibold text-fg-primary truncate">
+            <h2 className="font-display text-sm font-semibold text-fg-primary truncate">
               {chapterTitle && /^第\d+章/.test(chapterTitle)
                 ? chapterTitle
                 : `第${chapterNumber}章${chapterTitle ? ` ${chapterTitle}` : ""}`}
             </h2>
             <p className="font-caption text-[11px] text-fg-muted">
-              {wordCount} 字 · v{version}
+              {wordCount.toLocaleString()} 字 · v{version}
             </p>
           </div>
         </div>
@@ -526,7 +531,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
           <button
             onClick={handleWrite}
             disabled={isAnyWriting}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-press flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-semibold text-accent-ink transition-all hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isThisWriting ? (
               <Loader2 size={13} className="animate-spin" />
@@ -535,7 +540,7 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             ) : (
               <PenLine size={13} />
             )}
-            {isThisWriting ? "生成中..." : wordCount > 0 ? "重新生成" : "生成"}
+            {isThisWriting ? "落墨中..." : wordCount > 0 ? "重新生成" : "生成"}
           </button>
           {!isFileMode && (
             <button
@@ -638,6 +643,12 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
         </div>
       </div>
 
+      {isThisWriting && (
+        <div className="ink-progress ink-progress-indeterminate shrink-0" aria-hidden>
+          <i />
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto p-4 lg:p-6">
         <div className="mx-auto max-w-3xl space-y-6">
           {chapterSummary && (
@@ -669,12 +680,17 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             </div>
           )}
           {viewMode === "preview" ? (
-            <div ref={contentRef} onMouseUp={handleTextSelection} className="relative">
+            <div
+              key="preview"
+              ref={contentRef}
+              onMouseUp={handleTextSelection}
+              className="relative crossfade-swap"
+            >
               <ChapterReading content={content} />
               {selectionPos && selectedText && (
                 <button
                   onClick={() => handleOpenRewrite(selectedText)}
-                  className="fixed z-50 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-white shadow-lg transition-colors hover:bg-accent-deep"
+                  className="absolute z-20 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 font-body text-xs font-medium text-accent-ink shadow-lg transition-colors hover:bg-accent-light"
                   style={{ left: selectionPos.x, top: selectionPos.y, transform: "translate(-50%, -100%)" }}
                 >
                   <Wand2 size={12} />
@@ -684,9 +700,10 @@ export function ChapterEditor({ chapterId: propChapterId, filePath, novelId: pro
             </div>
           ) : (
             <textarea
+              key="edit"
               value={content}
               onChange={handleContentChange}
-              className="min-h-[70vh] w-full resize-none rounded-lg border border-subtle bg-surface-card p-6 font-body text-sm text-fg-primary leading-[1.85] focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20"
+              className="crossfade-swap min-h-[70vh] w-full resize-none rounded-lg border border-subtle bg-surface-card p-6 font-body text-sm text-fg-primary leading-[1.85] focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20"
               placeholder="开始写作..."
             />
           )}
@@ -788,7 +805,7 @@ function FileReviewPanel({
   };
   const statusColor: Record<string, string> = {
     pending: "bg-surface-muted text-fg-muted",
-    applied: "bg-success/15 text-success",
+    applied: "bg-accent-bg text-accent",
     ignored: "bg-fg-muted/10 text-fg-muted",
   };
   const statusLabel: Record<string, string> = {
@@ -866,7 +883,7 @@ function FileReviewPanel({
                               <button
                                 onClick={() => handleApply(item)}
                                 disabled={applyingId === item.id}
-                                className="rounded bg-success/10 px-2 py-0.5 font-caption text-xs text-success transition-colors hover:bg-success/20 disabled:opacity-50"
+                                className="rounded bg-accent-bg px-2 py-0.5 font-caption text-xs text-accent transition-colors hover:bg-accent-bg/80 disabled:opacity-50"
                               >
                                 {applyingId === item.id ? "采纳中..." : "采纳"}
                               </button>

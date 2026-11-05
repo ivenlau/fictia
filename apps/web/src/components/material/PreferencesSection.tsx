@@ -107,13 +107,13 @@ export function PreferencesSection({ novelId }: { novelId: string }) {
           <button
             onClick={save}
             disabled={saving}
-            className="flex items-center gap-1.5 font-body text-xs px-3 py-1.5 rounded-md bg-accent text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 font-body text-xs px-3 py-1.5 rounded-md bg-accent text-accent-ink disabled:opacity-40 hover:opacity-90 transition-opacity"
           >
             {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
             保存
           </button>
           {saved && (
-            <span className="font-caption text-[10px] text-success">已保存</span>
+            <span className="font-caption text-[10px] text-accent">已保存</span>
           )}
         </div>
       </div>

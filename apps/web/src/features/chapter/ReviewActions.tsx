@@ -99,7 +99,7 @@ export function ReviewActions({ chapterId, novelId, onTrigger }: ReviewActionsPr
             {isRunning ? (
               <Loader2 size={14} className="animate-spin text-accent" />
             ) : isDone ? (
-              <CheckCircle2 size={14} className="text-success" />
+              <CheckCircle2 size={14} className="text-accent" />
             ) : (
               <Icon size={14} />
             )}

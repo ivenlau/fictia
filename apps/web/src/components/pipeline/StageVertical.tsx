@@ -12,7 +12,7 @@ const statusConfig: Record<
   StageStatus,
   { icon: React.ElementType; color: string; bg: string }
 > = {
-  done: { icon: Check, color: "text-success", bg: "bg-success/10" },
+  done: { icon: Check, color: "text-accent", bg: "bg-accent-bg" },
   active: { icon: Loader2, color: "text-accent", bg: "bg-accent-bg" },
   pending: { icon: Circle, color: "text-fg-muted", bg: "bg-surface-muted" },
 };
