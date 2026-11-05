@@ -3,6 +3,7 @@ import { Search, FileText, BookOpen, Loader2 } from "lucide-react";
 import { novelsApi } from "@/api/novels";
 import { useEditorStore } from "@/stores/editorStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useNovelStore } from "@/stores/novelStore";
 import type { SearchResult } from "@/api/novels";
 
 export function SearchPanel() {
@@ -15,6 +16,8 @@ export function SearchPanel() {
   const openFile = useEditorStore((s) => s.openFile);
   const explorerWidth = useUIStore((s) => s.explorerWidth);
   const setExplorerWidth = useUIStore((s) => s.setExplorerWidth);
+  const currentNovelId = useNovelStore((s) => s.currentNovelId);
+  const currentNovel = useNovelStore((s) => s.currentNovel);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const handleResizeStart = useCallback(
@@ -58,13 +61,17 @@ export function SearchPanel() {
     setSearched(true);
     try {
       const data = await novelsApi.search(q.trim());
-      setResults(data);
+      // 只保留当前选中项目的结果
+      const filtered = currentNovelId
+        ? data.filter((r) => r.novelId === currentNovelId)
+        : data;
+      setResults(filtered);
     } catch {
       setResults([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentNovelId]);
 
   const handleChange = useCallback(
     (value: string) => {
@@ -138,10 +145,15 @@ export function SearchPanel() {
             value={query}
             onChange={(e) => handleChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="搜索所有文件和章节..."
+            placeholder={currentNovel ? `在「${currentNovel.title}」中搜索...` : "搜索所有文件和章节..."}
             className="w-full rounded-md border border-subtle bg-surface-card pl-8 pr-3 py-1.5 font-body text-xs text-fg-primary placeholder:text-fg-muted focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20"
           />
         </div>
+        {currentNovel && (
+          <p className="mt-1.5 font-caption text-[10px] text-fg-muted">
+            仅搜索当前项目 · {currentNovel.title}
+          </p>
+        )}
       </div>
 
       {/* Results */}

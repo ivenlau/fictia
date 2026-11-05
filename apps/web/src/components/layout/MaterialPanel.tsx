@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { BookMarked, Boxes, BookOpen, Eye, Layers, MessageSquareText } from "lucide-react";
-import { useEditorStore } from "@/stores/editorStore";
+import { useNovelStore } from "@/stores/novelStore";
 import { useUIStore } from "@/stores/uiStore";
 import { GenreCardSection } from "@/components/material/GenreCardSection";
 import { CraftSection } from "@/components/material/CraftSection";
@@ -21,11 +21,10 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
 
 export function MaterialPanel() {
   const [tab, setTab] = useState<Tab>("genre");
-  const openFiles = useEditorStore((s) => s.openFiles);
-  const activeFileId = useEditorStore((s) => s.activeFileId);
-  const activeFile = openFiles.find((f) => f.id === activeFileId);
-  const novelId = activeFile?.novelId;
-  const novelTitle = activeFile?.novelTitle;
+  const currentNovelId = useNovelStore((s) => s.currentNovelId);
+  const currentNovel = useNovelStore((s) => s.currentNovel);
+  const novelId = currentNovelId ?? undefined;
+  const novelTitle = currentNovel?.title;
 
   const explorerWidth = useUIStore((s) => s.explorerWidth);
   const setExplorerWidth = useUIStore((s) => s.setExplorerWidth);

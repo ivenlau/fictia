@@ -31,8 +31,8 @@ export default function App() {
     <>
       <IDELayout>
         <Routes>
-          <Route path="/" element={<Navigate to="/novel" replace />} />
-          <Route path="/novel" element={<></>} />
+          <Route path="/" element={<></>} />
+          <Route path="/novel" element={<Navigate to="/" replace />} />
           <Route path="/novel/:novelId/chapter/:chapterId" element={<ChapterEditor />} />
         </Routes>
       </IDELayout>

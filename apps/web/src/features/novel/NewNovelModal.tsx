@@ -6,8 +6,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import { useEditorStore } from "@/stores/editorStore";
 import { useCreateNovel } from "@/hooks/useNovel";
+import { enterProjectSafe } from "@/stores/novelStore";
 import { AiGenerateButton } from "@/components/ui/AiGenerateButton";
 import { FILE_TEMPLATES, AGENT_TYPE_LABELS } from "@fictia/shared";
 import type { AgentType } from "@fictia/shared";
@@ -66,8 +66,6 @@ export function NewNovelModal() {
     [tags],
   );
 
-  const openFile = useEditorStore((s) => s.openFile);
-
   const handleSubmit = useCallback(async () => {
     if (!title.trim() || !genre.trim()) return;
 
@@ -80,18 +78,12 @@ export function NewNovelModal() {
         tags,
       });
       setShowNewNovel(false);
-      openFile({
-        id: `overview_${novel.id}`,
-        path: novel.title,
-        type: "overview",
-        label: novel.title,
-        novelId: novel.id,
-        novelTitle: novel.title,
-      });
+      // 创建后直接进入该项目主页
+      enterProjectSafe(novel);
     } catch {
       // error handled silently
     }
-  }, [title, genre, description, targetChapters, tags, createNovel, setShowNewNovel, openFile]);
+  }, [title, genre, description, targetChapters, tags, createNovel, setShowNewNovel]);
 
   const isValid = title.trim().length > 0 && genre.trim().length > 0;
 

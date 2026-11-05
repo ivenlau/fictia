@@ -14,7 +14,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useChatStore } from "../../stores/chatStore";
 import { SnippetPicker } from "../material/SnippetPicker";
-import { useEditorStore } from "../../stores/editorStore";
+import { useNovelStore } from "../../stores/novelStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useChatStream } from "../../hooks/useChatStream";
@@ -71,10 +71,8 @@ export function ChatPanel() {
   );
   const { streamChat } = useChatStream();
 
-  // Get current novelId from active file
-  const activeFileId = useEditorStore((s) => s.activeFileId);
-  const openFiles = useEditorStore((s) => s.openFiles);
-  const activeNovelId = openFiles.find((f) => f.id === activeFileId)?.novelId;
+  // 当前选中项目（资源按项目维度加载）
+  const activeNovelId = useNovelStore((s) => s.currentNovelId) ?? undefined;
 
   // Load chat history on mount and when novelId changes
   useEffect(() => {

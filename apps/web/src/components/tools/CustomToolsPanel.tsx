@@ -10,7 +10,7 @@ import { useNovelStore } from "../../stores/novelStore";
  * 工具是全局资源（不绑 novel）；novelId 仅用于 js 工具测试时的 novelDir 解析。
  */
 export function CustomToolsPanel() {
-  const novelId = useNovelStore((s) => s.currentNovel?.id ?? "");
+  const novelId = useNovelStore((s) => s.currentNovelId) ?? "";
   const [tools, setTools] = useState<CustomToolDef[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<CustomToolDef | null>(null);

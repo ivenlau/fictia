@@ -1,12 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { X, FileText, BookOpen } from "lucide-react";
+import { X, FileText, BookOpen, FolderOpen } from "lucide-react";
 import { useEditorStore } from "../../stores/editorStore";
+import { GALLERY_TAB_ID, galleryTab } from "./galleryTab";
 
 const fileIcons = {
   workspace: FileText,
   chapter: BookOpen,
   file: FileText,
   overview: BookOpen,
+  gallery: FolderOpen,
 } as const;
 
 export function EditorTabs() {
@@ -18,11 +20,8 @@ export function EditorTabs() {
   const listRef = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
 
-  const hasOverview = openFiles.some((f) => f.type === "overview");
-  const tabs = hasOverview
-    ? openFiles
-    : [{ id: "__overview__", type: "overview" as const, label: "概览", path: "" }, ...openFiles];
-  const activeTabId = activeFileId ?? "__overview__";
+  const tabs = [galleryTab, ...openFiles.filter((f) => f.id !== GALLERY_TAB_ID)];
+  const activeTabId = activeFileId ?? GALLERY_TAB_ID;
 
   useLayoutEffect(() => {
     const root = listRef.current;
@@ -55,14 +54,14 @@ export function EditorTabs() {
       )}
       {tabs.map((file) => {
         const isActive = file.id === activeTabId;
-        const Icon = fileIcons[file.type] ?? FileText;
-        const isVirtualOverview = file.id === "__overview__";
+        const Icon = fileIcons[file.type as keyof typeof fileIcons] ?? FileText;
+        const isGallery = file.id === GALLERY_TAB_ID;
 
         return (
           <button
             key={file.id}
             data-tab-id={file.id}
-            onClick={() => setActiveFile(file.id)}
+            onClick={() => setActiveFile(isGallery ? null : file.id)}
             className={`group relative flex h-full shrink-0 items-center gap-1.5 border-r border-subtle px-3 text-[12px] font-caption transition-colors duration-fast ${
               isActive
                 ? "bg-surface-primary text-fg-primary"
@@ -71,7 +70,7 @@ export function EditorTabs() {
           >
             <Icon size={13} className={isActive ? "text-accent" : ""} />
             <span className="max-w-[140px] truncate">{file.label}</span>
-            {!isVirtualOverview && (
+            {!isGallery && (
               <span
                 role="button"
                 tabIndex={0}

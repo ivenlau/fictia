@@ -23,7 +23,7 @@ import { AGENT_TYPE_LABELS } from "@fictia/shared";
 import type { AgentType, AgentOutput, Chapter } from "@fictia/shared";
 import { useAgentOutputs, useDeleteAgentOutput, useClearAgentOutputs } from "@/hooks/useAgent";
 import { useChapters } from "@/hooks/useNovel";
-import { useEditorStore } from "@/stores/editorStore";
+import { useNovelStore } from "@/stores/novelStore";
 import { useUIStore } from "@/stores/uiStore";
 import { agentColor } from "@/lib/agentColors";
 import { AgentRunDetailModal } from "./AgentRunDetailModal";
@@ -74,9 +74,7 @@ export function DebugPanel() {
   const setExplorerWidth = useUIStore((s) => s.setExplorerWidth);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  const openFiles = useEditorStore((s) => s.openFiles);
-  const activeFileId = useEditorStore((s) => s.activeFileId);
-  const activeNovelId = openFiles.find((f) => f.id === activeFileId)?.novelId;
+  const activeNovelId = useNovelStore((s) => s.currentNovelId) ?? undefined;
 
   const { data: outputs } = useAgentOutputs(activeNovelId);
   const { data: chapters } = useChapters(activeNovelId);

@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
-  Plus,
   Sparkles,
   Tag,
   Calendar,
@@ -12,8 +11,6 @@ import {
   Eye,
   RefreshCw,
   Download,
-  Play,
-  Pause,
   CheckCircle2,
   Pencil,
   Trash2,
@@ -24,7 +21,6 @@ import {
   FastForward,
 } from "lucide-react";
 import { useNovelStore } from "@/stores/novelStore";
-import { useUIStore } from "@/stores/uiStore";
 import { useAgentStore } from "@/stores/agentStore";
 import { useNovel, useDeleteNovel, useResetNovel } from "@/hooks/useNovel";
 import { useEditorStore } from "@/stores/editorStore";
@@ -78,7 +74,6 @@ function parseChapterFiles(files: WorkspaceFile[]): ChapterFileInfo[] {
 export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewProps = {}) {
   const { novelId: paramNovelId } = useParams<{ novelId: string }>();
   const novelId = propNovelId ?? paramNovelId;
-  const setShowNewNovel = useUIStore((s) => s.setShowNewNovel);
   const setCurrentNovel = useNovelStore((s) => s.setCurrentNovel);
 
   const queryClient = useQueryClient();
@@ -169,6 +164,10 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
     try {
       await deleteNovel.mutateAsync(novelId);
       closeFile(`overview_${novelId}`);
+      // 若删除的是当前项目，清理选中态
+      if (useNovelStore.getState().currentNovelId === novelId) {
+        useNovelStore.getState().clearProjectIfSelected(novelId);
+      }
     } catch {
       // error handled silently
     }
@@ -189,7 +188,14 @@ export function WorkspaceRootView({ novelId: propNovelId }: WorkspaceRootViewPro
   }, [novelId, resetNovel, refreshFiles, resetFromStage]);
 
   if (!novelId) {
-    return <WelcomeState onCreateNovel={() => setShowNewNovel(true)} />;
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <BookOpen size={28} className="text-fg-muted/40" />
+        <p className="font-body text-sm text-fg-muted">
+          请从「概览」或顶栏切换器进入一个小说项目
+        </p>
+      </div>
+    );
   }
 
   if (isLoading) {
@@ -711,30 +717,5 @@ function ChapterRerunModal({
         />
       </ModalShell>
     </Modal>
-  );
-}
-
-function WelcomeState({ onCreateNovel }: { onCreateNovel: () => void }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4">
-      <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-accent-bg text-accent animate-float-soft">
-        <BookOpen size={28} />
-      </div>
-      <div className="text-center">
-        <h1 className="font-heading text-xl font-bold text-fg-primary">
-          欢迎来到 Fictia
-        </h1>
-        <p className="mt-1 font-body text-sm text-fg-secondary">
-          自由发挥你的创意，开始AI智能写作之旅
-        </p>
-      </div>
-      <button
-        onClick={onCreateNovel}
-        className="btn-press mt-2 flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-body text-sm font-medium text-accent-ink transition-colors hover:bg-accent-light"
-      >
-        <Plus size={16} />
-        创建新小说
-      </button>
-    </div>
   );
 }

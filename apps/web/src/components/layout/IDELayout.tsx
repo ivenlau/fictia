@@ -13,20 +13,23 @@ import { EditorTabs } from "./EditorTabs";
 import { StatusBar } from "./StatusBar";
 import { useEditorStore } from "../../stores/editorStore";
 import { useUIStore } from "../../stores/uiStore";
+import { useNovelStore } from "../../stores/novelStore";
 import { FileViewer } from "../../features/workspace/FileViewer";
 import { WorkspaceRootView } from "../../features/workspace/WorkspaceRootView";
+import { OverviewPage } from "../../features/overview/OverviewPage";
+import { GALLERY_TAB_ID, galleryTab } from "./galleryTab";
 
 interface IDELayoutProps {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
-export function IDELayout({ children }: IDELayoutProps) {
+export function IDELayout(_props: IDELayoutProps) {
   const activeFileId = useEditorStore((s) => s.activeFileId);
   const openFiles = useEditorStore((s) => s.openFiles);
-  const activeFile = openFiles.find((f) => f.id === activeFileId);
   const activePanel = useUIStore((s) => s.activePanel);
   const explorerVisible = useUIStore((s) => s.explorerVisible);
   const explorerWidth = useUIStore((s) => s.explorerWidth);
+  const currentNovel = useNovelStore((s) => s.currentNovel);
 
   const showSidePanel =
     explorerVisible &&
@@ -38,34 +41,20 @@ export function IDELayout({ children }: IDELayoutProps) {
       activePanel === "material" ||
       activePanel === "tools");
 
-  const novelName = activeFile?.novelTitle ?? "Fictia";
+  const novelName = currentNovel?.title ?? "Fictia";
 
-  const tabsWithOverview = useMemo(() => {
-    const hasOverview = openFiles.some((f) => f.type === "overview");
-    if (!hasOverview && openFiles.length > 0) {
-      return [
-        {
-          id: "__overview__",
-          type: "overview" as const,
-          label: "概览",
-          path: "",
-          novelId: openFiles[0]?.novelId,
-          novelTitle: openFiles[0]?.novelTitle,
-        },
-        ...openFiles,
-      ];
-    }
-    if (openFiles.length === 0) {
-      return [{ id: "__overview__", type: "overview" as const, label: "概览", path: "" }];
-    }
-    return openFiles;
+  // 默认首标签为「概览」画廊；其后是已打开文件
+  const tabs = useMemo(() => {
+    const rest = openFiles.filter((f) => f.id !== GALLERY_TAB_ID);
+    return [galleryTab, ...rest];
   }, [openFiles]);
 
-  const activeTabId = activeFileId ?? "__overview__";
+  const activeTabId = activeFileId ?? GALLERY_TAB_ID;
+  const activeTab = tabs.find((t) => t.id === activeTabId);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-primary text-fg-primary">
-      <TopBar path={novelName} />
+      <TopBar />
 
       <div className="flex flex-1 overflow-hidden">
         <ActivityBar />
@@ -96,22 +85,25 @@ export function IDELayout({ children }: IDELayoutProps) {
         <div className="flex flex-1 flex-col overflow-hidden">
           <EditorTabs />
           <main className="relative flex flex-1 flex-col overflow-hidden bg-surface-primary">
-            {tabsWithOverview.map((file) => {
-              const isActive = file.id === activeTabId;
+            {tabs.map((tab) => {
+              const isActive = tab.id === activeTabId;
               return (
                 <div
-                  key={file.id}
+                  key={tab.id}
                   className="absolute inset-0 flex flex-col overflow-hidden"
                   style={{ display: isActive ? "flex" : "none" }}
                 >
-                  {file.type === "overview" ? (
-                    <WorkspaceRootView novelId={file.novelId} />
+                  {tab.id === GALLERY_TAB_ID || tab.type === "gallery" ? (
+                    <OverviewPage />
+                  ) : tab.type === "overview" ? (
+                    <WorkspaceRootView novelId={tab.novelId} />
                   ) : (
-                    <FileViewer fileId={file.id} />
+                    <FileViewer fileId={tab.id} />
                   )}
                 </div>
               );
             })}
+            {!activeTab && <OverviewPage />}
           </main>
         </div>
       </div>
